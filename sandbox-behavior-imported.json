@@ -1,0 +1,87 @@
+{
+  "kind": "mind_weave_workflow_export",
+  "schema_version": 1,
+  "exported_at": "2026-03-25T03:48:34.037Z",
+  "source_definition_id": "0b138527-e67b-48af-b924-f2dba678a3fc",
+  "definition": {
+    "name": "Sandbox Behavior (imported)",
+    "description": "Built-in deterministic pet brain (sandbox_starter_decision utility; legacy sandbox_behavior primitive remains available).",
+    "graph": {
+      "nodes": [
+        {
+          "id": "sandbox_start",
+          "kind": "start",
+          "label": "Start",
+          "data": {
+            "required_inputs": [
+              {
+                "key": "sandbox_tick",
+                "type": "dictionary",
+                "value": null
+              }
+            ]
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "sandbox_brain",
+          "kind": "utility",
+          "utility_type": "sandbox_starter_decision",
+          "label": "Starter sandbox decision",
+          "data": {},
+          "position": {
+            "x": 220,
+            "y": 0
+          }
+        },
+        {
+          "id": "sandbox_stop",
+          "kind": "stop",
+          "label": "Stop",
+          "data": {
+            "required_outputs": [
+              {
+                "key": "output",
+                "type": "dictionary"
+              }
+            ]
+          },
+          "position": {
+            "x": 480,
+            "y": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "sandbox_start",
+          "target": "sandbox_brain",
+          "source_handle": "signal_out",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "sandbox_start",
+          "target": "sandbox_brain",
+          "source_handle": "sandbox_tick",
+          "target_handle": "input"
+        },
+        {
+          "source": "sandbox_brain",
+          "target": "sandbox_stop",
+          "source_handle": "signal_out",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "sandbox_brain",
+          "target": "sandbox_stop",
+          "source_handle": "output",
+          "target_handle": "output"
+        }
+      ]
+    },
+    "palette_id": null
+  }
+}

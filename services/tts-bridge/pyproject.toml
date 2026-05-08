@@ -1,0 +1,27 @@
+[project]
+name = "mind-weave-tts-bridge"
+version = "0.1.0"
+description = "Local HTTP TTS service for Mind Weave"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.27.0",
+    "huggingface_hub>=0.26.0",
+    "pydantic-settings>=2.0.0",
+    "soundfile>=0.12.0",
+    "numpy>=1.26.0",
+    "torch>=2.11.0",
+    "qwen-tts>=0.1.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tts_bridge"]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]

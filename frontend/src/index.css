@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design system CSS variable fallbacks (light mode defaults) */
+:root {
+  --mw-page-bg: #f9fafb;
+  --mw-sidebar-bg: #ffffff;
+  --mw-card-bg: #ffffff;
+  --mw-card-bg-alt: #f3f4f6;
+  --mw-text-primary: #111827;
+  --mw-text-secondary: #4b5563;
+  --mw-border: #e5e7eb;
+  --mw-primary: #2563eb;
+  --mw-primary-hover: #1d4ed8;
+  --mw-primary-muted: #eff6ff;
+  --mw-success: #16a34a;
+  --mw-success-muted: #dcfce7;
+  --mw-error: #dc2626;
+  --mw-error-muted: #fee2e2;
+  --mw-scrollbar-thumb: #c5ccd6;
+  --mw-scrollbar-thumb-hover: #9ca3af;
+  --mw-scrollbar-track: #f3f4f6;
+}
+
+.dark {
+  --mw-page-bg: #030712;
+  --mw-sidebar-bg: #111827;
+  --mw-card-bg: #111827;
+  --mw-card-bg-alt: #1f2937;
+  --mw-text-primary: #f9fafb;
+  --mw-text-secondary: #9ca3af;
+  --mw-border: #1f2937;
+  --mw-primary: #60a5fa;
+  --mw-primary-hover: #93c5fd;
+  --mw-primary-muted: #1e293b;
+  --mw-success: #4ade80;
+  --mw-success-muted: #14532d;
+  --mw-error: #f87171;
+  --mw-error-muted: #7f1d1d;
+  --mw-scrollbar-thumb: #4b5563;
+  --mw-scrollbar-thumb-hover: #6b7280;
+  --mw-scrollbar-track: #111827;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Themed scrollbars (Firefox + WebKit); see --mw-scrollbar-* in :root / .dark */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mw-scrollbar-thumb) var(--mw-scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--mw-scrollbar-track);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--mw-scrollbar-thumb);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--mw-scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--mw-scrollbar-track);
+}
+
+/* Ensure edges render above nodes so connection lines and wires don't go under nodes */
+.react-flow__edges {
+  z-index: 5;
+}
+.react-flow__nodes {
+  z-index: 3;
+}
+
+/* React Flow Controls - use design system variables */
+.react-flow__controls {
+  background: var(--mw-card-bg) !important;
+  border: 1px solid var(--mw-border);
+  border-radius: 8px;
+}
+.react-flow__controls-button {
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  background-color: var(--mw-card-bg) !important;
+  color: var(--mw-text-primary) !important;
+  border-color: var(--mw-border) !important;
+}
+@media (pointer: coarse) {
+  .react-flow__controls-button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+.react-flow__controls-button:hover {
+  background-color: var(--mw-card-bg-alt) !important;
+  color: var(--mw-text-primary) !important;
+}
+
+/* Workflow canvas: palette-tinted selection halo (nodes) */
+@keyframes mw-flow-node-glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px var(--mw-node-glow)) drop-shadow(0 0 1px var(--mw-node-glow-accent));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px var(--mw-node-glow)) drop-shadow(0 0 4px var(--mw-node-glow-accent));
+  }
+}
+
+.mw-flow-node-selected {
+  animation: mw-flow-node-glow-pulse 1.85s ease-in-out infinite;
+}
+
+/* Workflow canvas: selected edge glow (--mw-edge-glow set inline from stroke color) */
+@keyframes mw-flow-edge-glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px var(--mw-edge-glow)) drop-shadow(0 0 5px color-mix(in srgb, var(--mw-edge-glow) 42%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 7px var(--mw-edge-glow)) drop-shadow(0 0 14px color-mix(in srgb, var(--mw-edge-glow) 58%, transparent));
+  }
+}
+
+.react-flow__edge.mw-flow-edge-selected .react-flow__edge-path {
+  animation: mw-flow-edge-glow-pulse 1.7s ease-in-out infinite;
+}

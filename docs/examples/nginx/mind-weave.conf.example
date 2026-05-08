@@ -1,0 +1,110 @@
+# Mind Weave — example nginx server blocks (HTTPS → localhost)
+#
+# Copy to your nginx sites path (e.g. /etc/nginx/sites-available/mind-weave on Debian/Ubuntu),
+# then symlink from sites-enabled. Replace api.example.com and app.example.com with your hosts.
+# See docs/DEPLOYMENT_AND_NETWORK.md for DNS, Google OAuth, port forwarding, and Certbot.
+#
+# Backend: set BEHIND_REVERSE_PROXY=true in backend/.env so FastAPI trusts X-Forwarded-Proto from this proxy.
+#
+# macOS (Homebrew): config often lives under $(brew --prefix)/etc/nginx/ — include server blocks from
+# servers/*.conf; use `brew services start nginx` and `sudo nginx -t` / `brew services restart nginx`.
+#
+# After editing: sudo nginx -t && sudo systemctl reload nginx
+#
+# TLS: obtain certificates with Certbot once DNS points to this machine and ports 80/443 reach it.
+#   https://certbot.eff.org/ — e.g. sudo certbot --nginx -d api.example.com -d app.example.com
+# One certificate can cover both names (SANs); Certbot may set a single ssl_certificate path for both
+# server blocks—edit the ssl_certificate lines to match what certbot prints.
+# Certbot may inject or adjust :80 blocks for HTTP-01; if nginx -t fails after edits, merge carefully.
+
+# Optional: redirect HTTP to HTTPS (Certbot also manages :80 during HTTP-01 challenges)
+server {
+	listen 80;
+	listen [::]:80;
+	server_name api.example.com app.example.com;
+	return 301 https://$host$request_uri;
+}
+
+# API — FastAPI (uvicorn on 127.0.0.1:8000)
+#
+# uvicorn must listen on 127.0.0.1 (or 0.0.0.0). If you use --host <LAN_IP> only, nginx gets 502.
+#
+# IMPORTANT: use `proxy_pass http://127.0.0.1:8000` with NO path after the port (no trailing `/`).
+# If you use `proxy_pass http://127.0.0.1:8000/;` or `location /api/ { proxy_pass http://127.0.0.1:8000/; }`,
+# nginx rewrites the URI and the backend may see `/auth/...` instead of `/api/v1/auth/...` → 404 JSON
+# `{"detail":"Not Found"}` and Safari may suggest saving it as `login.json`.
+server {
+	listen 443 ssl;
+	listen [::]:443 ssl;
+	server_name api.example.com;
+
+	ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+
+	# POST /api/v1/voice-samples/ sends JSON with base64 WAV (backend cap TTS_BRIDGE_MAX_AUDIO_BYTES ≈ 50 MiB raw → ~67 MiB encoded).
+	# Runtime Audio File Input sends multipart audio up to STT_MAX_AUDIO_UPLOAD_BYTES (default 75 MiB).
+	# nginx default client_max_body_size is 1m — larger bodies get 413 with an HTML error page that has no Access-Control-Allow-Origin, so the browser reports a CORS failure instead of "payload too large".
+	client_max_body_size 100m;
+
+	# Safety net: if a request does NOT match the regex `location` below (wrong path, typo),
+	# nginx still defaults proxy_read_timeout to 60s — streams then die at ~60s. These apply
+	# to every location in this server unless overridden.
+	proxy_read_timeout 3600s;
+	proxy_send_timeout 3600s;
+
+	# Long NDJSON stream (parallel LLM steps can run for minutes). CORS OPTIONS preflight is
+	# short and often 200; the POST body is chunked — without these, nginx may buffer or
+	# time out → browser net::ERR_INCOMPLETE_CHUNKED_ENCODING while uvicorn still completes.
+	location ~ ^/api/v1/workflow-definitions/[^/]+/run_stream$ {
+		proxy_pass http://127.0.0.1:8000;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_buffering off;
+		proxy_request_buffering off;
+		proxy_read_timeout 3600s;
+		proxy_send_timeout 3600s;
+	}
+
+	location / {
+		proxy_pass http://127.0.0.1:8000;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+	}
+}
+
+# SPA — Vite dev server (127.0.0.1:5173). For production, serve frontend/dist with root + try_files instead.
+server {
+	listen 443 ssl;
+	listen [::]:443 ssl;
+	server_name app.example.com;
+
+	ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+
+	location / {
+		proxy_pass http://127.0.0.1:5173;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+	}
+}
+
+# Optional — production SPA: build with `npm run build` and serve static files (no Vite dev server).
+# server {
+# 	listen 443 ssl;
+# 	listen [::]:443 ssl;
+# 	server_name app.example.com;
+# 	root /path/to/mind-weave/frontend/dist;
+# 	ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
+# 	ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+# 	location / {
+# 		try_files $uri $uri/ /index.html;
+# 	}
+# }

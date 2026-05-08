@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- SE-020: baseline CSP; tighten connect-src in production to your API origin only. -->
+    <!-- LAN dev: `http:` / `ws:` allow VITE_API_BASE on RFC1918 hosts (CSP has no private-range syntax). -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob: data:; connect-src 'self' http://127.0.0.1:* http://localhost:* http: ws://127.0.0.1:* ws://localhost:* ws://0.0.0.0:* ws: wss:" />
+    <title>Mind Weave</title>
+    <script>
+      (function() {
+        var isDark = localStorage.getItem('theme') === 'dark' ||
+          (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', isDark);
+      })();
+    </script>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

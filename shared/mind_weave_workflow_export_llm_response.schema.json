@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mind-weave.local/schemas/mind_weave_workflow_export_llm_response.schema.json",
+  "title": "mind_weave_workflow_export",
+  "description": "Reference JSON Schema for LLM structured output when generating a Mind Weave workflow export. Intended for copy-paste into a Structure resource used by Simple LLM Call. Tightens the envelope (full export root), requires non-empty edges, requires nodes array to contain both start and stop (contains), and constrains Start/Stop data via if/then on node kind.",
+  "type": "object",
+  "required": ["kind", "schema_version", "exported_at", "definition"],
+  "properties": {
+    "kind": { "type": "string", "const": "mind_weave_workflow_export" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "exported_at": { "type": "string", "minLength": 1 },
+    "source_definition_id": { "type": "string" },
+    "definition": {
+      "type": "object",
+      "required": ["name", "description", "graph"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": ["string", "null"] },
+        "palette_id": { "type": ["string", "null"] },
+        "graph": {
+          "type": "object",
+          "required": ["schema_version", "nodes", "edges"],
+          "properties": {
+            "schema_version": { "type": "integer", "const": 1 },
+            "nodes": {
+              "type": "array",
+              "minItems": 2,
+              "allOf": [
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": ["kind"],
+                    "properties": { "kind": { "const": "start" } }
+                  }
+                },
+                {
+                  "contains": {
+                    "type": "object",
+                    "required": ["kind"],
+                    "properties": { "kind": { "const": "stop" } }
+                  }
+                }
+              ],
+              "items": { "$ref": "#/$defs/workflowNode" }
+            },
+            "edges": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/graphEdge" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "graphEdge": {
+      "type": "object",
+      "required": ["source", "target"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "source_handle": { "type": "string" },
+        "target_handle": { "type": "string" }
+      }
+    },
+    "workflowNode": {
+      "type": "object",
+      "required": ["id", "kind", "label", "data", "position"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["start", "stop", "primitive", "utility", "control", "skill", "workflow"]
+        },
+        "label": { "type": "string" },
+        "position": {
+          "type": "object",
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          }
+        },
+        "data": { "type": "object" },
+        "primitive_type": { "type": "string" },
+        "utility_type": { "type": "string" },
+        "control_type": { "type": "string" },
+        "skill_type": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "start" } }, "required": ["kind"] },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": ["required_inputs"],
+                "properties": {
+                  "required_inputs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": ["key", "type"],
+                      "properties": {
+                        "key": { "type": "string" },
+                        "type": { "type": "string" },
+                        "value": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "stop" } }, "required": ["kind"] },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": ["required_outputs"],
+                "properties": {
+                  "required_outputs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": ["key", "type"],
+                      "properties": {
+                        "key": { "type": "string" },
+                        "type": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "primitive" } }, "required": ["kind"] },
+          "then": { "required": ["primitive_type"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "utility" } }, "required": ["kind"] },
+          "then": { "required": ["utility_type"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "control" } }, "required": ["kind"] },
+          "then": { "required": ["control_type"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "skill" } }, "required": ["kind"] },
+          "then": { "required": ["skill_type"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "workflow" } }, "required": ["kind"] },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": ["workflow_id"],
+                "properties": {
+                  "workflow_id": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

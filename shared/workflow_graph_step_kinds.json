@@ -1,0 +1,506 @@
+{
+  "manifest_version": 1,
+  "steps": [
+    {
+      "kind": "primitive",
+      "primitive_type": "string",
+      "react_flow_type": "stringPrimitive",
+      "pydantic_model": "StringPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "list",
+      "react_flow_type": "listPrimitive",
+      "pydantic_model": "ListPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "dictionary",
+      "react_flow_type": "dictionaryPrimitive",
+      "pydantic_model": "DictionaryPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "boolean",
+      "react_flow_type": "booleanPrimitive",
+      "pydantic_model": "BooleanPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "int",
+      "react_flow_type": "intPrimitive",
+      "pydantic_model": "IntPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "datetime",
+      "react_flow_type": "dateTimePrimitive",
+      "pydantic_model": "DateTimePrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "structure",
+      "react_flow_type": "structurePrimitive",
+      "pydantic_model": "StructurePrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "document",
+      "react_flow_type": "documentPrimitive",
+      "pydantic_model": "DocumentPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "image",
+      "react_flow_type": "imagePrimitive",
+      "pydantic_model": "ImagePrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "gmail",
+      "react_flow_type": "gmailPrimitive",
+      "pydantic_model": "GmailPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "sandbox_behavior",
+      "react_flow_type": "sandboxBehaviorPrimitive",
+      "pydantic_model": "SandboxBehaviorPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "decision_action",
+      "react_flow_type": "decisionActionPrimitive",
+      "pydantic_model": "DecisionActionPrimitiveNode"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "sandbox_tick",
+      "react_flow_type": "sandboxTickPrimitive",
+      "pydantic_model": "SandboxTickPrimitiveNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "simple_llm_call",
+      "react_flow_type": "simpleLLMCall",
+      "pydantic_model": "SimpleLLMCallSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "multimodal_llm",
+      "react_flow_type": "multimodalLLMCall",
+      "pydantic_model": "MultimodalLLMCallSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "text_to_speech",
+      "react_flow_type": "textToSpeech",
+      "pydantic_model": "TextToSpeechSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "transcribe_audio",
+      "react_flow_type": "transcribeAudio",
+      "pydantic_model": "TranscribeAudioSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "audio_file_input",
+      "react_flow_type": "audioFileInput",
+      "pydantic_model": "AudioFileInputSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "transcribe_file",
+      "react_flow_type": "transcribeFile",
+      "pydantic_model": "TranscribeFileSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "gmail_list_messages",
+      "react_flow_type": "gmailListMessages",
+      "pydantic_model": "GmailListMessagesSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "calendar_list_events",
+      "react_flow_type": "calendarListEvents",
+      "pydantic_model": "CalendarListEventsSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "fetch_url",
+      "react_flow_type": "fetchUrl",
+      "pydantic_model": "FetchUrlSkillNode"
+    },
+    {
+      "kind": "skill",
+      "skill_type": "capture_url_snapshot",
+      "react_flow_type": "captureUrlSnapshot",
+      "pydantic_model": "CaptureUrlSnapshotSkillNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "list_to_string",
+      "react_flow_type": "listToString",
+      "pydantic_model": "ListToStringUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "string_to_list",
+      "react_flow_type": "stringToList",
+      "pydantic_model": "StringToListUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "prepend_text",
+      "react_flow_type": "prependText",
+      "pydantic_model": "PrependTextUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "string_trunc",
+      "react_flow_type": "stringTrunc",
+      "pydantic_model": "StringTruncUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "message",
+      "react_flow_type": "messageUtility",
+      "pydantic_model": "MessageUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_tick_items",
+      "react_flow_type": "sandboxTickItems",
+      "pydantic_model": "SandboxTickItemsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_world_grid",
+      "react_flow_type": "sandboxWorldGrid",
+      "pydantic_model": "SandboxWorldGridUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_available_cells",
+      "react_flow_type": "sandboxAvailableCells",
+      "pydantic_model": "SandboxAvailableCellsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_tick_pet",
+      "react_flow_type": "sandboxTickPet",
+      "pydantic_model": "SandboxTickPetUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_filter_items_by_type",
+      "react_flow_type": "sandboxFilterItemsByType",
+      "pydantic_model": "SandboxFilterItemsByTypeUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_nearest_item_by_type",
+      "react_flow_type": "sandboxNearestItemByType",
+      "pydantic_model": "SandboxNearestItemByTypeUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_closest_item",
+      "react_flow_type": "sandboxClosestItem",
+      "pydantic_model": "SandboxClosestItemUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_decision_intent",
+      "react_flow_type": "sandboxDecisionIntent",
+      "pydantic_model": "SandboxDecisionIntentUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_decision_move_to",
+      "react_flow_type": "sandboxDecisionMoveTo",
+      "pydantic_model": "SandboxDecisionMoveToUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_starter_decision",
+      "react_flow_type": "sandboxStarterDecision",
+      "pydantic_model": "SandboxStarterDecisionUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_pet_hunger",
+      "react_flow_type": "sandboxPetHunger",
+      "pydantic_model": "SandboxPetHungerUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_pet_energy",
+      "react_flow_type": "sandboxPetEnergy",
+      "pydantic_model": "SandboxPetEnergyUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_pet_cell",
+      "react_flow_type": "sandboxPetCell",
+      "pydantic_model": "SandboxPetCellUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_is_nearby8",
+      "react_flow_type": "sandboxIsNearby8",
+      "pydantic_model": "SandboxIsNearby8UtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_first_nearby_food",
+      "react_flow_type": "sandboxFirstNearbyFood",
+      "pydantic_model": "SandboxFirstNearbyFoodUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_first_food_world_order",
+      "react_flow_type": "sandboxFirstFoodWorldOrder",
+      "pydantic_model": "SandboxFirstFoodWorldOrderUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "len_from_list",
+      "react_flow_type": "lenFromList",
+      "pydantic_model": "LenFromListUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "random_item_from_list",
+      "react_flow_type": "randomItemFromList",
+      "pydantic_model": "RandomItemFromListUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "int_to_string",
+      "react_flow_type": "intToString",
+      "pydantic_model": "IntToStringUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "list_item_by_index",
+      "react_flow_type": "listItemByIndex",
+      "pydantic_model": "ListItemByIndexUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "dictionary_value_by_key",
+      "react_flow_type": "dictionaryValueByKey",
+      "pydantic_model": "DictionaryValueByKeyUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "dictionary_set_value_by_key",
+      "react_flow_type": "dictionarySetValueByKey",
+      "pydantic_model": "DictionarySetValueByKeyUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "read_document_property",
+      "react_flow_type": "readDocumentProperty",
+      "pydantic_model": "ReadDocumentPropertyUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "load_document",
+      "react_flow_type": "loadDocument",
+      "pydantic_model": "LoadDocumentUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "upsert_document",
+      "react_flow_type": "upsertDocument",
+      "pydantic_model": "UpsertDocumentUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "parse_document_body",
+      "react_flow_type": "parseDocumentBody",
+      "pydantic_model": "ParseDocumentBodyUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "html_parse_basic",
+      "react_flow_type": "htmlParseBasic",
+      "pydantic_model": "HtmlParseBasicUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "write_object_to_document_body",
+      "react_flow_type": "writeObjectToDocumentBody",
+      "pydantic_model": "WriteObjectToDocumentBodyUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "append_value_to_document",
+      "react_flow_type": "appendValueToDocument",
+      "pydantic_model": "AppendValueToDocumentUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "validate_against_structure",
+      "react_flow_type": "validateAgainstStructure",
+      "pydantic_model": "ValidateAgainstStructureUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "add_to_list",
+      "react_flow_type": "addToList",
+      "pydantic_model": "AddToListUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "add_ints",
+      "react_flow_type": "addInts",
+      "pydantic_model": "AddIntsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "add_days",
+      "react_flow_type": "addDays",
+      "pydantic_model": "AddDaysUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "subtract_ints",
+      "react_flow_type": "subtractInts",
+      "pydantic_model": "SubtractIntsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "multiply_ints",
+      "react_flow_type": "multiplyInts",
+      "pydantic_model": "MultiplyIntsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "divide_ints",
+      "react_flow_type": "divideInts",
+      "pydantic_model": "DivideIntsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "modulo_ints",
+      "react_flow_type": "moduloInts",
+      "pydantic_model": "ModuloIntsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "min_ints",
+      "react_flow_type": "minInts",
+      "pydantic_model": "MinIntsUtilityNode"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "max_ints",
+      "react_flow_type": "maxInts",
+      "pydantic_model": "MaxIntsUtilityNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "basic_conditional",
+      "react_flow_type": "basicConditional",
+      "pydantic_model": "BasicConditionalControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "is",
+      "react_flow_type": "isControl",
+      "pydantic_model": "IsControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "is_empty",
+      "react_flow_type": "isEmptyControl",
+      "pydantic_model": "IsEmptyControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "gt",
+      "react_flow_type": "gtControl",
+      "pydantic_model": "GtControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "lt",
+      "react_flow_type": "ltControl",
+      "pydantic_model": "LtControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "gte",
+      "react_flow_type": "gteControl",
+      "pydantic_model": "GteControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "lte",
+      "react_flow_type": "lteControl",
+      "pydantic_model": "LteControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "and",
+      "react_flow_type": "andControl",
+      "pydantic_model": "AndControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "or",
+      "react_flow_type": "orControl",
+      "pydantic_model": "OrControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "xor",
+      "react_flow_type": "xorControl",
+      "pydantic_model": "XorControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "not",
+      "react_flow_type": "notControl",
+      "pydantic_model": "NotControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "between",
+      "react_flow_type": "betweenControl",
+      "pydantic_model": "BetweenControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "for_loop",
+      "react_flow_type": "forLoopControl",
+      "pydantic_model": "ForLoopControlNode"
+    },
+    {
+      "kind": "control",
+      "control_type": "for_loop_end",
+      "react_flow_type": "forLoopEndControl",
+      "pydantic_model": "ForLoopEndControlNode"
+    },
+    {
+      "kind": "start",
+      "react_flow_type": "start",
+      "pydantic_model": "StartGraphNode"
+    },
+    {
+      "kind": "stop",
+      "react_flow_type": "stop",
+      "pydantic_model": "StopGraphNode"
+    },
+    {
+      "kind": "workflow",
+      "react_flow_type": "workflowRef",
+      "pydantic_model": "WorkflowRefNode"
+    }
+  ]
+}

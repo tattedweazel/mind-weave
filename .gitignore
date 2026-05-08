@@ -1,0 +1,26 @@
+.DS_Store
+.idea/
+.vscode/
+*.swp
+.env
+# Local overrides (never commit secrets); keep tracked templates named `.env.example`.
+.env.*
+!**/.env.example
+.cursor/
+.venv/
+# Local TTS + STT (Whisper) weights and caches (never commit multi-GB artifacts).
+# Default layout: .local/tts-models, .local/stt-models (see services/*/README, OPERATIONS.md).
+.local/
+# If STT_CACHE_DIR is pointed at a directory named stt-models inside the tree, keep it out of VC.
+**/stt-models/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.db
+*.db-shm
+*.db-wal
+coverage/
+htmlcov/
+.coverage
+frontend/coverage/

@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+.local/
+# Fallback when repo .local/ does not exist (see stt_bridge.config._default_cache_root)
+stt_bridge/.local/
