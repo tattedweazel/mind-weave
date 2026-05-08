@@ -3,6 +3,7 @@ name = "mind-weave-tts-bridge"
 version = "0.1.0"
 description = "Local HTTP TTS service for Mind Weave"
 readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",

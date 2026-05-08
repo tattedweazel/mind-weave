@@ -1,8 +1,8 @@
 ---
 
-## last_reviewed: 2026-05-08 (pre-public checklist; dependency + gitignore)
+## last_reviewed: 2026-05-08 (Apache-2.0 LICENSE, SECURITY.md, CONTRIBUTING.md; manifests)
 audience: Maintainers preparing a first public GitHub (or similar) push after local-only history
-scope: Whole repo: secrets posture, dependency advisories, tests, docs coherence; excludes choosing an open-source **license** (see Policy checkpoint)
+scope: Whole repo: secrets posture, dependency advisories, tests, docs coherence; policy files [LICENSE](../../LICENSE), [SECURITY.md](../../SECURITY.md), [CONTRIBUTING.md](../../CONTRIBUTING.md) are tracked at repo root (2026-05-08).
 methodology: Re-run existing audit family ([SECURITY_AUDIT.md](SECURITY_AUDIT.md), [TEST_AUDIT.md](TEST_AUDIT.md), [LIBRARY_USAGE_AUDIT.md](LIBRARY_USAGE_AUDIT.md), [CODE_QUALITY_AND_STYLE_AUDIT.md](CODE_QUALITY_AND_STYLE_AUDIT.md), [MODULAR_DIRECTION_AUDIT.md](MODULAR_DIRECTION_AUDIT.md), [DOCUMENTATION_AUDIT.md](DOCUMENTATION_AUDIT.md)); record tool output; apply scoped remediations; destructive git rewrite only after tree is clean (see **Git history**).
 
 ---
@@ -43,13 +43,11 @@ Some contributors prefer a **100% line-coverage** bar. This codebase instead fol
 
 ## Policy checkpoint (license and disclosure)
 
-**Not done in this pass** (per maintainer choice to decide explicitly):
+**Done (2026-05-08):**
 
-- `LICENSE` (SPDX / text)
-- `SECURITY.md` (disclosure contact / process)
-- `CONTRIBUTING.md` (optional)
-
-Add these in a follow-up commit before advertising the repo.
+- [LICENSE](../../LICENSE) — Apache License 2.0 (`Copyright 2026 Mind Weave contributors` in the Appendix; replace with a single legal entity name if required).
+- [SECURITY.md](../../SECURITY.md) — GitHub private vulnerability reporting only (no email in-repo). After the first push, enable **Settings → General → Security → Private vulnerability reporting** on GitHub if it is not already on.
+- [CONTRIBUTING.md](../../CONTRIBUTING.md) — Local checks, test policy, links to architecture and audits.
 
 ## Git history — single initial commit
 

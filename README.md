@@ -57,6 +57,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for layering, DRY boundaries (p
 
 Backend pytest suites are extensive. **This project does not use a line-coverage target**; what matters is that important behavior is covered and recorded. **Line coverage is not the same as “core behavior covered.”** See [docs/Audits/TEST_AUDIT.md](docs/Audits/TEST_AUDIT.md) for the capability → test matrix and how to keep it current when the API changes. For README vs shipped-code drift and the documentation audit process, see [docs/Audits/DOCUMENTATION_AUDIT.md](docs/Audits/DOCUMENTATION_AUDIT.md). For a recorded pre-public checklist (dependency scans, optional coverage reports, git squash recipe), see [docs/Audits/PUBLIC_RELEASE_PASS.md](docs/Audits/PUBLIC_RELEASE_PASS.md).
 
+## License, security, and contributing
+
+Mind Weave is licensed under the [Apache License 2.0](LICENSE). To report security vulnerabilities privately, see [SECURITY.md](SECURITY.md) (GitHub **Security** tab — enable private vulnerability reporting on the repo if needed). For development setup and pull-request expectations, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Releases & upgrades
 
 See [CHANGELOG.md](CHANGELOG.md) for operator-facing release notes and [docs/OPERATIONS.md](docs/OPERATIONS.md) for deployment runbook detail (JWT upgrades, multi-instance rate limits).

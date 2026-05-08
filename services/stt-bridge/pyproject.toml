@@ -3,6 +3,7 @@ name = "mind-weave-stt-bridge"
 version = "0.1.0"
 description = "Local HTTP speech-to-text service for Mind Weave (faster-whisper)"
 readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",

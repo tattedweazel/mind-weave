@@ -1,6 +1,6 @@
 ---
 
-## last_reviewed: 2026-05-08 (SANDBOX test-audit link; public-release audit doc)
+## last_reviewed: 2026-05-08 (root LICENSE, SECURITY, CONTRIBUTING)
 audience: Maintainers and operators validating that prose matches code and that docs are discoverable
 scope: Root and package READMEs, `docs/*.md` (non-audit narrative), **`docs/DEPLOYMENT_AND_NETWORK.md`** (SSOT for network paths, Google OAuth, HTTPS/tunnel), `backend/.env.example` comments, [`backend/app/domain/schemas/README.md`](../../backend/app/domain/schemas/README.md). **Not** re-auditing security behavior ([SECURITY_AUDIT.md](SECURITY_AUDIT.md)), dependencies ([LIBRARY_USAGE_AUDIT.md](LIBRARY_USAGE_AUDIT.md)), composition ([MODULAR_DIRECTION_AUDIT.md](MODULAR_DIRECTION_AUDIT.md)), code style ([CODE_QUALITY_AND_STYLE_AUDIT.md](CODE_QUALITY_AND_STYLE_AUDIT.md)), or test mapping ([TEST_AUDIT.md](TEST_AUDIT.md))—this file **points** to those.
 methodology: Static inventory, relative-link sanity checks from `docs/` and repo root, SSOT/dup review, and sampled factual spot-checks against [`backend/app/domain/schemas/graph_nodes.py`](../../backend/app/domain/schemas/graph_nodes.py), [`backend/app/domain/palette_defaults.py`](../../backend/app/domain/palette_defaults.py), and [`frontend/src/components/workflow-editor/WorkflowEditor.tsx`](../../frontend/src/components/workflow-editor/WorkflowEditor.tsx). New passes add **DO-xxx** rows, update `last_reviewed`, and **remove** rows when remediated (keep ids stable until closed). **Documents:** treat [ARCHITECTURE.md](../ARCHITECTURE.md) “Resource-backed primitives” as the narrative SSOT—**`documents.body`** is flexible text (Markdown is common, not exclusive); keep [WORKFLOW_TOOL_INVENTORY.md](../../WORKFLOW_TOOL_INVENTORY.md) and package READMEs consistent.
@@ -67,7 +67,10 @@ flowchart TB
 
 | Document | Primary audience | Role |
 |----------|------------------|------|
-| [README.md](../../README.md) | New contributors / users | Product snapshot, links to packages and ARCHITECTURE |
+| [README.md](../../README.md) | New contributors / users | Product snapshot; links to packages, ARCHITECTURE, License / [SECURITY.md](../../SECURITY.md) / [CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| [LICENSE](../../LICENSE) | Users / distributors | Apache-2.0 full text |
+| [SECURITY.md](../../SECURITY.md) | Reporters / maintainers | Private vulnerability reporting via GitHub |
+| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Contributors | Dev setup, checks, PR expectations |
 | [CHANGELOG.md](../../CHANGELOG.md) | Operators / upgraders | Release notes; points to OPERATIONS |
 | [docs/ARCHITECTURE.md](../ARCHITECTURE.md) | Maintainers | SSOT for layering, SSOT pointers, related audits |
 | [docs/OPERATIONS.md](../OPERATIONS.md) | Operators | Post-deploy auth, rate limits, doc pointers |
