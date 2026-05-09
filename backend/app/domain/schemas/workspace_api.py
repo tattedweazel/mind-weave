@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
@@ -12,8 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 def _normalize_workflow_id_list(v: object) -> List[str]:
     if v is None:
         return []
+    if isinstance(v, (str, bytes, dict)):
+        return []
+    if not isinstance(v, Iterable):
+        return []
     out: List[str] = []
-    for x in v:  # type: ignore[union-attr]
+    for x in v:
         out.append(str(UUID(str(x))))
     return out
 

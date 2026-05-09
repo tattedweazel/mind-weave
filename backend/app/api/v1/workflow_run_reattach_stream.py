@@ -25,10 +25,9 @@ from typing import Any, AsyncIterator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.api.deps import get_current_user
-from app.core.logging import logger
 from app.persistence.db import get_session
 from app.persistence.tables import NodeRunLog, TranscriptionJob, User, WorkflowRun
 
@@ -102,7 +101,6 @@ async def reattach_workflow_run_stream(
     stream_engine = preflight_session.get_bind()
 
     async def ndjson_stream() -> AsyncIterator[str]:
-        t0 = perf_counter()
         seen_log_ids: set[uuid.UUID] = set()
         seen_job_states: dict[uuid.UUID, str] = {}
 
@@ -117,17 +115,20 @@ async def reattach_workflow_run_stream(
                 session.exec(
                     select(NodeRunLog)
                     .where(NodeRunLog.run_id == run_id)
-                    .order_by(NodeRunLog.created_at.asc(), NodeRunLog.id.asc())
+                    .order_by(col(NodeRunLog.created_at).asc(), col(NodeRunLog.id).asc())
                 ).all()
             )
-            yield json.dumps(
-                {
-                    "event": "reattach_start",
-                    "run_id": str(run_id),
-                    "status": run_row.status,
-                    "replayed_count": len(initial_logs),
-                },
-            ) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "event": "reattach_start",
+                        "run_id": str(run_id),
+                        "status": run_row.status,
+                        "replayed_count": len(initial_logs),
+                    },
+                )
+                + "\n"
+            )
             for log_row in initial_logs:
                 seen_log_ids.add(log_row.id)
                 yield json.dumps(_serialize_node_log(log_row)) + "\n"
@@ -138,7 +139,7 @@ async def reattach_workflow_run_stream(
                     select(TranscriptionJob)
                     .where(TranscriptionJob.run_id == run_id)
                     .where(TranscriptionJob.user_id == current_user.id)
-                    .order_by(TranscriptionJob.created_at.asc())
+                    .order_by(col(TranscriptionJob.created_at).asc())
                 ).all()
             )
             for job in jobs:
@@ -155,9 +156,12 @@ async def reattach_workflow_run_stream(
             poll_interval = max(0.25, float(_REATTACH_TAIL_INTERVAL_SECONDS))
             while True:
                 if perf_counter() - tail_started > _REATTACH_TAIL_MAX_DURATION_SECONDS:
-                    yield json.dumps(
-                        {"event": "reattach_timeout", "run_id": str(run_id)},
-                    ) + "\n"
+                    yield (
+                        json.dumps(
+                            {"event": "reattach_timeout", "run_id": str(run_id)},
+                        )
+                        + "\n"
+                    )
                     return
                 await asyncio.sleep(poll_interval)
                 # Refresh persistent state.
@@ -167,7 +171,7 @@ async def reattach_workflow_run_stream(
                     session.exec(
                         select(NodeRunLog)
                         .where(NodeRunLog.run_id == run_id)
-                        .order_by(NodeRunLog.created_at.asc(), NodeRunLog.id.asc())
+                        .order_by(col(NodeRunLog.created_at).asc(), col(NodeRunLog.id).asc())
                     ).all()
                 )
                 for log_row in new_logs:
@@ -181,7 +185,7 @@ async def reattach_workflow_run_stream(
                         select(TranscriptionJob)
                         .where(TranscriptionJob.run_id == run_id)
                         .where(TranscriptionJob.user_id == current_user.id)
-                        .order_by(TranscriptionJob.created_at.asc())
+                        .order_by(col(TranscriptionJob.created_at).asc())
                     ).all()
                 )
                 for job in jobs_now:
@@ -198,12 +202,6 @@ async def reattach_workflow_run_stream(
                 if (run_now.status or "running") != "running":
                     yield json.dumps(_serialize_run_end(run_now)) + "\n"
                     return
-
-        logger.info(
-            "reattach_stream complete run_id=%s elapsed_ms=%.1f",
-            run_id,
-            (perf_counter() - t0) * 1000,
-        )
 
     return StreamingResponse(
         ndjson_stream(),

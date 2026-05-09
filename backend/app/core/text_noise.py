@@ -242,7 +242,9 @@ def _strip_tracking_url_params(text: str) -> str:
             return match.group(0)
         if not split.query:
             return url + trailing
-        kept = [(k, v) for k, v in parse_qsl(split.query, keep_blank_values=True) if k.lower() not in _TRACKING_QUERY_KEYS]
+        kept = [
+            (k, v) for k, v in parse_qsl(split.query, keep_blank_values=True) if k.lower() not in _TRACKING_QUERY_KEYS
+        ]
         if len(kept) == len(parse_qsl(split.query, keep_blank_values=True)):
             return url + trailing
         new_query = urlencode(kept, doseq=True)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.domain.audio_file_validation import ValidatedAudioFile
 from app.persistence.tables import AudioFileArtifact, utc_now
@@ -26,7 +26,7 @@ class AudioFileArtifactService:
                     AudioFileArtifact.user_id == self.user_id,
                     AudioFileArtifact.transient == False,  # noqa: E712 — SQLAlchemy expression form
                 )
-                .order_by(AudioFileArtifact.created_at.desc())
+                .order_by(col(AudioFileArtifact.created_at).desc())
             ).all()
         )
 

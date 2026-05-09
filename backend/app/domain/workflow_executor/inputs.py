@@ -131,15 +131,9 @@ def _plain_upstream_from_slot(
             return slot.data
         if expected_type == "gmail" and isinstance(slot.data, dict):
             return dict(slot.data)
-        if (
-            isinstance(slot.data, dict)
-            and expected_type == "string"
-            and is_gmail_like_message_dict(slot.data)
-        ):
+        if isinstance(slot.data, dict) and expected_type == "string" and is_gmail_like_message_dict(slot.data):
             return format_gmail_message_dict_for_llm_prompt(slot.data)
-        return (
-            json.dumps(slot.data, indent=2) if isinstance(slot.data, (dict, list)) else str(slot.data)
-        )
+        return json.dumps(slot.data, indent=2) if isinstance(slot.data, (dict, list)) else str(slot.data)
     return str(slot)
 
 
@@ -155,11 +149,7 @@ def _slot_needs_implicit_wire(
     if overrides.get(key) is not None:
         return False
     t = _expected_type_for_key(node_required_inputs, key)
-    if (
-        implicit_null_target_wire_string_keys
-        and key in implicit_null_target_wire_string_keys
-        and t == "string"
-    ):
+    if implicit_null_target_wire_string_keys and key in implicit_null_target_wire_string_keys and t == "string":
         return current in (None, "")
     if t in ("dictionary", "list"):
         return current in (None, "")

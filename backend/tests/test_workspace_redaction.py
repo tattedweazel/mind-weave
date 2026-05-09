@@ -24,22 +24,24 @@ def test_non_dict_payload_returns_empty():
 
 
 def test_output_included_and_redacted():
-    obj = _make_execution([
-        {
-            "capability_key": "wf:abc",
-            "status": "success",
-            "error": None,
-            "validation": {},
-            "output": {
-                "node_id": "stop1",
-                "kind": "list",
-                "data": [
-                    {"id": "msg-1", "subject": "Hello", "snippet": "Preview"},
-                    {"id": "msg-2", "subject": "World", "snippet": "More"},
-                ],
-            },
-        }
-    ])
+    obj = _make_execution(
+        [
+            {
+                "capability_key": "wf:abc",
+                "status": "success",
+                "error": None,
+                "validation": {},
+                "output": {
+                    "node_id": "stop1",
+                    "kind": "list",
+                    "data": [
+                        {"id": "msg-1", "subject": "Hello", "snippet": "Preview"},
+                        {"id": "msg-2", "subject": "World", "snippet": "More"},
+                    ],
+                },
+            }
+        ]
+    )
     result = sanitize_workspace_execution_for_console(obj)
     cap = result["capability_results"][0]
     assert cap["capability_key"] == "wf:abc"
@@ -55,29 +57,27 @@ def test_output_included_and_redacted():
 
 
 def test_output_none_stays_none():
-    obj = _make_execution([
-        {"capability_key": "wf:x", "status": "error", "error": "boom", "output": None}
-    ])
+    obj = _make_execution([{"capability_key": "wf:x", "status": "error", "error": "boom", "output": None}])
     result = sanitize_workspace_execution_for_console(obj)
     assert result["capability_results"][0]["output"] is None
 
 
 def test_output_absent_becomes_none():
-    obj = _make_execution([
-        {"capability_key": "wf:y", "status": "success"}
-    ])
+    obj = _make_execution([{"capability_key": "wf:y", "status": "success"}])
     result = sanitize_workspace_execution_for_console(obj)
     assert result["capability_results"][0]["output"] is None
 
 
 def test_error_urls_stripped():
-    obj = _make_execution([
-        {
-            "capability_key": "wf:z",
-            "status": "error",
-            "error": "Failed at https://api.google.com/v1/messages: 401",
-        }
-    ])
+    obj = _make_execution(
+        [
+            {
+                "capability_key": "wf:z",
+                "status": "error",
+                "error": "Failed at https://api.google.com/v1/messages: 401",
+            }
+        ]
+    )
     result = sanitize_workspace_execution_for_console(obj)
     err = result["capability_results"][0]["error"]
     assert "https://" not in err
@@ -85,13 +85,15 @@ def test_error_urls_stripped():
 
 
 def test_validation_redacted():
-    obj = _make_execution([
-        {
-            "capability_key": "wf:v",
-            "status": "error",
-            "validation": {"prompt": "secret system prompt", "passed": False},
-        }
-    ])
+    obj = _make_execution(
+        [
+            {
+                "capability_key": "wf:v",
+                "status": "error",
+                "validation": {"prompt": "secret system prompt", "passed": False},
+            }
+        ]
+    )
     result = sanitize_workspace_execution_for_console(obj)
     val = result["capability_results"][0]["validation"]
     assert val["prompt"] == "[redacted]"

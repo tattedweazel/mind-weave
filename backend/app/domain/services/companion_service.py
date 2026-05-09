@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.persistence.tables import Companion, CompanionMemoryEntry, Persona
 
@@ -98,7 +98,7 @@ class CompanionService:
         q = select(CompanionMemoryEntry).where(CompanionMemoryEntry.companion_id == c.id)
         if approval_status:
             q = q.where(CompanionMemoryEntry.approval_status == approval_status)
-        q = q.order_by(CompanionMemoryEntry.created_at.desc())  # type: ignore[union-attr]
+        q = q.order_by(col(CompanionMemoryEntry.created_at).desc())
         return list(self.session.exec(q).all())
 
     def set_memory_approval(self, memory_id: uuid.UUID, *, approved: bool) -> Optional[CompanionMemoryEntry]:

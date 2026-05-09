@@ -198,13 +198,9 @@ class SandboxService:
         except (TypeError, ValueError) as exc:
             raise ValueError("width and height must be integers") from exc
         if w_i < SANDBOX_GRID_MIN_SIZE or h_i < SANDBOX_GRID_MIN_SIZE:
-            raise ValueError(
-                f"grid dimensions must be at least {SANDBOX_GRID_MIN_SIZE}x{SANDBOX_GRID_MIN_SIZE}"
-            )
+            raise ValueError(f"grid dimensions must be at least {SANDBOX_GRID_MIN_SIZE}x{SANDBOX_GRID_MIN_SIZE}")
         if w_i > SANDBOX_GRID_MAX_SIZE or h_i > SANDBOX_GRID_MAX_SIZE:
-            raise ValueError(
-                f"grid dimensions must be at most {SANDBOX_GRID_MAX_SIZE}x{SANDBOX_GRID_MAX_SIZE}"
-            )
+            raise ValueError(f"grid dimensions must be at most {SANDBOX_GRID_MAX_SIZE}x{SANDBOX_GRID_MAX_SIZE}")
 
         st = env.sandbox.model_copy(deep=True)
         resize_world_grid(st, w_i, h_i)

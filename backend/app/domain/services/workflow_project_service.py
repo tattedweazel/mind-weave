@@ -80,7 +80,7 @@ class WorkflowProjectService:
 
     def count_workflows(self, project_id: uuid.UUID) -> int:
         n = self.session.exec(
-            select(func.count(WorkflowDefinition.id)).where(WorkflowDefinition.project_id == project_id)
+            select(func.count(col(WorkflowDefinition.id))).where(WorkflowDefinition.project_id == project_id)
         ).one()
         return int(n)
 

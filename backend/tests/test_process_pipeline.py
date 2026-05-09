@@ -35,6 +35,7 @@ from app.providers.base import ProviderResponse
 # Mock LM provider
 # ---------------------------------------------------------------------------
 
+
 class _MockProvider:
     """Fake LM provider that returns canned responses based on the schema name."""
 
@@ -194,9 +195,7 @@ async def test_run_process_pipeline_disabled_step_skipped():
     svc = _make_svc()
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="s1", kind=ProcessStepKind.summarize, enabled=False, description="Sum.")
-        ],
+        process=[ProcessStepConfig(id="s1", kind=ProcessStepKind.summarize, enabled=False, description="Sum.")],
     )
     payload, sse = await svc._run_process_pipeline(
         pipeline_cfg=cfg,
@@ -220,9 +219,7 @@ async def test_run_process_pipeline_summarize(monkeypatch):
 
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="sum1", kind=ProcessStepKind.summarize, description="Summarize emails.")
-        ],
+        process=[ProcessStepConfig(id="sum1", kind=ProcessStepKind.summarize, description="Summarize emails.")],
     )
     ex = _execution_with_output({"data": [{"subject": "Hello"}]})
     payload, sse = await svc._run_process_pipeline(
@@ -255,9 +252,7 @@ async def test_run_process_pipeline_critique(monkeypatch):
 
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="crit1", kind=ProcessStepKind.critique, description="Critique the output.")
-        ],
+        process=[ProcessStepConfig(id="crit1", kind=ProcessStepKind.critique, description="Critique the output.")],
     )
     payload, sse = await svc._run_process_pipeline(
         pipeline_cfg=cfg,
@@ -284,8 +279,10 @@ async def test_run_process_pipeline_investigate(monkeypatch):
         version=1,
         process=[
             ProcessStepConfig(
-                id="inv1", kind=ProcessStepKind.investigate,
-                description="Answer questions.", questions=["Q1?", "Q2?"],
+                id="inv1",
+                kind=ProcessStepKind.investigate,
+                description="Answer questions.",
+                questions=["Q1?", "Q2?"],
             )
         ],
     )
@@ -310,9 +307,7 @@ async def test_run_process_pipeline_analyze(monkeypatch):
 
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="an1", kind=ProcessStepKind.analyze, description="Analyze scores.")
-        ],
+        process=[ProcessStepConfig(id="an1", kind=ProcessStepKind.analyze, description="Analyze scores.")],
     )
     payload, _ = await svc._run_process_pipeline(
         pipeline_cfg=cfg,
@@ -326,9 +321,11 @@ async def test_run_process_pipeline_analyze(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_process_pipeline_review_approved_first_iteration(monkeypatch):
     svc = _make_svc()
-    provider = _MockProvider(responses=[
-        {"reviewed_content": "Looks good.", "approved": True, "feedback": ""},
-    ])
+    provider = _MockProvider(
+        responses=[
+            {"reviewed_content": "Looks good.", "approved": True, "feedback": ""},
+        ]
+    )
 
     async def _lm():
         return provider
@@ -339,8 +336,10 @@ async def test_run_process_pipeline_review_approved_first_iteration(monkeypatch)
         version=1,
         process=[
             ProcessStepConfig(
-                id="rev1", kind=ProcessStepKind.review,
-                description="Review quality.", max_iterations=3,
+                id="rev1",
+                kind=ProcessStepKind.review,
+                description="Review quality.",
+                max_iterations=3,
             )
         ],
     )
@@ -361,11 +360,13 @@ async def test_run_process_pipeline_review_approved_first_iteration(monkeypatch)
 @pytest.mark.asyncio
 async def test_run_process_pipeline_review_iterates_then_approves(monkeypatch):
     svc = _make_svc()
-    provider = _MockProvider(responses=[
-        {"reviewed_content": "Draft 1", "approved": False, "feedback": "Needs more detail."},
-        {"reviewed_content": "Draft 2", "approved": False, "feedback": "Almost there."},
-        {"reviewed_content": "Final draft", "approved": True, "feedback": ""},
-    ])
+    provider = _MockProvider(
+        responses=[
+            {"reviewed_content": "Draft 1", "approved": False, "feedback": "Needs more detail."},
+            {"reviewed_content": "Draft 2", "approved": False, "feedback": "Almost there."},
+            {"reviewed_content": "Final draft", "approved": True, "feedback": ""},
+        ]
+    )
 
     async def _lm():
         return provider
@@ -376,8 +377,10 @@ async def test_run_process_pipeline_review_iterates_then_approves(monkeypatch):
         version=1,
         process=[
             ProcessStepConfig(
-                id="rev2", kind=ProcessStepKind.review,
-                description="Check quality.", max_iterations=5,
+                id="rev2",
+                kind=ProcessStepKind.review,
+                description="Check quality.",
+                max_iterations=5,
             )
         ],
     )
@@ -397,9 +400,11 @@ async def test_run_process_pipeline_review_iterates_then_approves(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_process_pipeline_review_max_iterations_reached(monkeypatch):
     svc = _make_svc()
-    provider = _MockProvider(responses=[
-        {"reviewed_content": "Draft", "approved": False, "feedback": "Not good enough."},
-    ])
+    provider = _MockProvider(
+        responses=[
+            {"reviewed_content": "Draft", "approved": False, "feedback": "Not good enough."},
+        ]
+    )
 
     async def _lm():
         return provider
@@ -410,8 +415,10 @@ async def test_run_process_pipeline_review_max_iterations_reached(monkeypatch):
         version=1,
         process=[
             ProcessStepConfig(
-                id="rev3", kind=ProcessStepKind.review,
-                description="Strict review.", max_iterations=2,
+                id="rev3",
+                kind=ProcessStepKind.review,
+                description="Strict review.",
+                max_iterations=2,
             )
         ],
     )
@@ -440,9 +447,7 @@ async def test_run_process_pipeline_llm_error(monkeypatch):
 
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="fail1", kind=ProcessStepKind.summarize, description="X")
-        ],
+        process=[ProcessStepConfig(id="fail1", kind=ProcessStepKind.summarize, description="X")],
     )
     payload, sse = await svc._run_process_pipeline(
         pipeline_cfg=cfg,
@@ -478,9 +483,7 @@ async def test_run_process_pipeline_review_llm_error_mid_loop(monkeypatch):
 
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="rev_fail", kind=ProcessStepKind.review, description="R", max_iterations=5)
-        ],
+        process=[ProcessStepConfig(id="rev_fail", kind=ProcessStepKind.review, description="R", max_iterations=5)],
     )
     payload, _ = await svc._run_process_pipeline(
         pipeline_cfg=cfg,
@@ -509,9 +512,7 @@ async def test_run_process_pipeline_unparseable_response(monkeypatch):
 
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="bad1", kind=ProcessStepKind.summarize, description="S")
-        ],
+        process=[ProcessStepConfig(id="bad1", kind=ProcessStepKind.summarize, description="S")],
     )
     payload, _ = await svc._run_process_pipeline(
         pipeline_cfg=cfg,
@@ -526,10 +527,12 @@ async def test_run_process_pipeline_unparseable_response(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_process_pipeline_multiple_steps(monkeypatch):
     svc = _make_svc()
-    provider = _MockProvider(responses=[
-        {"summary": "Summary output."},
-        {"notes": "Critique notes."},
-    ])
+    provider = _MockProvider(
+        responses=[
+            {"summary": "Summary output."},
+            {"notes": "Critique notes."},
+        ]
+    )
 
     async def _lm():
         return provider
@@ -567,9 +570,7 @@ async def test_run_process_pipeline_sse_events(monkeypatch):
 
     cfg = CompanionPipelineConfig(
         version=1,
-        process=[
-            ProcessStepConfig(id="s1", kind=ProcessStepKind.summarize, description="D")
-        ],
+        process=[ProcessStepConfig(id="s1", kind=ProcessStepKind.summarize, description="D")],
     )
     _, sse = await svc._run_process_pipeline(
         pipeline_cfg=cfg,
@@ -602,8 +603,10 @@ async def test_run_process_pipeline_expose_in_traces(monkeypatch):
         version=1,
         process=[
             ProcessStepConfig(
-                id="t1", kind=ProcessStepKind.summarize,
-                description="D", expose_in_traces=True,
+                id="t1",
+                kind=ProcessStepKind.summarize,
+                description="D",
+                expose_in_traces=True,
             )
         ],
     )
@@ -632,8 +635,10 @@ async def test_run_process_pipeline_trace_no_preview_when_disabled(monkeypatch):
         version=1,
         process=[
             ProcessStepConfig(
-                id="t2", kind=ProcessStepKind.summarize,
-                description="D", expose_in_traces=False,
+                id="t2",
+                kind=ProcessStepKind.summarize,
+                description="D",
+                expose_in_traces=False,
             )
         ],
     )
@@ -662,8 +667,10 @@ async def test_run_process_pipeline_model_override(monkeypatch):
         version=1,
         process=[
             ProcessStepConfig(
-                id="m1", kind=ProcessStepKind.summarize,
-                description="D", model="custom-model-v1",
+                id="m1",
+                kind=ProcessStepKind.summarize,
+                description="D",
+                model="custom-model-v1",
             )
         ],
     )

@@ -134,11 +134,7 @@ def test_filter_text_noise_can_disable_url_shortening():
 
 def test_filter_text_noise_strips_quoted_reply_chains_when_enabled():
     text = (
-        "Hi there,\n"
-        "On Mon, 1 Jan 2024 at 09:00, Person <p@x.com> wrote:\n"
-        "> previous content\n"
-        ">> deeper quote\n"
-        "Thanks!"
+        "Hi there,\nOn Mon, 1 Jan 2024 at 09:00, Person <p@x.com> wrote:\n> previous content\n>> deeper quote\nThanks!"
     )
     out, _ = filter_text_noise(
         text,
@@ -156,12 +152,7 @@ def test_filter_text_noise_strips_quoted_reply_chains_when_enabled():
 
 
 def test_filter_text_noise_strips_outlook_style_reply_header():
-    text = (
-        "My reply.\n"
-        "-------- Original Message --------\n"
-        "From: someone@x.com\n"
-        "Old body line"
-    )
+    text = "My reply.\n-------- Original Message --------\nFrom: someone@x.com\nOld body line"
     out, _ = filter_text_noise(
         text,
         NoiseFilterConfig(
@@ -253,11 +244,7 @@ def test_filter_text_noise_max_chars_none_means_no_cap():
 
 
 def test_filter_text_noise_is_idempotent_on_its_own_output():
-    text = (
-        "Hello\u034f world\n\n\n\n"
-        "------------\n"
-        "Visit https://" + ("a" * 200) + " now\t   please"
-    )
+    text = "Hello\u034f world\n\n\n\n------------\nVisit https://" + ("a" * 200) + " now\t   please"
     once, _ = filter_text_noise(text)
     twice, twice_trunc = filter_text_noise(once)
     assert once == twice
@@ -569,15 +556,7 @@ def test_strip_orphan_link_placeholders_drops_lines():
         collapse_whitespace=True,
         max_chars=None,
     )
-    text = (
-        "Real first line.\n"
-        "[link]\n"
-        "( [link] )\n"
-        "- [link]\n"
-        "• [link] •\n"
-        "Click [link] for details.\n"
-        "Real last line."
-    )
+    text = "Real first line.\n[link]\n( [link] )\n- [link]\n• [link] •\nClick [link] for details.\nReal last line."
     out, _ = filter_text_noise(text, cfg)
     assert "Real first line." in out
     assert "Real last line." in out
@@ -600,11 +579,7 @@ def test_strip_orphan_link_placeholders_can_be_disabled():
 
 
 def test_email_body_filter_default_strips_marketing_footers():
-    text = (
-        "Real content here.\n"
-        "Click here to unsubscribe.\n"
-        "Footer text that survives."
-    )
+    text = "Real content here.\nClick here to unsubscribe.\nFooter text that survives."
     out, _ = filter_text_noise(text, EMAIL_BODY_NOISE_FILTER)
     assert "unsubscribe" not in out.lower()
     assert "Real content here." in out

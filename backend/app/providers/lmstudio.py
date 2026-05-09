@@ -29,6 +29,7 @@ _load_locks: dict[str, asyncio.Lock] = {}
 # LM Studio may return 500 while weights are still initializing; 504 from some proxies.
 _TRANSIENT_CHAT_STATUSES = frozenset({429, 500, 502, 503, 504})
 
+
 class LMStudioModelNotMultimodalError(ValueError):
     """Raised when LM Studio rejects a chat request that includes image content (model not vision-capable)."""
 
@@ -410,9 +411,7 @@ async def _post_chat_completions(
                 warmup = _is_warmup_400(e.response)
                 if warmup:
                     body = _read_lm_error_body(e.response)
-                    logger.warning(
-                        "LM Studio returned 400 warmup response (%r); retrying within budget", body
-                    )
+                    logger.warning("LM Studio returned 400 warmup response (%r); retrying within budget", body)
                 if code not in _TRANSIENT_CHAT_STATUSES and not warmup:
                     body = _read_lm_error_body(e.response)
                     reason = (e.response.reason_phrase or "").strip() or "error"
@@ -424,9 +423,7 @@ async def _post_chat_completions(
                             "Selected model does not support image input.",
                             provider_detail=body,
                         ) from e
-                    raise ValueError(
-                        f"LM Studio returned {code} {reason}{detail}"
-                    ) from e
+                    raise ValueError(f"LM Studio returned {code} {reason}{detail}") from e
                 last_retryable_err = e
                 if time.monotonic() >= deadline:
                     raise

@@ -10,9 +10,7 @@ from sqlmodel import Session, select
 from app.persistence.tables import UrlSnapshotArtifact, UrlSnapshotCache, utc_now
 
 
-def get_cache_artifact(
-    session: Session, user_id: uuid.UUID, cache_key: str
-) -> Optional[UrlSnapshotArtifact]:
+def get_cache_artifact(session: Session, user_id: uuid.UUID, cache_key: str) -> Optional[UrlSnapshotArtifact]:
     row = session.exec(
         select(UrlSnapshotCache).where(
             UrlSnapshotCache.user_id == user_id,

@@ -314,7 +314,9 @@ def coerce_raw_to_node_output(
 
     if isinstance(parsed, TranscribeAudioSkillNode):
         if not isinstance(raw, str):
-            raise ValueError(f"output_overrides[{node_id!r}]: Voice input (transcribe_audio) requires a JSON string (transcript)")
+            raise ValueError(
+                f"output_overrides[{node_id!r}]: Voice input (transcribe_audio) requires a JSON string (transcript)"
+            )
         return StringNodeOutput(node_id=node_id, text=raw)
 
     if isinstance(parsed, AudioFileInputSkillNode):

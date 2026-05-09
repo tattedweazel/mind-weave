@@ -53,9 +53,7 @@ def _add_user_and_connection(session: Session) -> tuple[uuid.UUID, uuid.UUID]:
 
 def test_returns_empty_dict_for_none_graph(db_session: Session):
     uid, cid = _add_user_and_connection(db_session)
-    out = workflow_graph_with_default_google_connection(
-        db_session, user_id=uid, graph=None, default_connection_id=cid
-    )
+    out = workflow_graph_with_default_google_connection(db_session, user_id=uid, graph=None, default_connection_id=cid)
     assert out == {}
 
 
@@ -110,9 +108,7 @@ def test_injects_when_skill_type_only_on_node(db_session: Session):
             {"id": "g1", "kind": "skill", "skill_type": "gmail_list_messages", "data": {}},
         ]
     }
-    out = workflow_graph_with_default_google_connection(
-        db_session, user_id=uid, graph=graph, default_connection_id=cid
-    )
+    out = workflow_graph_with_default_google_connection(db_session, user_id=uid, graph=graph, default_connection_id=cid)
     assert out["nodes"][0]["data"]["google_connection_id"] == str(cid)
 
 
@@ -185,9 +181,7 @@ def test_non_google_skill_unchanged(db_session: Session):
             {"id": "x", "kind": "skill", "data": {"skill_type": "other_skill"}},
         ]
     }
-    out = workflow_graph_with_default_google_connection(
-        db_session, user_id=uid, graph=graph, default_connection_id=cid
-    )
+    out = workflow_graph_with_default_google_connection(db_session, user_id=uid, graph=graph, default_connection_id=cid)
     assert "google_connection_id" not in (out["nodes"][0].get("data") or {})
 
 
@@ -203,18 +197,14 @@ def test_deep_copy_does_not_mutate_original(db_session: Session, graph_with_gmai
 def test_nodes_not_list_returns_graph_unchanged_for_injection(db_session: Session):
     uid, cid = _add_user_and_connection(db_session)
     graph = {"nodes": {"not": "a-list"}}
-    out = workflow_graph_with_default_google_connection(
-        db_session, user_id=uid, graph=graph, default_connection_id=cid
-    )
+    out = workflow_graph_with_default_google_connection(db_session, user_id=uid, graph=graph, default_connection_id=cid)
     assert out["nodes"] == {"not": "a-list"}
 
 
 def test_skips_non_dict_nodes(db_session: Session):
     uid, cid = _add_user_and_connection(db_session)
     graph = {"nodes": ["bad", {"kind": "skill", "data": {"skill_type": "gmail_list_messages"}}]}
-    out = workflow_graph_with_default_google_connection(
-        db_session, user_id=uid, graph=graph, default_connection_id=cid
-    )
+    out = workflow_graph_with_default_google_connection(db_session, user_id=uid, graph=graph, default_connection_id=cid)
     assert out["nodes"][1]["data"]["google_connection_id"] == str(cid)
 
 
@@ -236,9 +226,7 @@ def test_normalizes_camelCase_and_injects_google_connection_id(db_session: Sessi
             },
         ]
     }
-    out = workflow_graph_with_default_google_connection(
-        db_session, user_id=uid, graph=graph, default_connection_id=cid
-    )
+    out = workflow_graph_with_default_google_connection(db_session, user_id=uid, graph=graph, default_connection_id=cid)
     assert out["nodes"][0]["data"]["skill_type"] == "gmail_list_messages"
     assert out["nodes"][0]["data"]["google_connection_id"] == str(cid)
 
@@ -263,7 +251,5 @@ def test_normalizes_inplace_copies_blank_snake_when_camel_present():
 def test_normalizes_non_dict_skill_data(db_session: Session):
     uid, cid = _add_user_and_connection(db_session)
     graph = {"nodes": [{"id": "g1", "kind": "skill", "data": None}]}
-    out = workflow_graph_with_default_google_connection(
-        db_session, user_id=uid, graph=graph, default_connection_id=cid
-    )
+    out = workflow_graph_with_default_google_connection(db_session, user_id=uid, graph=graph, default_connection_id=cid)
     assert out["nodes"][0]["data"] == {}

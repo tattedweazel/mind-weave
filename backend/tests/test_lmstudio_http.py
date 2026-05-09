@@ -56,7 +56,4 @@ def test_normalize_bearer_secret_value_strips_bearer_prefixes():
 
 def test_resolve_strips_bearer_prefix_from_user_key(monkeypatch):
     monkeypatch.setattr(settings, "LMSTUDIO_API_KEY", "env-fallback")
-    assert (
-        resolve_lmstudio_bearer(decrypted_api_keys={"lmstudio_api_key": "Bearer user-key"})
-        == "user-key"
-    )
+    assert resolve_lmstudio_bearer(decrypted_api_keys={"lmstudio_api_key": "Bearer user-key"}) == "user-key"

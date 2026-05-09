@@ -48,7 +48,10 @@ def test_resolve_auto_play_false_for_after_workflow():
 def test_resolve_max_concurrent_lm_studio_calls_default():
     assert resolve_max_concurrent_lm_studio_calls(None) == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
     assert resolve_max_concurrent_lm_studio_calls({}) == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
-    assert resolve_max_concurrent_lm_studio_calls({"max_concurrent_lm_studio_calls": None}) == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
+    assert (
+        resolve_max_concurrent_lm_studio_calls({"max_concurrent_lm_studio_calls": None})
+        == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
+    )
 
 
 def test_resolve_max_concurrent_lm_studio_calls_clamps():
@@ -60,8 +63,14 @@ def test_resolve_max_concurrent_lm_studio_calls_clamps():
 
 
 def test_resolve_max_concurrent_lm_studio_calls_invalid_types_fall_back():
-    assert resolve_max_concurrent_lm_studio_calls({"max_concurrent_lm_studio_calls": True}) == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
-    assert resolve_max_concurrent_lm_studio_calls({"max_concurrent_lm_studio_calls": "3"}) == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
+    assert (
+        resolve_max_concurrent_lm_studio_calls({"max_concurrent_lm_studio_calls": True})
+        == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
+    )
+    assert (
+        resolve_max_concurrent_lm_studio_calls({"max_concurrent_lm_studio_calls": "3"})
+        == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
+    )
 
 
 @pytest.mark.parametrize(

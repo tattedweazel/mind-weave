@@ -338,7 +338,9 @@ async def test_assemblyai_provider_surfaces_provider_error_status() -> None:
 
     def fake_client(*, base_url: str, api_key: str, timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(
-            base_url=base_url.rstrip("/"), timeout=timeout, transport=transport,
+            base_url=base_url.rstrip("/"),
+            timeout=timeout,
+            transport=transport,
         )
 
     with patch("app.providers.transcription.assemblyai._build_async_client", fake_client):
@@ -522,7 +524,9 @@ async def test_transcribe_file_saved_artifact_runs_with_assemblyai(
 
     def fake_client(*, base_url: str, api_key: str, timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(
-            base_url=base_url.rstrip("/"), timeout=timeout, transport=transport,
+            base_url=base_url.rstrip("/"),
+            timeout=timeout,
+            transport=transport,
         )
 
     uid = uuid.uuid4()
@@ -925,7 +929,10 @@ def test_transcription_job_service_find_existing_for_node(db_session: Session) -
     run_id = uuid.uuid4()
     db_session.add(
         WorkflowRun(
-            id=run_id, workflow_id=uuid.uuid4(), started_by_user_id=uid, status="running",
+            id=run_id,
+            workflow_id=uuid.uuid4(),
+            started_by_user_id=uid,
+            status="running",
         )
     )
     db_session.commit()
@@ -951,7 +958,10 @@ def test_transcription_job_service_find_existing_for_node(db_session: Session) -
     # Different node id returns None.
     assert (
         svc.find_existing_for_node(
-            run_id=run_id, node_id="other", for_loop_id=None, for_loop_iteration=None,
+            run_id=run_id,
+            node_id="other",
+            for_loop_id=None,
+            for_loop_iteration=None,
         )
         is None
     )
@@ -1062,7 +1072,9 @@ async def test_lifespan_poller_advances_pending_assemblyai_row(
 
     def fake_client(*, base_url: str, api_key: str, timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(
-            base_url=base_url.rstrip("/"), timeout=timeout, transport=transport,
+            base_url=base_url.rstrip("/"),
+            timeout=timeout,
+            transport=transport,
         )
 
     poller = TranscriptionJobPoller(poll_interval_seconds=0.05)
@@ -1217,7 +1229,10 @@ def test_transcribe_file_runtime_upload_route_accepts_multipart(
     run_id = uuid.uuid4()
     db_session.add(
         WorkflowRun(
-            id=run_id, workflow_id=uuid.uuid4(), started_by_user_id=user.id, status="running",
+            id=run_id,
+            workflow_id=uuid.uuid4(),
+            started_by_user_id=user.id,
+            status="running",
         )
     )
     db_session.commit()
@@ -1244,7 +1259,10 @@ def test_transcribe_file_runtime_upload_route_rejects_stale_wait(
     run_id = uuid.uuid4()
     db_session.add(
         WorkflowRun(
-            id=run_id, workflow_id=uuid.uuid4(), started_by_user_id=user.id, status="running",
+            id=run_id,
+            workflow_id=uuid.uuid4(),
+            started_by_user_id=user.id,
+            status="running",
         )
     )
     db_session.commit()

@@ -12,9 +12,7 @@ from sqlmodel import Session, select
 from app.domain.services.workflow_executor import WorkflowExecutor
 from app.persistence.tables import UrlSnapshotArtifact, UrlSnapshotCache, User, WorkflowDefinition
 
-_MIN_PNG_B64 = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lmfkAAAAASUVORK5CYII="
-)
+_MIN_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+lmfkAAAAASUVORK5CYII="
 
 _SUCCESS_RAW = {
     "_png_bytes": base64.b64decode(_MIN_PNG_B64),

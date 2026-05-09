@@ -28,10 +28,11 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from typing import cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session, delete, select
+from sqlmodel import Session, col, delete, select
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -90,7 +91,7 @@ class RequestTimingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
         start = time.perf_counter()
-        response = await call_next(request)
+        response = cast(Response, await call_next(request))
         elapsed_ms = (time.perf_counter() - start) * 1000
         _perf_logger.info(
             "%s %s %s %.1fms",
@@ -123,16 +124,11 @@ def _purge_old_workflow_runs(session: Session) -> None:
     if days <= 0:
         return
     cutoff = utc_now() - timedelta(days=days)
-    old_run_ids = [
-        r.id
-        for r in session.exec(
-            select(WorkflowRun.id).where(WorkflowRun.created_at < cutoff)
-        ).all()
-    ]
+    old_run_ids = list(session.exec(select(WorkflowRun.id).where(WorkflowRun.created_at < cutoff)))
     if not old_run_ids:
         return
-    session.exec(delete(NodeRunLog).where(NodeRunLog.run_id.in_(old_run_ids)))  # type: ignore[union-attr]
-    session.exec(delete(WorkflowRun).where(WorkflowRun.id.in_(old_run_ids)))  # type: ignore[union-attr]
+    session.exec(delete(NodeRunLog).where(col(NodeRunLog.run_id).in_(old_run_ids)))
+    session.exec(delete(WorkflowRun).where(col(WorkflowRun.id).in_(old_run_ids)))
     session.commit()
 
 
@@ -239,9 +235,7 @@ app.include_router(structures.router, prefix=f"{api_v1}/structures", tags=["stru
 app.include_router(tts_models.router, prefix=api_v1, tags=["tts-models"])
 app.include_router(documents.router, prefix=f"{api_v1}/documents", tags=["documents"])
 app.include_router(audio_file_artifacts.router, prefix=f"{api_v1}/audio-file-artifacts", tags=["audio-file-artifacts"])
-app.include_router(
-    url_snapshot_artifacts.router, prefix=f"{api_v1}", tags=["url-snapshot-artifacts"]
-)
+app.include_router(url_snapshot_artifacts.router, prefix=f"{api_v1}", tags=["url-snapshot-artifacts"])
 app.include_router(voice_samples.router, prefix=f"{api_v1}/voice-samples", tags=["voice-samples"])
 app.include_router(sandbox.router, prefix=f"{api_v1}", tags=["sandbox"])
 app.include_router(companion_api.router, prefix=api_v1)
@@ -249,18 +243,10 @@ app.include_router(workspaces_api.router, prefix=api_v1)
 app.include_router(
     workflow_definitions_router.router, prefix=f"{api_v1}/workflow-definitions", tags=["workflow-definitions"]
 )
-app.include_router(
-    workflow_run_transcribe.router, prefix=f"{api_v1}", tags=["workflow-runs"]
-)
-app.include_router(
-    workflow_run_audio_file_input.router, prefix=f"{api_v1}", tags=["workflow-runs"]
-)
-app.include_router(
-    workflow_run_transcribe_file.router, prefix=f"{api_v1}", tags=["workflow-runs"]
-)
-app.include_router(
-    workflow_run_reattach_stream.router, prefix=f"{api_v1}", tags=["workflow-runs"]
-)
+app.include_router(workflow_run_transcribe.router, prefix=f"{api_v1}", tags=["workflow-runs"])
+app.include_router(workflow_run_audio_file_input.router, prefix=f"{api_v1}", tags=["workflow-runs"])
+app.include_router(workflow_run_transcribe_file.router, prefix=f"{api_v1}", tags=["workflow-runs"])
+app.include_router(workflow_run_reattach_stream.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(transcription_router.router, prefix=f"{api_v1}", tags=["transcription"])
 app.include_router(stt.router, prefix=f"{api_v1}", tags=["stt"])
 app.include_router(workflow_projects_router.router, prefix=f"{api_v1}/workflow-projects", tags=["workflow-projects"])

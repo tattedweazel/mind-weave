@@ -300,11 +300,7 @@ def test_curated_gmail_message_strips_mailchimp_tracking_params_from_body_urls()
 def test_curated_gmail_message_drops_orphan_link_placeholder_lines_from_html_body():
     """HTML bodies whose anchors became `[link]` after long-URL shortening lose orphan-only lines."""
     long_href = "https://tracker.example.com/click?" + ("z" * 300)
-    html = (
-        f'<p>Real intro paragraph.</p>'
-        f'<p>(<a href="{long_href}">{long_href}</a>)</p>'
-        f'<p>Closing line.</p>'
-    )
+    html = f'<p>Real intro paragraph.</p><p>(<a href="{long_href}">{long_href}</a>)</p><p>Closing line.</p>'
     msg = {
         "id": "lk1",
         "payload": {

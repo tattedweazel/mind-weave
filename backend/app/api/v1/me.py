@@ -22,7 +22,10 @@ def list_my_workflow_runs(
     """
     stmt = (
         select(WorkflowRun, WorkflowDefinition.name)
-        .join(WorkflowDefinition, WorkflowRun.workflow_id == WorkflowDefinition.id)
+        .join(
+            WorkflowDefinition,
+            WorkflowRun.workflow_id == WorkflowDefinition.id,  # type: ignore[arg-type]
+        )
         .where(WorkflowDefinition.user_id == current_user.id)
         .where(WorkflowRun.started_by_user_id == current_user.id)
         .order_by(col(WorkflowRun.created_at).desc())

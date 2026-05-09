@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.persistence.tables import Companion, Workspace, WorkspaceSession
 
@@ -35,7 +35,7 @@ class WorkspaceService:
             self.session.exec(
                 select(Workspace)
                 .where(Workspace.owner_user_id == self.user_id)
-                .order_by(Workspace.updated_at.desc())  # type: ignore[union-attr]
+                .order_by(col(Workspace.updated_at).desc())
             ).all()
         )
 
@@ -48,7 +48,7 @@ class WorkspaceService:
         first = self.session.exec(
             select(Workspace)
             .where(Workspace.owner_user_id == self.user_id)
-            .order_by(Workspace.updated_at.desc())  # type: ignore[union-attr]
+            .order_by(col(Workspace.updated_at).desc())
             .limit(1)
         ).first()
         if first:
@@ -164,7 +164,7 @@ class WorkspaceService:
         return self.session.exec(
             select(WorkspaceSession)
             .where(WorkspaceSession.workspace_id == workspace_id)
-            .order_by(WorkspaceSession.updated_at.desc())  # type: ignore[union-attr]
+            .order_by(col(WorkspaceSession.updated_at).desc())
             .limit(1)
         ).first()
 
@@ -175,7 +175,7 @@ class WorkspaceService:
             self.session.exec(
                 select(WorkspaceSession)
                 .where(WorkspaceSession.workspace_id == workspace_id)
-                .order_by(WorkspaceSession.updated_at.desc())  # type: ignore[union-attr]
+                .order_by(col(WorkspaceSession.updated_at).desc())
             ).all()
         )
 

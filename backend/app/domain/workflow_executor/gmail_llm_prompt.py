@@ -46,7 +46,9 @@ def is_gmail_like_message_dict(d: Any) -> bool:
     """
     if not isinstance(d, dict) or not d:
         return False
-    if isinstance(d.get("id"), str) and d.get("id").strip() and isinstance(d.get("threadId"), str):
+    nid = d.get("id")
+    tid = d.get("threadId")
+    if isinstance(nid, str) and nid.strip() and isinstance(tid, str):
         return True
     if any(k in d for k in ("body_text", "snippet")) and any(k in d for k in ("from", "subject", "to")):
         return True

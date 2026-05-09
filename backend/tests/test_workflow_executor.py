@@ -3277,7 +3277,10 @@ def test_dictionary_value_by_key_missing_key_uses_static_fallback(client: TestCl
                         "position": {"x": 100, "y": 100},
                     },
                     _dictionary_value_by_key_node(
-                        util_id, output_value_type="list", key_value="missing", fallback_value=[9, 8],
+                        util_id,
+                        output_value_type="list",
+                        key_value="missing",
+                        fallback_value=[9, 8],
                     ),
                 ],
                 "edges": [{"source": dict_id, "target": util_id, "target_handle": "dictionary"}],
@@ -3315,7 +3318,10 @@ def test_dictionary_value_by_key_null_uses_static_fallback(client: TestClient):
                         "position": {"x": 100, "y": 100},
                     },
                     _dictionary_value_by_key_node(
-                        util_id, output_value_type="list", key_value="x", fallback_value=[1, 2, 3],
+                        util_id,
+                        output_value_type="list",
+                        key_value="x",
+                        fallback_value=[1, 2, 3],
                     ),
                 ],
                 "edges": [{"source": dict_id, "target": util_id, "target_handle": "dictionary"}],
@@ -3350,7 +3356,10 @@ def test_dictionary_value_by_key_wrong_type_still_errors_with_fallback(client: T
                         "position": {"x": 100, "y": 100},
                     },
                     _dictionary_value_by_key_node(
-                        util_id, output_value_type="list", key_value="x", fallback_value=[0, 0],
+                        util_id,
+                        output_value_type="list",
+                        key_value="x",
+                        fallback_value=[0, 0],
                     ),
                 ],
                 "edges": [{"source": dict_id, "target": util_id, "target_handle": "dictionary"}],
@@ -3445,7 +3454,9 @@ def test_dictionary_value_by_key_wired_fallback_overrides_static(client: TestCli
                         "position": {"x": 100, "y": 200},
                     },
                     _dictionary_value_by_key_node(
-                        util_id, key_value="k", fallback_value=[0, 0],
+                        util_id,
+                        key_value="k",
+                        fallback_value=[0, 0],
                     ),
                 ],
                 "edges": [
@@ -3945,9 +3956,7 @@ def test_string_trunc_inclusive_basic(client: TestClient):
             "name": "String Trunc Inclusive",
             "graph": {
                 "nodes": [
-                    _string_trunc_node(
-                        nid, target_string="This is my target string", start_index=8, end_index=9
-                    ),
+                    _string_trunc_node(nid, target_string="This is my target string", start_index=8, end_index=9),
                 ],
                 "edges": [],
             },
@@ -8739,9 +8748,19 @@ def test_parallel_for_loop_with_nested_inner_loop_returns_422(client: TestClient
                     },
                 ],
                 "edges": [
-                    {"source": "n_start", "target": "n_list", "source_handle": "signal_out", "target_handle": "trigger"},
+                    {
+                        "source": "n_start",
+                        "target": "n_list",
+                        "source_handle": "signal_out",
+                        "target_handle": "trigger",
+                    },
                     {"source": "n_list", "target": "n_outer", "source_handle": "output", "target_handle": "input"},
-                    {"source": "n_list", "target": "n_outer", "source_handle": "signal_out", "target_handle": "trigger"},
+                    {
+                        "source": "n_list",
+                        "target": "n_outer",
+                        "source_handle": "signal_out",
+                        "target_handle": "trigger",
+                    },
                     {
                         "source": "n_outer",
                         "target": "n_inner_list",
@@ -8754,7 +8773,12 @@ def test_parallel_for_loop_with_nested_inner_loop_returns_422(client: TestClient
                         "source_handle": "signal_out",
                         "target_handle": "trigger",
                     },
-                    {"source": "n_inner_list", "target": "n_inner", "source_handle": "output", "target_handle": "input"},
+                    {
+                        "source": "n_inner_list",
+                        "target": "n_inner",
+                        "source_handle": "output",
+                        "target_handle": "input",
+                    },
                     {"source": "n_inner", "target": "n_str", "source_handle": "item", "target_handle": "input"},
                     {
                         "source": "n_inner",
@@ -9539,7 +9563,10 @@ def test_multimodal_llm_success_sends_image_url_parts(client: TestClient, db_ses
     user_parts = messages[1]["content"]
     assert isinstance(user_parts, list)
     assert user_parts[0] == {"type": "text", "text": "Describe the pixel"}
-    assert any(p.get("type") == "image_url" and "data:image/png;base64," in (p.get("image_url") or {}).get("url", "") for p in user_parts[1:])
+    assert any(
+        p.get("type") == "image_url" and "data:image/png;base64," in (p.get("image_url") or {}).get("url", "")
+        for p in user_parts[1:]
+    )
 
 
 def test_multimodal_llm_success_with_list_of_snapshot_output_dicts(client: TestClient, db_session: Session):

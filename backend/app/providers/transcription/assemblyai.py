@@ -280,9 +280,7 @@ def _build_create_payload(*, audio_url: str, options: TranscriptionOptions) -> d
         speech_models = [explicit]
     else:
         speech_models = [
-            m.strip()
-            for m in (settings.ASSEMBLYAI_SPEECH_MODELS or [])
-            if isinstance(m, str) and m.strip()
+            m.strip() for m in (settings.ASSEMBLYAI_SPEECH_MODELS or []) if isinstance(m, str) and m.strip()
         ]
         if not speech_models:
             speech_models = ["universal-3-pro"]

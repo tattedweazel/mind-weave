@@ -45,7 +45,9 @@ def validate_audio_upload(data: bytes, *, filename: str | None, content_type: st
     if not data:
         raise AudioFileValidationError("Audio file is empty.")
     if len(data) > settings.STT_MAX_AUDIO_UPLOAD_BYTES:
-        raise AudioFileValidationError(f"Audio file exceeds maximum size ({settings.STT_MAX_AUDIO_UPLOAD_BYTES} bytes).")
+        raise AudioFileValidationError(
+            f"Audio file exceeds maximum size ({settings.STT_MAX_AUDIO_UPLOAD_BYTES} bytes)."
+        )
 
     safe_name = safe_audio_filename(filename)
     suffix = safe_name.rsplit(".", 1)[-1].lower() if "." in safe_name else ""

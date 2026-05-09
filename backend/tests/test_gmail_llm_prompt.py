@@ -11,9 +11,7 @@ from app.domain.workflow_executor.gmail_llm_prompt import (
 
 
 def test_is_gmail_like_message_dict_positive():
-    assert is_gmail_like_message_dict(
-        {"id": "a", "threadId": "b", "from": "x", "labelIds": ["INBOX"]}
-    )
+    assert is_gmail_like_message_dict({"id": "a", "threadId": "b", "from": "x", "labelIds": ["INBOX"]})
     assert is_gmail_like_message_dict(
         {"subject": "Hi", "body_text": "Hello", "from": "a@b.com"},
     )

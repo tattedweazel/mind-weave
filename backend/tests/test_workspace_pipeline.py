@@ -22,9 +22,7 @@ from app.domain.workspace.companion_pipeline_config import COMPANION_PIPELINE_KE
 async def _deterministic_session_summary(self, *, workspace, companion, session_row, turn_digest):
     _, stored_max, _ = self._session_memory_limits(workspace)
     prev = (session_row.active_summary or "").strip()
-    session_row.active_summary = WorkspaceRuntimeService._deterministic_summary_merge(
-        prev, turn_digest, stored_max
-    )
+    session_row.active_summary = WorkspaceRuntimeService._deterministic_summary_merge(prev, turn_digest, stored_max)
     session_row.updated_at = datetime.now(timezone.utc)
     self.session.add(session_row)
     self.session.commit()

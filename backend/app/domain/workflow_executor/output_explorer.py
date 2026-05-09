@@ -104,8 +104,7 @@ def _looks_like_google_calendar_list_events_blob(data: dict[str, Any]) -> bool:
 
 
 def _looks_like_capture_url_snapshot_blob(data: dict[str, Any]) -> bool:
-    if not isinstance(data, dict):
-        return False
+    """Detect capture_url_snapshot ``output.data`` shape."""
     if isinstance(data.get("error"), dict) and "captured_at" in data:
         return "type" in data["error"]  # type: ignore[operator]
     img = data.get("image")
@@ -173,8 +172,6 @@ def build_capture_url_snapshot_explorer(data: dict[str, Any]) -> dict[str, Any]:
 
 def _looks_like_fetch_url_blob(data: dict[str, Any]) -> bool:
     """Distinguish fetch_url output from other dictionary steps."""
-    if not isinstance(data, dict):
-        return False
     if isinstance(data.get("error"), dict) and "fetched_at" in data:
         return "type" in data["error"]  # type: ignore[operator]
     return (
@@ -273,7 +270,7 @@ def _looks_like_gmail_curated_message_list(arr: list[Any]) -> bool:
 
 
 def build_gmail_list_explorer_from_messages(
-    messages: list[Any],
+    messages: Any,
     result_size_estimate: Any = None,
 ) -> dict[str, Any]:
     """Explorer rows for a list of curated Gmail message dicts."""

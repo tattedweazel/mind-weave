@@ -46,9 +46,7 @@ async def deterministic_workspace_session_summary_refresh(
     """Avoid real LLM for `_refresh_active_summary` in tests that complete a persisted turn."""
     _, stored_max, _ = self._session_memory_limits(workspace)
     prev = (session_row.active_summary or "").strip()
-    session_row.active_summary = WorkspaceRuntimeService._deterministic_summary_merge(
-        prev, turn_digest, stored_max
-    )
+    session_row.active_summary = WorkspaceRuntimeService._deterministic_summary_merge(prev, turn_digest, stored_max)
     session_row.updated_at = datetime.now(timezone.utc)
     self.session.add(session_row)
     self.session.commit()

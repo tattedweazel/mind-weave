@@ -30,7 +30,7 @@ import time
 import uuid
 from collections import deque
 from datetime import timezone
-from typing import Any, Dict, List, Optional, Sequence, cast
+from typing import Any, Dict, List, Literal, Optional, Sequence, cast
 from uuid import UUID
 
 from jsonschema import Draft202012Validator
@@ -1394,7 +1394,10 @@ class WorkflowExecutor:
         ]
         if not matches:
             return
-        last_i = max(matches, key=lambda i: node_results[i].step_number)
+        last_i = max(
+            matches,
+            key=lambda i: float(sn) if (sn := node_results[i].step_number) is not None else float("-inf"),
+        )
         prev = node_results[last_i]
         node_results[last_i] = NodeRunResult(
             node_id=prev.node_id,
@@ -1509,7 +1512,8 @@ class WorkflowExecutor:
                     else:
                         result, elapsed_ms = cast(tuple[dict[str, Any], float], raw)
 
-                    det = dict(result.get("details") or {})
+                    det_raw: Any = result.get("details") or {}
+                    det: dict[str, Any] = dict(det_raw if isinstance(det_raw, dict) else {})
                     det["for_loop_node_id"] = for_loop_id
                     det["for_loop_iteration"] = iteration_index
 
@@ -1857,7 +1861,7 @@ class WorkflowExecutor:
             if isinstance(node, DocumentPrimitiveNode):
                 return self._resolve_document_primitive_node(node)
             if isinstance(node, ImagePrimitiveNode):
-                return self._resolve_image_primitive_node(node, edges, outputs, input_overrides)
+                return self._resolve_image_primitive_node(node, edges, outputs, overrides)
             if isinstance(node, GmailPrimitiveNode):
                 return self._resolve_gmail_primitive_node(node, edges, outputs, overrides)
             if isinstance(node, SandboxBehaviorPrimitiveNode):
@@ -2214,13 +2218,13 @@ class WorkflowExecutor:
         """
         data_edges = [e for e in edges if e.target == node.id and (e.target_handle or "") != "trigger"]
         if not data_edges:
-            data = dict(node.data) if isinstance(node.data, dict) else {}
+            static_payload = dict(node.data) if isinstance(node.data, dict) else {}
             return {
                 "status": "ok",
-                "output": DictionaryNodeOutput(node_id=node.id, data=data),
-                "details": {"resolved_inputs": {"data": data}},
+                "output": DictionaryNodeOutput(node_id=node.id, data=static_payload),
+                "details": {"resolved_inputs": {"data": static_payload}},
             }
-        data: dict[str, Any] = {}
+        merged: dict[str, Any] = {}
         for edge in data_edges:
             src = edge.source
             out = outputs.get(src)
@@ -2228,17 +2232,17 @@ class WorkflowExecutor:
                 continue
             slot_val = _get_slot_value(out, edge.source_handle)
             if isinstance(slot_val, DictionaryNodeOutput):
-                data.update(dict(slot_val.data))
+                merged.update(dict(slot_val.data))
             else:
                 base_key = (edge.source_handle or "").strip() or "output"
                 key = base_key
-                if key in data:
+                if key in merged:
                     key = f"{base_key}_{edge.source}"
-                data[key] = node_output_to_input_override_value(slot_val)
+                merged[key] = node_output_to_input_override_value(slot_val)
         return {
             "status": "ok",
-            "output": DictionaryNodeOutput(node_id=node.id, data=data),
-            "details": {"resolved_inputs": {"data": data}},
+            "output": DictionaryNodeOutput(node_id=node.id, data=merged),
+            "details": {"resolved_inputs": {"data": merged}},
         }
 
     def _resolve_boolean_primitive_node(
@@ -3814,10 +3818,12 @@ class WorkflowExecutor:
                 resolved["value"] = node_output_to_input_override_value(slot)
                 break
 
-        carry_key = (for_loop_id, node.id) if for_loop_id and loop_list_carry is not None else None
+        carry_bundle = loop_list_carry
+        fk = for_loop_id
+        carry_key: tuple[str, str] | None = (fk, node.id) if fk and carry_bundle is not None else None
         base_list: list[Any]
-        if carry_key is not None and carry_key in loop_list_carry:
-            base_list = list(loop_list_carry[carry_key])
+        if carry_bundle is not None and carry_key is not None and carry_key in carry_bundle:
+            base_list = list(carry_bundle[carry_key])
         else:
             raw_list = resolved.get("list")
             if raw_list is None or (isinstance(raw_list, str) and str(raw_list).strip() == ""):
@@ -3832,8 +3838,8 @@ class WorkflowExecutor:
 
         item = raw_val
         new_list = base_list + [item]
-        if carry_key is not None and loop_list_carry is not None:
-            loop_list_carry[carry_key] = new_list
+        if carry_key is not None and carry_bundle is not None:
+            carry_bundle[carry_key] = new_list
 
         return {
             "status": "ok",
@@ -4513,9 +4519,7 @@ class WorkflowExecutor:
         raw_inputs = (node.data or {}).get("required_inputs") or [
             {"key": "image", "type": "dictionary", "value": None},
         ]
-        resolved = _resolve_inputs_by_target_handle(
-            node.id, ["image"], edges, outputs, input_overrides, raw_inputs
-        )
+        resolved = _resolve_inputs_by_target_handle(node.id, ["image"], edges, outputs, input_overrides, raw_inputs)
         wired = resolved.get("image")
         aid: Optional[UUID] = None
         if wired is not None and wired != "":
@@ -4801,7 +4805,7 @@ class WorkflowExecutor:
                 name=str(name).strip(),
                 content=content_str,
                 existing_document_id=ex_id,
-                write_mode=wm,  # validated: replace | append | merge_json
+                write_mode=cast(Literal["replace", "append", "merge_json"], wm),
             )
         except ValueError as e:
             return {
@@ -5736,9 +5740,7 @@ class WorkflowExecutor:
 
         try:
             async with self._async_session_lock:
-                image_parts = build_openai_image_parts_from_artifacts(
-                    self.session, self.user_id, artifact_ids
-                )
+                image_parts = build_openai_image_parts_from_artifacts(self.session, self.user_id, artifact_ids)
         except MultimodalLLMInputError as e:
             return _error_with_structured(
                 e.message,
@@ -6184,25 +6186,13 @@ class WorkflowExecutor:
         if isinstance(task_raw, str) and task_raw.strip().lower() in ("transcribe", "translate"):
             task_norm = task_raw.strip().lower()
         language_raw = data.get("language")
-        language = (
-            language_raw.strip()
-            if isinstance(language_raw, str) and language_raw.strip()
-            else None
-        )
+        language = language_raw.strip() if isinstance(language_raw, str) and language_raw.strip() else None
         prompt_raw = data.get("prompt")
-        prompt = (
-            prompt_raw.strip()
-            if isinstance(prompt_raw, str) and prompt_raw.strip()
-            else None
-        )
+        prompt = prompt_raw.strip() if isinstance(prompt_raw, str) and prompt_raw.strip() else None
         diarization_enabled = bool(data.get("diarization_enabled"))
         include_word_timestamps = bool(data.get("include_word_timestamps"))
         pm_raw = data.get("provider_model_id")
-        provider_model_id = (
-            pm_raw.strip()
-            if isinstance(pm_raw, str) and pm_raw.strip()
-            else None
-        )
+        provider_model_id = pm_raw.strip() if isinstance(pm_raw, str) and pm_raw.strip() else None
         model_desc = tuple(type(provider).model_descriptors)
         if provider_model_id and model_desc:
             allowed = {m.id for m in model_desc}
@@ -6237,8 +6227,10 @@ class WorkflowExecutor:
         validated: Optional[ValidatedAudioFile] = None
 
         if artifact_path_used:
+            raw_aid_local = audio_artifact_id_raw
+            assert isinstance(raw_aid_local, str)
             try:
-                artifact_id = uuid.UUID(audio_artifact_id_raw.strip())
+                artifact_id = uuid.UUID(raw_aid_local.strip())
             except ValueError:
                 return _error_with_resolved_inputs(
                     "Transcribe File has an invalid saved file reference.",
@@ -7124,11 +7116,16 @@ class WorkflowExecutor:
         if fp_raw is None:
             full_page = True
         else:
-            full_page = bool(fp_raw) if not isinstance(fp_raw, str) else str(fp_raw).strip().lower() in (
-                "1",
-                "true",
-                "yes",
-                "on",
+            full_page = (
+                bool(fp_raw)
+                if not isinstance(fp_raw, str)
+                else str(fp_raw).strip().lower()
+                in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
             )
 
         vw = node.data.get("viewport_width")

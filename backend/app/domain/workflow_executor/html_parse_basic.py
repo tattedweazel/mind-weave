@@ -174,14 +174,10 @@ def _normalise_granularity(raw: Optional[str]) -> str:
         return _GRANULARITY_DEFAULT
     if g in _KNOWN_GRANULARITY:
         return g
-    raise ValueError(
-        f"html_parse_basic: unknown granularity {raw!r}; expected 'default', 'list_items', or 'articles'."
-    )
+    raise ValueError(f"html_parse_basic: unknown granularity {raw!r}; expected 'default', 'list_items', or 'articles'.")
 
 
-def _resolve_work_root(
-    soup: BeautifulSoup, content_root_css: Optional[str]
-) -> Union[BeautifulSoup, Tag]:
+def _resolve_work_root(soup: BeautifulSoup, content_root_css: Optional[str]) -> Union[BeautifulSoup, Tag]:
     c = (content_root_css or "").strip()
     if not c:
         return soup
@@ -231,7 +227,7 @@ def _omit_ancestor_rollups(ordered_with_text: List[Tag]) -> List[Tag]:
     return [t for t in ordered_with_text if id(t) not in drop_ids]
 
 
-def _iter_outer_block_text(work: PageElement) -> List[Dict[str, str]]:
+def _iter_outer_block_text(work: BeautifulSoup | Tag) -> List[Dict[str, str]]:
     """
     Build ``text_blocks`` in document order: each item is ``{"tag": <element name>, "text": ...}`` for
     **leaf** ``article``s, headings, ``p``, list items, and pure ``div``/``section``/``main`` wrappers
@@ -244,11 +240,7 @@ def _iter_outer_block_text(work: PageElement) -> List[Dict[str, str]]:
         if not _text_block_tag_included(t):
             continue
         candidates.append(t)
-    with_text = [
-        t
-        for t in candidates
-        if _clean_extracted_text(t.get_text(separator=" ", strip=True))
-    ]
+    with_text = [t for t in candidates if _clean_extracted_text(t.get_text(separator=" ", strip=True))]
     kept = _omit_ancestor_rollups(with_text)
     out: List[Dict[str, str]] = []
     for t in kept:
@@ -262,7 +254,7 @@ def _iter_outer_block_text(work: PageElement) -> List[Dict[str, str]]:
     return out
 
 
-def _extract_links_from(work: PageElement) -> List[Dict[str, str]]:
+def _extract_links_from(work: BeautifulSoup | Tag) -> List[Dict[str, str]]:
     links: List[Dict[str, str]] = []
     for a in work.find_all("a", href=True):
         a = cast(Tag, a)
@@ -275,7 +267,7 @@ def _extract_links_from(work: PageElement) -> List[Dict[str, str]]:
     return links
 
 
-def _segment_by_granularity(work: PageElement, granularity: str) -> List[str]:
+def _segment_by_granularity(work: BeautifulSoup | Tag, granularity: str) -> List[str]:
     if granularity == "list_items":
         segs: List[str] = []
         for li in work.select("ol > li, ul > li"):

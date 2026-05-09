@@ -8,7 +8,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.api.deps import get_current_user
 from app.api.workspace_workflow_allowlist import validate_enabled_workflow_ids
@@ -225,7 +225,9 @@ def list_turns(
         raise HTTPException(status_code=404, detail="Session not found.")
     rows = list(
         session.exec(
-            select(WorkspaceTurn).where(WorkspaceTurn.session_id == session_id).order_by(WorkspaceTurn.turn_index.asc())  # type: ignore[union-attr]
+            select(WorkspaceTurn)
+            .where(WorkspaceTurn.session_id == session_id)
+            .order_by(col(WorkspaceTurn.turn_index).asc())
         ).all()
     )
     return [WorkspaceTurnRead.model_validate(r) for r in rows]

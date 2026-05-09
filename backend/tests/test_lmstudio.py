@@ -266,9 +266,7 @@ async def test_chat_retries_on_500_then_succeeds():
     resp500 = MagicMock()
     resp500.status_code = 500
     req = MagicMock()
-    resp500.raise_for_status.side_effect = httpx.HTTPStatusError(
-        "server error", request=req, response=resp500
-    )
+    resp500.raise_for_status.side_effect = httpx.HTTPStatusError("server error", request=req, response=resp500)
     resp200 = MagicMock()
     resp200.status_code = 200
     resp200.raise_for_status = lambda: None
@@ -304,9 +302,7 @@ def _mock_status_response(status_code: int, body_text: str, reason: str = "") ->
     resp.text = body_text
     resp.reason_phrase = reason
     req = MagicMock()
-    resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-        f"{status_code} error", request=req, response=resp
-    )
+    resp.raise_for_status.side_effect = httpx.HTTPStatusError(f"{status_code} error", request=req, response=resp)
     return resp
 
 
@@ -402,9 +398,7 @@ class TestIsWarmup400:
 @pytest.mark.asyncio
 async def test_chat_retries_on_400_warmup_body_then_succeeds():
     """First parallel iteration may hit 400 while the OpenAI runtime is still warming; retry."""
-    resp400 = _mock_status_response(
-        400, json.dumps({"error": "Model not loaded yet"}), reason="Bad Request"
-    )
+    resp400 = _mock_status_response(400, json.dumps({"error": "Model not loaded yet"}), reason="Bad Request")
     resp200 = MagicMock()
     resp200.status_code = 200
     resp200.raise_for_status = lambda: None

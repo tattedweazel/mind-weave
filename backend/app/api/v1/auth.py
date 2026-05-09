@@ -201,11 +201,11 @@ class UserUpdate(BaseModel):
                 )
             v["gmail_workflow_inbox_focus"] = gfs
         if "gmail_workflow_exclude_categories" in v and v["gmail_workflow_exclude_categories"] is not None:
-            exc = v["gmail_workflow_exclude_categories"]
-            if not isinstance(exc, list):
+            excluded_cats_raw = v["gmail_workflow_exclude_categories"]
+            if not isinstance(excluded_cats_raw, list):
                 raise ValueError("settings.gmail_workflow_exclude_categories must be a list")
             norm: list[str] = []
-            for item in exc:
+            for item in excluded_cats_raw:
                 if not isinstance(item, str):
                     raise ValueError(
                         "settings.gmail_workflow_exclude_categories must be a list of strings",

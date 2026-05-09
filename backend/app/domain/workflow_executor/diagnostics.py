@@ -130,7 +130,8 @@ def _pick_plain_and_html_bodies(payload: dict[str, Any]) -> tuple[str, str]:
     html_chunks: list[str] = []
     for p in _gmail_leaf_mime_parts(payload):
         mt = str(p.get("mimeType") or "").lower()
-        b = p.get("body") if isinstance(p.get("body"), dict) else {}
+        body_holder = p.get("body")
+        b = body_holder if isinstance(body_holder, dict) else {}
         decoded = _decode_gmail_body_b64(b.get("data"))
         if not decoded:
             continue
@@ -178,7 +179,9 @@ def curated_gmail_message_from_full_api(
     if isinstance(labels, list) and labels:
         row["labelIds"] = [str(x) for x in labels if x is not None]
 
-    payload = msg.get("payload") if isinstance(msg.get("payload"), dict) else {}
+    payload_any = msg.get("payload")
+    payload = payload_any if isinstance(payload_any, dict) else {}
+
     hmap = _header_map_from_payload(payload)
     for hk, outk in (
         ("subject", "subject"),
@@ -235,8 +238,10 @@ def curated_gmail_messages_list_item(ref: dict[str, Any]) -> dict[str, Any]:
 
 def curated_google_calendar_event(event: dict[str, Any]) -> dict[str, Any]:
     """Stable, workflow-facing subset of a Calendar API Event resource."""
-    start = event.get("start") if isinstance(event.get("start"), dict) else {}
-    end = event.get("end") if isinstance(event.get("end"), dict) else {}
+    start_ev = event.get("start")
+    start: dict[str, Any] = start_ev if isinstance(start_ev, dict) else {}
+    end_ev = event.get("end")
+    end: dict[str, Any] = end_ev if isinstance(end_ev, dict) else {}
     row: dict[str, Any] = {
         "id": event.get("id"),
         "status": event.get("status"),

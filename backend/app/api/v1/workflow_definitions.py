@@ -254,9 +254,12 @@ async def run_workflow_stream(
         with _app_db_session() as stream_session:
             wf_row = stream_session.get(WorkflowDefinition, wf_id)
             if not wf_row:
-                yield json.dumps(
-                    {"event": "error", "error": "Workflow not found after validation."},
-                ) + "\n"
+                yield (
+                    json.dumps(
+                        {"event": "error", "error": "Workflow not found after validation."},
+                    )
+                    + "\n"
+                )
                 return
             executor = WorkflowExecutor(stream_session, current_user.id)
             async for chunk in executor.run_stream(

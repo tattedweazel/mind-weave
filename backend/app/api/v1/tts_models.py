@@ -68,7 +68,9 @@ def list_ready_tts_models(
     current_user: User = Depends(get_current_user),
 ):
     rows = session.exec(
-        select(TtsModelArtifact).where(col(TtsModelArtifact.status) == "ready").order_by(col(TtsModelArtifact.display_name))
+        select(TtsModelArtifact)
+        .where(col(TtsModelArtifact.status) == "ready")
+        .order_by(col(TtsModelArtifact.display_name))
     ).all()
     return [_artifact_to_read(r) for r in rows]
 

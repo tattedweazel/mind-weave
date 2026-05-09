@@ -208,9 +208,7 @@ def test_resolve_upsert_content_implicit_null_target_handle_when_allow_listed():
     nid_up = "n_up"
     nid_src = "n_l2s"
     edges = [GraphEdge(source=nid_src, target=nid_up, target_handle=None)]
-    outputs: dict[str, NodeOutputUnion] = {
-        nid_src: StringNodeOutput(node_id=nid_src, text="hello from wire")
-    }
+    outputs: dict[str, NodeOutputUnion] = {nid_src: StringNodeOutput(node_id=nid_src, text="hello from wire")}
     res = _resolve_inputs_by_target_handle(
         nid_up,
         _UPSERT_LIKE_KEYS,

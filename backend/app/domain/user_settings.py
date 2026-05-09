@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 MAX_CONCURRENT_LM_STUDIO_CALLS_MIN = 1
 MAX_CONCURRENT_LM_STUDIO_CALLS_MAX = 32
@@ -47,7 +47,10 @@ def resolve_max_concurrent_lm_studio_calls(settings: Any) -> int:
         return MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
     if isinstance(raw, bool) or not isinstance(raw, int):
         return MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
-    return max(
-        MAX_CONCURRENT_LM_STUDIO_CALLS_MIN,
-        min(MAX_CONCURRENT_LM_STUDIO_CALLS_MAX, raw),
+    return cast(
+        int,
+        max(
+            MAX_CONCURRENT_LM_STUDIO_CALLS_MIN,
+            min(MAX_CONCURRENT_LM_STUDIO_CALLS_MAX, raw),
+        ),
     )

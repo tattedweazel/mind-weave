@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from app.core.run_log_redaction import redact_error_for_api, redact_prompt_like
 
@@ -11,7 +11,7 @@ def redact_workspace_trace(obj: Optional[Dict[str, Any]]) -> Optional[Dict[str, 
     """Return a copy safe to persist in workspace_replays."""
     if obj is None:
         return None
-    return redact_prompt_like(dict(obj))
+    return cast(Optional[Dict[str, Any]], redact_prompt_like(dict(obj)))
 
 
 def sanitize_workspace_execution_for_console(obj: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

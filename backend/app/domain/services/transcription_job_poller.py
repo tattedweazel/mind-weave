@@ -262,9 +262,10 @@ def _normalize_transcription_options_dict(raw: dict[str, Any]) -> dict[str, Any]
 
 
 def _options_from_row(row: TranscriptionJob) -> TranscriptionOptions:
-    raw = row.options_json or {}
-    if not isinstance(raw, dict):
+    raw_any: Any = row.options_json or {}
+    if not isinstance(raw_any, dict):
         return TranscriptionOptions()
+    raw = raw_any
     try:
         return TranscriptionOptions.model_validate(_normalize_transcription_options_dict(raw))
     except Exception:

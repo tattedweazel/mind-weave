@@ -201,8 +201,13 @@ class TestExtractListFromOutput:
 class TestCompactCapabilityOutputForCompose:
     def test_five_emails_all_visible(self):
         emails = [
-            {"id": f"m{i}", "threadId": f"t{i}", "from": f"sender{i}@example.com",
-             "subject": f"Subject {i}", "date": f"2025-01-{15 - i}"}
+            {
+                "id": f"m{i}",
+                "threadId": f"t{i}",
+                "from": f"sender{i}@example.com",
+                "subject": f"Subject {i}",
+                "date": f"2025-01-{15 - i}",
+            }
             for i in range(5)
         ]
         output = {"node_id": "stop1", "text": json.dumps(emails)}
@@ -214,8 +219,7 @@ class TestCompactCapabilityOutputForCompose:
 
     def test_five_emails_via_data_key(self):
         emails = [
-            {"id": f"m{i}", "threadId": f"t{i}", "from": f"user{i}@test.com",
-             "subject": f"Email {i}", "date": "Jan 1"}
+            {"id": f"m{i}", "threadId": f"t{i}", "from": f"user{i}@test.com", "subject": f"Email {i}", "date": "Jan 1"}
             for i in range(5)
         ]
         output = {"node_id": "stop1", "data": emails}
@@ -226,8 +230,11 @@ class TestCompactCapabilityOutputForCompose:
 
     def test_calendar_events_all_visible(self):
         events = [
-            {"summary": f"Meeting {i}", "start": {"dateTime": f"2025-01-15T{9 + i}:00:00"},
-             "end": {"dateTime": f"2025-01-15T{10 + i}:00:00"}}
+            {
+                "summary": f"Meeting {i}",
+                "start": {"dateTime": f"2025-01-15T{9 + i}:00:00"},
+                "end": {"dateTime": f"2025-01-15T{10 + i}:00:00"},
+            }
             for i in range(3)
         ]
         output = {"node_id": "stop1", "data": events}

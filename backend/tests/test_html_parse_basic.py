@@ -77,11 +77,9 @@ def test_normalize_href_empty_after_strip() -> None:
 
 def test_href_strips_backslash_quoted_and_entity_wrapped_values() -> None:
     # Literal \\" in markup (e.g. JSON-escaped HTML) — BS yields backslash+quote in the value.
-    html_bs = r'<a href=\\\"index.html\\\">A</a>'
+    html_bs = r"<a href=\\\"index.html\\\">A</a>"
     # &quot; in attribute — value includes ASCII "…"  around the real path
-    html_ent = (
-        "<a href=\"&quot;catalogue/category/books/cultural_49/index.html&quot;\">B</a>"
-    )
+    html_ent = '<a href="&quot;catalogue/category/books/cultural_49/index.html&quot;">B</a>'
     out1 = parse_html_basic(html_bs)
     out2 = parse_html_basic(html_ent)
     assert out1["links"][0]["href"] == "index.html"
@@ -166,10 +164,7 @@ def test_content_root_css_scopes_blocks_and_links_title_from_full_doc() -> None:
 
 
 def test_list_items_granularity_adds_segments() -> None:
-    html = (
-        "<body><div><ul><li>  One  </li><li>Two</li></ul>"
-        "<ol><li>Third</li></ol></div></body>"
-    )
+    html = "<body><div><ul><li>  One  </li><li>Two</li></ul><ol><li>Third</li></ol></div></body>"
     out = parse_html_basic(html, granularity="list_items")
     assert out["text_blocks"]  # from outer div
     assert out["segment_text_blocks"] == ["One", "Two", "Third"]
@@ -188,10 +183,7 @@ def test_articles_granularity() -> None:
 
 
 def test_content_root_with_list_items() -> None:
-    html = (
-        "<body><div id='out'><ul><li>Skip</li></ul></div>"
-        "<div id='in'><ul><li>Keep</li></ul></div></body>"
-    )
+    html = "<body><div id='out'><ul><li>Skip</li></ul></div><div id='in'><ul><li>Keep</li></ul></div></body>"
     out = parse_html_basic(html, content_root_css="#in", granularity="list_items")
     assert out["segment_text_blocks"] == ["Keep"]
 
@@ -224,16 +216,12 @@ def test_list_item_not_under_ol_or_ul_is_skipped() -> None:
 
 
 def test_non_leaf_outer_article_omitted_inner_emitted() -> None:
-    out = parse_html_basic(
-        "<html><body><article>outer<article>INNER</article></article></body></html>"
-    )
+    out = parse_html_basic("<html><body><article>outer<article>INNER</article></article></body></html>")
     assert out["text_blocks"] == _tb(("article", "INNER"))
 
 
 def test_heading_inside_article_omitted_outside_kept() -> None:
-    out = parse_html_basic(
-        "<html><body><article><h2>in</h2></article><h1>out</h1></body></html>"
-    )
+    out = parse_html_basic("<html><body><article><h2>in</h2></article><h1>out</h1></body></html>")
     assert out["text_blocks"] == _tb(("article", "in"), ("h1", "out"))
 
 
@@ -304,11 +292,7 @@ def test_is_strict_ancestor_detects_nested_li() -> None:
 
 
 def test_ancestor_rollup_suppresses_parent_li_with_nested_lis() -> None:
-    html = (
-        "<ul>"
-        "<li>Books<ul><li>Travel</li><li>Mystery</li></ul></li>"
-        "</ul>"
-    )
+    html = "<ul><li>Books<ul><li>Travel</li><li>Mystery</li></ul></li></ul>"
     out = parse_html_basic(html)
     assert out["text_blocks"] == _tb(("li", "Travel"), ("li", "Mystery"))
     assert "Books Travel Mystery" not in _block_text_join(out["text_blocks"])
@@ -321,9 +305,5 @@ def test_ancestor_rollup_suppresses_parent_li_for_child_paragraphs() -> None:
 
 def test_nested_div_siblings_not_rolled_into_parent_when_parent_excluded() -> None:
     """Outer div has child divs, so _container skips outer; inners remain (no mega parent string)."""
-    out = parse_html_basic(
-        "<body><div><div>Books</div><div>Travel</div><div>Mystery</div></div></body>"
-    )
-    assert out["text_blocks"] == _tb(
-        ("div", "Books"), ("div", "Travel"), ("div", "Mystery")
-    )
+    out = parse_html_basic("<body><div><div>Books</div><div>Travel</div><div>Mystery</div></div></body>")
+    assert out["text_blocks"] == _tb(("div", "Books"), ("div", "Travel"), ("div", "Mystery"))

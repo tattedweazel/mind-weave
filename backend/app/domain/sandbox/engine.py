@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 import uuid
-from typing import Any, List, Optional, Set
+from typing import Any, List, Optional, Set, assert_never
 
 from app.domain.sandbox.constants import (
     DEFAULT_FOOD_ENERGY,
@@ -291,6 +291,16 @@ class SandboxEngine:
 
         w, h = state.world.grid.width, state.world.grid.height
         act = intent.action
+        valid_actions = (
+            "idle",
+            "sleep",
+            "wander",
+            "move_to",
+            "eat_nearby",
+        )
+        if act not in valid_actions:
+            state.pet.intent = None
+            return True
 
         if act == "idle":
             intent.status = "complete"
@@ -362,8 +372,7 @@ class SandboxEngine:
                 state.pet.intent = None
             return True
 
-        state.pet.intent = None
-        return True
+        assert_never(act)
 
     def start_intent_from_decision(self, state: SandboxState, dec: DecisionIntent) -> None:
         state.pet.intent = PetIntent(

@@ -59,8 +59,16 @@ def test_decision_intent_picks_higher_stop_priority_when_multiple_stops_succeed(
     low = "stop_low"
     high = "stop_high"
     graph_nodes = [
-        {"id": low, "kind": "stop", "data": {"stop_priority": 0, "required_outputs": [{"key": "output", "type": "dictionary"}]}},
-        {"id": high, "kind": "stop", "data": {"stop_priority": 10, "required_outputs": [{"key": "output", "type": "dictionary"}]}},
+        {
+            "id": low,
+            "kind": "stop",
+            "data": {"stop_priority": 0, "required_outputs": [{"key": "output", "type": "dictionary"}]},
+        },
+        {
+            "id": high,
+            "kind": "stop",
+            "data": {"stop_priority": 10, "required_outputs": [{"key": "output", "type": "dictionary"}]},
+        },
     ]
     low_data = DecisionIntent(
         action="idle",

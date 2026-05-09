@@ -5,7 +5,7 @@ Separate redirect URI and scopes from identity-only Google sign-in / association
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
 import httpx
@@ -59,7 +59,7 @@ def exchange_code_for_token_response(code: str) -> dict[str, Any]:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         token_resp.raise_for_status()
-        return token_resp.json()
+        return cast(dict[str, Any], token_resp.json())
 
 
 async def exchange_code_for_token_response_async(code: str) -> dict[str, Any]:
@@ -77,7 +77,7 @@ async def exchange_code_for_token_response_async(code: str) -> dict[str, Any]:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         token_resp.raise_for_status()
-        return token_resp.json()
+        return cast(dict[str, Any], token_resp.json())
 
 
 def fetch_userinfo_sub_email(access_token: str) -> dict[str, str]:
@@ -124,7 +124,7 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         token_resp.raise_for_status()
-        return token_resp.json()
+        return cast(dict[str, Any], token_resp.json())
 
 
 async def refresh_access_token_async(refresh_token: str) -> dict[str, Any]:
@@ -140,7 +140,7 @@ async def refresh_access_token_async(refresh_token: str) -> dict[str, Any]:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         token_resp.raise_for_status()
-        return token_resp.json()
+        return cast(dict[str, Any], token_resp.json())
 
 
 def revoke_token(token: str) -> None:

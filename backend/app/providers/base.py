@@ -21,9 +21,7 @@ class ProviderResponse(BaseModel):
 
 class ModelProvider(ABC):
     @abstractmethod
-    async def chat(
-        self, messages: List[Dict[str, Any]], options: Optional[Dict[str, Any]] = None
-    ) -> ProviderResponse:
+    async def chat(self, messages: List[Dict[str, Any]], options: Optional[Dict[str, Any]] = None) -> ProviderResponse:
         """
         Sends a conversation history to the model provider.
         messages matches OpenAI format: [{"role": "system", "content": "..."}].

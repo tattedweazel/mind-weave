@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from uuid import UUID
 
 import httpx
@@ -104,7 +104,7 @@ async def gmail_list_messages(
             timeout=60.0,
         )
         r.raise_for_status()
-        return r.json()
+        return cast(dict[str, Any], r.json())
 
 
 async def gmail_get_message_full(access_token: str, message_id: str) -> dict[str, Any]:
@@ -120,7 +120,7 @@ async def gmail_get_message_full(access_token: str, message_id: str) -> dict[str
             timeout=60.0,
         )
         r.raise_for_status()
-        return r.json()
+        return cast(dict[str, Any], r.json())
 
 
 async def calendar_list_events(
@@ -148,4 +148,4 @@ async def calendar_list_events(
             timeout=60.0,
         )
         r.raise_for_status()
-        return r.json()
+        return cast(dict[str, Any], r.json())

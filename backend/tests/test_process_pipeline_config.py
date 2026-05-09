@@ -67,9 +67,7 @@ def test_process_step_invalid_kind_rejected():
 def test_process_step_review_max_iterations():
     blob = {
         "version": 1,
-        "process": [
-            {"id": "rev", "kind": "review", "max_iterations": 5}
-        ],
+        "process": [{"id": "rev", "kind": "review", "max_iterations": 5}],
     }
     cfg = validate_companion_pipeline_blob(blob)
     assert cfg.process[0].max_iterations == 5
@@ -78,18 +76,14 @@ def test_process_step_review_max_iterations():
 def test_process_step_max_iterations_clamped():
     blob = {
         "version": 1,
-        "process": [
-            {"id": "rev", "kind": "review", "max_iterations": 0}
-        ],
+        "process": [{"id": "rev", "kind": "review", "max_iterations": 0}],
     }
     with pytest.raises(Exception):
         validate_companion_pipeline_blob(blob)
 
     blob2 = {
         "version": 1,
-        "process": [
-            {"id": "rev", "kind": "review", "max_iterations": 11}
-        ],
+        "process": [{"id": "rev", "kind": "review", "max_iterations": 11}],
     }
     with pytest.raises(Exception):
         validate_companion_pipeline_blob(blob2)
@@ -164,9 +158,7 @@ def test_rejects_too_many_process_steps():
 def test_rejects_oversized_process_description():
     blob = {
         "version": 1,
-        "process": [
-            {"id": "s1", "kind": "summarize", "description": "x" * 13_000}
-        ],
+        "process": [{"id": "s1", "kind": "summarize", "description": "x" * 13_000}],
     }
     with pytest.raises(ValueError, match="description exceeds maximum length"):
         validate_companion_pipeline_blob(blob)
@@ -206,9 +198,7 @@ def test_process_coexists_with_post_compose():
 def test_process_extra_fields_rejected():
     blob = {
         "version": 1,
-        "process": [
-            {"id": "s", "kind": "summarize", "unexpected_field": True}
-        ],
+        "process": [{"id": "s", "kind": "summarize", "unexpected_field": True}],
     }
     with pytest.raises(Exception):
         validate_companion_pipeline_blob(blob)
@@ -217,9 +207,7 @@ def test_process_extra_fields_rejected():
 def test_process_step_disabled():
     blob = {
         "version": 1,
-        "process": [
-            {"id": "s", "kind": "summarize", "enabled": False}
-        ],
+        "process": [{"id": "s", "kind": "summarize", "enabled": False}],
     }
     cfg = validate_companion_pipeline_blob(blob)
     assert cfg.process[0].enabled is False

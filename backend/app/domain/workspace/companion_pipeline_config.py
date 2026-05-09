@@ -268,12 +268,12 @@ def _validate_instruction_lengths(cfg: CompanionPipelineConfig) -> None:
     s = cfg.stages.session_summary.instructions_append or ""
     if len(s) > _MAX_INSTRUCTIONS_CHARS:
         raise ValueError("stages.session_summary.instructions_append exceeds maximum length")
-    for step in cfg.process:
-        if len(step.description) > _MAX_PROCESS_DESCRIPTION_CHARS:
-            raise ValueError(f"process step {step.id!r}: description exceeds maximum length")
-    for step in cfg.post_compose:
-        if len(step.system_prompt) > _MAX_POST_SYSTEM_CHARS:
-            raise ValueError(f"post_compose step {step.id!r}: system_prompt exceeds maximum length")
+    for proc_step in cfg.process:
+        if len(proc_step.description) > _MAX_PROCESS_DESCRIPTION_CHARS:
+            raise ValueError(f"process step {proc_step.id!r}: description exceeds maximum length")
+    for post_step in cfg.post_compose:
+        if len(post_step.system_prompt) > _MAX_POST_SYSTEM_CHARS:
+            raise ValueError(f"post_compose step {post_step.id!r}: system_prompt exceeds maximum length")
 
 
 def effective_interpret_append(cfg: CompanionPipelineConfig) -> str:

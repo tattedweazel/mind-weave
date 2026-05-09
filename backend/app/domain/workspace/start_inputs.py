@@ -109,7 +109,7 @@ def format_start_slots_for_capability_prompt(slots: List[StartInputSlot]) -> str
         if s.input_type == "datetime":
             extra = ", RFC3339 with offset or Z"
         elif s.input_type == "list":
-            extra = ", JSON array in input_bindings (e.g. [] or [\"id\"])"
+            extra = ', JSON array in input_bindings (e.g. [] or ["id"])'
         elif s.input_type in ("dictionary", "structure"):
             extra = ", JSON object in input_bindings"
         elif s.input_type == "gmail":

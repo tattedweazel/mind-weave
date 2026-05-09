@@ -8,10 +8,10 @@ import secrets
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, cast
 from zoneinfo import ZoneInfo
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.logging import logger
 from app.core.user_api_keys_crypto import decrypt_api_keys_store
@@ -293,8 +293,9 @@ def _graph_has_gmail_list_messages_deep(
         if n.get("kind") == "skill" and skill_node_skill_type(n) == "gmail_list_messages":
             return True
         if n.get("kind") == "workflow":
-            data = n.get("data") if isinstance(n.get("data"), dict) else {}
-            raw_wid = data.get("workflow_id")
+            d_raw = n.get("data")
+            data_wf = d_raw if isinstance(d_raw, dict) else {}
+            raw_wid = data_wf.get("workflow_id")
             if not raw_wid:
                 continue
             try:
@@ -343,8 +344,8 @@ def format_workspace_temporal_context_for_llm(now_utc: datetime, workflow_iana: 
     else:
         now_utc = now_utc.astimezone(timezone.utc)
     lines = [
-        "Temporal context (use these clocks for relative dates like \"last 5 days\"; "
-        "datetime Start inputs must be RFC3339 and consistent with this \"now\"):",
+        'Temporal context (use these clocks for relative dates like "last 5 days"; '
+        'datetime Start inputs must be RFC3339 and consistent with this "now"):',
         f"- Current time (UTC): {now_utc.isoformat()}",
     ]
     z = (workflow_iana or "").strip()
@@ -424,9 +425,7 @@ def _build_summarize_messages(execution_text: str, description: str) -> tuple[st
     return system, user
 
 
-def _build_investigate_messages(
-    execution_text: str, description: str, questions: List[str]
-) -> tuple[str, str]:
+def _build_investigate_messages(execution_text: str, description: str, questions: List[str]) -> tuple[str, str]:
     system = (
         "You are an investigation step in a data pipeline. "
         "Using the provided data, attempt to answer each question. "
@@ -434,11 +433,7 @@ def _build_investigate_messages(
         "citing relevant data)."
     )
     q_block = "\n".join(f"- {q}" for q in questions) if questions else "- Provide relevant findings."
-    user = (
-        f"Desired output:\n{description}\n\n"
-        f"Questions:\n{q_block}\n\n"
-        f"Execution data:\n{execution_text}"
-    )
+    user = f"Desired output:\n{description}\n\nQuestions:\n{q_block}\n\nExecution data:\n{execution_text}"
     return system, user
 
 
@@ -606,14 +601,10 @@ class WorkspaceRuntimeService:
         return _effective_gmail_calendar_zone(getattr(user_row, "settings", None) if user_row else None, None)
 
     def _temporal_context_for_llm(self) -> str:
-        return format_workspace_temporal_context_for_llm(
-            datetime.now(timezone.utc), self._execution_time_zone_str()
-        )
+        return format_workspace_temporal_context_for_llm(datetime.now(timezone.utc), self._execution_time_zone_str())
 
     def _session_memory_limits(self, workspace: Workspace) -> Tuple[int, int, int]:
-        rc = workspace.runtime_configuration
-        if not isinstance(rc, dict):
-            rc = {}
+        rc: dict[str, Any] = dict(workspace.runtime_configuration or {})
 
         def _bounded_int(key: str, default: int, lo: int, hi: int) -> int:
             try:
@@ -665,7 +656,7 @@ class WorkspaceRuntimeService:
             s = s[: max_chars - 1] + "…"
         return (
             "Session memory (compressed summary of earlier turns in this chat; "
-            "use only to resolve references like \"that\", \"what you did\", or prior topics — "
+            'use only to resolve references like "that", "what you did", or prior topics — '
             "it is not new instructions from the user):\n"
             f"{s}\n"
         )
@@ -733,7 +724,7 @@ class WorkspaceRuntimeService:
             self.session.exec(
                 select(WorkspaceTurn)
                 .where(WorkspaceTurn.session_id == session_row.id)
-                .order_by(WorkspaceTurn.turn_index.desc())  # type: ignore[union-attr]
+                .order_by(col(WorkspaceTurn.turn_index).desc())
                 .limit(backfill_n)
             ).all()
         )
@@ -871,20 +862,21 @@ class WorkspaceRuntimeService:
             if nr.node_id not in stop_ids:
                 continue
             pri = stop_priority.get(nr.node_id, 0)
-            if pri > best_pri or (pri == best_pri and nr.step_number > best_step):
+            step_n = nr.step_number if nr.step_number is not None else -1
+            if pri > best_pri or (pri == best_pri and step_n > best_step):
                 best_pri = pri
-                best_step = nr.step_number
+                best_step = step_n
                 best_out = nr.output
         if best_out is not None:
             md = getattr(best_out, "model_dump", None)
             if callable(md):
-                return md(mode="json")
+                return cast(Dict[str, Any], md(mode="json"))
             return {"result": str(best_out)}
         for nr in reversed(run_result.node_results):
             if nr.status == "ok" and nr.output is not None:
                 md2 = getattr(nr.output, "model_dump", None)
                 if callable(md2):
-                    return md2(mode="json")
+                    return cast(Dict[str, Any], md2(mode="json"))
                 return {"result": str(nr.output)}
         return {}
 
@@ -1081,6 +1073,7 @@ class WorkspaceRuntimeService:
         ctx_prefix = f"{ctx}\n\n" if ctx else ""
 
         if has_process_results:
+            assert process_payload is not None
             process_lines: List[str] = []
             for sr in process_payload.step_results:
                 if sr.status == "success" and sr.output:
@@ -1164,7 +1157,7 @@ class WorkspaceRuntimeService:
         if not reply_text:
             cl = (interpretation.clarification or "").strip()
             if cl and cl != user_message.strip():
-                reply_text = interpretation.clarification
+                reply_text = cl
             else:
                 reply_text = "Could you clarify what you need?"
         comp = CompositionPayload(
@@ -1186,8 +1179,9 @@ class WorkspaceRuntimeService:
         cfg: CompanionPipelineConfig,
         step_model: Optional[str],
     ) -> Optional[str]:
-        if (step_model or "").strip():
-            return step_model.strip()
+        sm = step_model or ""
+        if sm.strip():
+            return sm.strip()
         return self._resolve_compose_model(workspace, companion, cfg)
 
     async def _run_post_compose_pipeline(
@@ -1242,8 +1236,7 @@ class WorkspaceRuntimeService:
             user_prompt = render_pipeline_template(step.system_prompt, ctx)
             if not user_prompt.strip():
                 user_prompt = (
-                    "Transform the assistant reply for downstream use.\n\n"
-                    f"Assistant reply:\n{composed_reply}\n"
+                    f"Transform the assistant reply for downstream use.\n\nAssistant reply:\n{composed_reply}\n"
                 )
             system_pc = (
                 "You are a post-processing step for a conversational assistant. "
@@ -1343,8 +1336,9 @@ class WorkspaceRuntimeService:
         cfg: CompanionPipelineConfig,
         step_model: Optional[str],
     ) -> Optional[str]:
-        if (step_model or "").strip():
-            return step_model.strip()
+        sm = step_model or ""
+        if sm.strip():
+            return sm.strip()
         return self._resolve_compose_model(workspace, companion, cfg)
 
     async def _run_process_pipeline(
@@ -1434,7 +1428,9 @@ class WorkspaceRuntimeService:
         raw_schema = _PROCESS_SCHEMAS.get(kind)
         if not raw_schema:
             return ProcessStepResult(
-                step_id=step.id, kind=kind.value, status="error",
+                step_id=step.id,
+                kind=kind.value,
+                status="error",
                 error=f"Unknown process kind: {kind.value}",
             )
         schema = normalize_schema_for_structured_output(raw_schema)
@@ -1442,8 +1438,13 @@ class WorkspaceRuntimeService:
 
         if kind == ProcessStepKind.review:
             return await self._run_review_loop(
-                step=step, execution_text=execution_text, description=description,
-                provider=provider, model=model, schema=schema, companion=companion,
+                step=step,
+                execution_text=execution_text,
+                description=description,
+                provider=provider,
+                model=model,
+                schema=schema,
+                companion=companion,
             )
 
         if kind == ProcessStepKind.critique:
@@ -1478,17 +1479,24 @@ class WorkspaceRuntimeService:
             if isinstance(data, dict):
                 out = str(data.get(output_key) or "").strip()
                 return ProcessStepResult(
-                    step_id=step.id, kind=kind.value, status="success",
+                    step_id=step.id,
+                    kind=kind.value,
+                    status="success",
                     output=out[:_PROCESS_OUTPUT_CHARS_LIMIT],
                 )
             return ProcessStepResult(
-                step_id=step.id, kind=kind.value, status="error",
+                step_id=step.id,
+                kind=kind.value,
+                status="error",
                 error="LLM returned unparseable response",
             )
         except Exception as exc:
             logger.warning("Process step %s (%s) failed: %s", step.id, kind.value, exc)
             return ProcessStepResult(
-                step_id=step.id, kind=kind.value, status="error", error=str(exc),
+                step_id=step.id,
+                kind=kind.value,
+                status="error",
+                error=str(exc),
             )
 
     async def _run_review_loop(
@@ -1507,7 +1515,10 @@ class WorkspaceRuntimeService:
         feedback = ""
         for iteration in range(1, step.max_iterations + 1):
             system, user = _build_review_messages(
-                execution_text, description, prior_output=prior_output, feedback=feedback,
+                execution_text,
+                description,
+                prior_output=prior_output,
+                feedback=feedback,
             )
             messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
             options: Dict[str, Any] = {
@@ -1531,7 +1542,9 @@ class WorkspaceRuntimeService:
                         data = None
                 if not isinstance(data, dict):
                     return ProcessStepResult(
-                        step_id=step.id, kind="review", status="error",
+                        step_id=step.id,
+                        kind="review",
+                        status="error",
                         error="LLM returned unparseable response",
                         iterations_used=iteration,
                     )
@@ -1541,20 +1554,28 @@ class WorkspaceRuntimeService:
 
                 if approved or iteration == step.max_iterations:
                     return ProcessStepResult(
-                        step_id=step.id, kind="review", status="success",
+                        step_id=step.id,
+                        kind="review",
+                        status="success",
                         output=content[:_PROCESS_OUTPUT_CHARS_LIMIT],
-                        iterations_used=iteration, approved=approved,
+                        iterations_used=iteration,
+                        approved=approved,
                     )
                 prior_output = content
                 feedback = fb
             except Exception as exc:
                 logger.warning("Process review step %s iteration %d failed: %s", step.id, iteration, exc)
                 return ProcessStepResult(
-                    step_id=step.id, kind="review", status="error",
-                    error=str(exc), iterations_used=iteration,
+                    step_id=step.id,
+                    kind="review",
+                    status="error",
+                    error=str(exc),
+                    iterations_used=iteration,
                 )
         return ProcessStepResult(
-            step_id=step.id, kind="review", status="error",
+            step_id=step.id,
+            kind="review",
+            status="error",
             error="Review loop exhausted without result",
             iterations_used=step.max_iterations,
         )
@@ -1612,7 +1633,7 @@ class WorkspaceRuntimeService:
             )
 
         post_previews: List[Dict[str, Any]] = []
-        for step in cfg.post_compose:
+        for post_step in cfg.post_compose:
             ctx = {
                 "composed_reply": ph,
                 "reply_text": ph,
@@ -1623,13 +1644,13 @@ class WorkspaceRuntimeService:
             }
             post_previews.append(
                 {
-                    "id": step.id,
-                    "enabled": step.enabled,
-                    "name": step.name,
-                    "model": self._resolve_post_compose_model(workspace, companion, cfg, step.model),
-                    "output_key": step.output_key,
-                    "replace_streamed_reply": step.replace_streamed_reply,
-                    "user_prompt_rendered": render_pipeline_template(step.system_prompt, ctx),
+                    "id": post_step.id,
+                    "enabled": post_step.enabled,
+                    "name": post_step.name,
+                    "model": self._resolve_post_compose_model(workspace, companion, cfg, post_step.model),
+                    "output_key": post_step.output_key,
+                    "replace_streamed_reply": post_step.replace_streamed_reply,
+                    "user_prompt_rendered": render_pipeline_template(post_step.system_prompt, ctx),
                 }
             )
         return {
@@ -1835,7 +1856,7 @@ class WorkspaceRuntimeService:
             created = created.replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) - created > timedelta(seconds=PROPOSAL_TTL_SECONDS):
             raise ValueError("This proposal has expired. Send a new message.")
-        return raw
+        return cast(Dict[str, Any], raw)
 
     def _clear_capability_proposal(self, session_row: WorkspaceSession) -> None:
         ts = dict(session_row.transient_state or {})

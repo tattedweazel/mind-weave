@@ -5,7 +5,7 @@ to be strings. JSON Schema permits `type` as an array (e.g. `["string", "null"]`
 This module recursively normalizes schemas so every `type` is a string.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 
 def _normalize_type(type_val: Any) -> str | None:
@@ -81,4 +81,4 @@ def normalize_schema_for_structured_output(schema: Dict[str, Any]) -> Dict[str, 
     """
     if not schema or not isinstance(schema, dict):
         return schema
-    return _normalize_schema_recursive(dict(schema))
+    return cast(Dict[str, Any], _normalize_schema_recursive(dict(schema)))

@@ -355,9 +355,7 @@ async def test_maybe_backfill_builds_summary_from_turns(db_session: Session, mon
     db_session.add(companion)
     db_session.add(sess)
     delivery = {
-        "payload": {
-            "final_user_response": {"rendered_text": "I summarized your inbox.", "render_mode": "chat_message"}
-        }
+        "payload": {"final_user_response": {"rendered_text": "I summarized your inbox.", "render_mode": "chat_message"}}
     }
     turn = WorkspaceTurn(
         session_id=sid,
