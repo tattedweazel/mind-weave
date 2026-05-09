@@ -8,7 +8,7 @@ import re
 import struct
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple, cast
 from urllib.parse import urlparse
 
 _PNG_HDR = b"\x89PNG\r\n\x1a\n"
@@ -145,7 +145,20 @@ async def perform_url_snapshot_capture(
             duration_ms=0,
         )
 
-    from playwright.async_api import async_playwright
+    try:
+        from playwright.async_api import async_playwright
+    except ModuleNotFoundError:
+        return _error_data(
+            err_type="PLAYWRIGHT_MISSING",
+            message=(
+                "Playwright is not installed. Install the backend optional extra "
+                "`url-snapshot` (e.g. `uv sync --extra url-snapshot` from `backend/`) "
+                "then run `uv run playwright install chromium`. "
+                "See docs/OPERATIONS.md#capture_url_snapshot--playwright."
+            ),
+            retryable=False,
+            duration_ms=0,
+        )
 
     try:
         async with async_playwright() as p:
@@ -156,7 +169,11 @@ async def perform_url_snapshot_capture(
                 )
                 page = await context.new_page()
                 to_ms = max(1000, int(timeout_ms))
-                await page.goto(u, wait_until=wu, timeout=to_ms)
+                await page.goto(
+                    u,
+                    wait_until=cast(Literal["load", "domcontentloaded", "networkidle"], wu),
+                    timeout=to_ms,
+                )
                 final_url = page.url
                 png = await page.screenshot(
                     type="png",

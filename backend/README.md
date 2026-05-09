@@ -102,6 +102,8 @@ The `WorkflowExecutor` runs a WorkflowDefinition DAG:
 
 **Offline loop wiring check** — From `backend/`, `uv run python scripts/analyze_workflow_definition.py --workflow-id <uuid>` loads the persisted graph and runs the same **For Loop** / **For Loop End** validators as the executor. **`--edges`** lists persisted handles per edge. See [docs/OPERATIONS.md](../docs/OPERATIONS.md#debugging-workflows-graphs-and-runs).
 
+**URL snapshot skill (`capture_url_snapshot`) — Playwright** — The skill runs **headless Chromium inside the API process** via **Playwright**. The Python package is an **optional extra**: from `backend/`, run **`uv sync --extra url-snapshot`** (alongside **`--extra dev`** if you use pytest/mypy) so **`playwright`** is installed, then **`uv run playwright install chromium`** once per machine or container image. Without the extra, runs that reach this node return a structured **`PLAYWRIGHT_MISSING`** error with install hints. Full timeouts, PNG size caps, and operator notes: [docs/OPERATIONS.md](../docs/OPERATIONS.md#capture_url_snapshot--playwright).
+
 **Stream a run locally (no HTTP)** — `cd backend && uv run python scripts/run_workflow_stream.py --workflow-id <uuid>` runs **`run_stream`** in-process and prints NDJSON to stdout (same events as **`POST .../run_stream`**). The script **`chdir`s to `backend/`** before loading **`app`** so **`.env`** / LM Studio URL / SQLite match **`uvicorn`**; it logs **`LMSTUDIO_BASE_URL`** and **`DATABASE_URL`** to stderr on startup. Optional **`--input-json`** for **`input_overrides`** / **`output_overrides`**. Same doc section as above.
 
 **books.toscrape.com sample (`fetch_url` + `html_parse_basic`)** — `cd backend && uv run python scripts/run_books_toscrape_fetch_parse_sample.py` runs that graph once with a real fetch and prints the parse result (see [docs/OPERATIONS.md](../docs/OPERATIONS.md)). **`--cleanup`** drops the created rows after the run.
@@ -188,7 +190,7 @@ The `WorkflowExecutor` runs a WorkflowDefinition DAG:
 
 ## Setup & Running
 
-If you prefer to stay at the **repository root**, use `uv --project backend …` (e.g. `uv sync --project backend --extra dev`) instead of `cd backend` — there is no `pyproject.toml` at the repo root.
+If you prefer to stay at the **repository root**, use `uv --project backend …` (e.g. `uv sync --project backend --extra dev` or `uv sync --project backend --extra dev --extra url-snapshot`) instead of `cd backend` — there is no `pyproject.toml` at the repo root.
 
 1. Navigate to the backend directory:
    ```bash
@@ -198,6 +200,7 @@ If you prefer to stay at the **repository root**, use `uv --project backend …`
    ```bash
    uv sync --extra dev
    ```
+   Use **`--extra url-snapshot`** as well if you run workflows that include the **URL snapshot** skill (`capture_url_snapshot`); see **URL snapshot skill** under [Workflow execution model](#workflow-execution-model). Default **`uv sync --extra dev`** omits Playwright so API installs stay lighter.
 3. **Convention — local dev server:** always start the API with **`uv` invoking this project’s Python**, then **`python -m fastapi`** (so dependencies come from **`backend/.venv`**, not another tool on your `PATH`):
 
    ```bash

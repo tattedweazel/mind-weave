@@ -34,7 +34,7 @@ The **`fetch_url`** skill issues HTTP requests from the **API process** (see the
 
 ## `capture_url_snapshot` — Playwright
 
-The **`capture_url_snapshot`** skill uses **Playwright** to launch **headless Chromium** in the **API process**. On first deploy, install the browser binary (per machine or container image):
+The **`capture_url_snapshot`** skill uses **Playwright** to launch **headless Chromium** in the **API process**. Install the **Python** package with the backend optional extra **`url-snapshot`** (e.g. from `backend/`: **`uv sync --extra url-snapshot`**, or add **`--extra dev`** for development tools). On first deploy, install the browser binary (per machine or container image):
 
 - From `backend/`: `uv run playwright install chromium` (or bake the same in your **Dockerfile** / CI image).
 

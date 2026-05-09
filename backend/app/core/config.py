@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     LMSTUDIO_BASE_URL: str = "http://127.0.0.1:1234/v1"
     # Empty or legacy placeholder is resolved at chat time via GET /v1/models (first id), or set explicitly.
     LMSTUDIO_MODEL: str = ""
-    LMSTUDIO_CHAT_TIMEOUT: float = 3600.0  # 1 hour for large/slow local models / long structured outputs (override via env)
+    LMSTUDIO_CHAT_TIMEOUT: float = (
+        3600.0  # 1 hour for large/slow local models / long structured outputs (override via env)
+    )
     # Server-wide LM Studio API key: required for GET /api/v1/models/ (shared picker list). Chat/workflows
     # still prefer User.api_keys lmstudio_api_key when set, else this env. See lmstudio_http.resolve_lmstudio_bearer.
     LMSTUDIO_API_KEY: str = ""
@@ -125,7 +127,7 @@ class Settings(BaseSettings):
     FETCH_URL_DEFAULT_TIMEOUT_MS: int = 30_000
     FETCH_URL_MAX_BODY_BYTES: int = 2_097_152  # 2 MiB cap per response body (streamed; oversized → structured error)
 
-    # capture_url_snapshot: Playwright Chromium (see docs/OPERATIONS.md)
+    # capture_url_snapshot: optional extra url-snapshot (Playwright) + Chromium (see docs/OPERATIONS.md)
     CAPTURE_URL_SNAPSHOT_DEFAULT_TIMEOUT_MS: int = 30_000
     CAPTURE_URL_SNAPSHOT_DEFAULT_VIEWPORT_WIDTH: int = 1280
     CAPTURE_URL_SNAPSHOT_DEFAULT_VIEWPORT_HEIGHT: int = 720

@@ -53,6 +53,8 @@ Operator-facing notes for upgrades. See [docs/OPERATIONS.md](docs/OPERATIONS.md)
 
 ### Development
 
+- **Backend dependencies (library audit LU-004 / LU-005)** — **`torch`** and **`qwen-tts`** are no longer declared on the main API package ([`backend/pyproject.toml`](backend/pyproject.toml)); use **[`services/tts-bridge`](services/tts-bridge/)** for synthesis. **`playwright`** is now the optional extra **`url-snapshot`** (`uv sync --extra url-snapshot` from `backend/`, then `uv run playwright install chromium`). Without it, **`capture_url_snapshot`** returns **`PLAYWRIGHT_MISSING`**. See [backend/README.md](backend/README.md), [docs/OPERATIONS.md](docs/OPERATIONS.md), [docs/Audits/LIBRARY_USAGE_AUDIT.md](docs/Audits/LIBRARY_USAGE_AUDIT.md).
+
 - **LAN-visible dev** — Documented running Vite and FastAPI on `0.0.0.0`, `VITE_API_BASE`, and backend `CORS_ORIGINS` / `TRUSTED_HOSTS` / `FRONTEND_URL` for phones and other machines on the same network; `npm run dev:lan` runs `vite --host`. [`frontend/index.html`](frontend/index.html) CSP `connect-src` includes scheme-wide `http:` and `ws:` so `VITE_API_BASE` on RFC1918 hosts is not blocked (tighten `connect-src` in production). See [frontend/README.md](frontend/README.md#lan--same-network-devices).
 
 ### Sandbox
