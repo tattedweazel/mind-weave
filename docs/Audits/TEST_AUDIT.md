@@ -80,6 +80,8 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | **Sandbox** pure query helpers (`query.py`: adjacency, first-food ordering, pet stats, nearest-by-type, world grid dimensions) | `test_sandbox_query.py` |
 | **`sandbox_*` workflow utilities** (executor HTTP runs; no LLM) | `test_sandbox_workflow_utilities.py` |
 | **Companion / Workspace** bootstrap, stream turn (LLM mocked via `WorkspaceRuntimeService` patches), disabled flag, `PUT /companion/` partial + clear persona, `PUT /workspaces/{id}` `enabled_workflow_ids` + 422 on unknown workflow | `test_workspace_api.py` |
+| **Workspace default Google connection** injected into **`gmail_list_messages`** / **`calendar_list_events`** graphs (deep copy; no DB mutation) | `test_workspace_google_graph.py` |
+| **Workspace Google injection** wired through **`WorkflowExecutor`** nested-schedule path | `test_workflow_executor_nested_google.py` |
 
 **Product note:** `WorkflowRun` rows (and thus `GET .../runs`) are created during **`run_stream`**, not during synchronous `POST .../run`. The lifecycle test documents that; changing it would require a product/code change.
 
@@ -92,6 +94,7 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | App shell, auth UI, theme, avatar, palettes (unit/integration) | `frontend/src/**/*.test.tsx`, `*.test.ts` |
 | Baseline CSP meta (tune `connect-src` for prod API) | `frontend/index.html` |
 | Workflow editor **step kind manifest** vs `nodeTypes` + `appNodeToFlow` / `flowNodeToApp` | `frontend/src/components/workflow-editor/workflowGraphStepKindsManifest.test.ts` |
+| **Manifest-aligned** `getSourceOutputType` default behavior (explicit `any` allowlist incl. Stop / For-loop item) | `workflowGraphStepKindsManifest.test.ts` (`getSourceOutputType vs manifest`) |
 | **Workflow editor (ReactFlow) end-to-end** | Not automated — manual QA or future Playwright/Cypress. |
 | **Sandbox Phaser adapter** | `frontend/src/sandbox/runtime/phaserSandboxAdapter.test.ts` (resize only on grid dimension change; Phaser mocked) |
 | **Sandbox `last_error` hint matching** | `frontend/src/sandbox/sandboxLastErrorHint.test.ts` |

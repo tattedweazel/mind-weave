@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { GraphNode as AppGraphNode } from '../../api/types';
 
-import { appNodeToFlow, flowNodeToApp } from './graphConverters';
+import { appNodeToFlow, flowNodeToApp, getSourceOutputType } from './graphConverters';
 import { manifestSteps, type ManifestStep } from './stepKindRegistry';
 import { nodeTypes } from './nodeTypes';
 
@@ -664,5 +664,99 @@ describe('workflow_graph_step_kinds manifest', () => {
                 expect(back.control_type).toBe(appNode.control_type);
             }
         }
+    });
+});
+
+describe('getSourceOutputType vs manifest react_flow_type', () => {
+    /** Ports where `undefined` would fall through to the default `any`; match production handle ids. */
+    const defaultSourceHandle: Partial<Record<string, string>> = {
+        forLoopControl: 'item',
+        forLoopEndControl: 'output',
+        basicConditional: 'true',
+        isControl: 'true',
+        isEmptyControl: 'true',
+        gtControl: 'true',
+        ltControl: 'true',
+        gteControl: 'true',
+        lteControl: 'true',
+        betweenControl: 'true',
+        andControl: 'true',
+        orControl: 'true',
+        xorControl: 'true',
+    };
+
+    /** `getSourceOutputType` intentionally yields `any` for these `react_flow_type` keys (see graphConverters). */
+    const allowAny = new Set([
+        'randomItemFromList',
+        'listItemByIndex',
+        'validateAgainstStructure',
+        'forLoopControl',
+        'stop',
+    ]);
+
+    it.each(manifestSteps())('non-accidental output type for $react_flow_type ($kind)', (step) => {
+        const rf = step.react_flow_type;
+        const appNode = minimalAppNodeFromManifestStep(step);
+        const flow = appNodeToFlow(appNode);
+        const handle = defaultSourceHandle[rf];
+        const ty = getSourceOutputType([flow], flow.id, handle, []);
+        if (allowAny.has(rf)) {
+            expect(ty).toBe('any');
+            return;
+        }
+        expect(ty).not.toBe('any');
+    });
+
+    it('simpleLLMCall: string without structure, dictionary with structure_id', () => {
+        const simple = minimalAppNodeFromManifestStep({
+            kind: 'skill',
+            skill_type: 'simple_llm_call',
+            react_flow_type: 'simpleLLMCall',
+            pydantic_model: 'SimpleLLMCallSkillNode',
+        } as ManifestStep);
+        const flowPlain = appNodeToFlow(simple);
+        expect(getSourceOutputType([flowPlain], flowPlain.id, undefined, [])).toBe('string');
+
+        const withStructure: AppGraphNode = {
+            ...(simple as Extract<AppGraphNode, { kind: 'skill' }>),
+            data: {
+                ...(simple as Extract<AppGraphNode, { kind: 'skill' }>).data,
+                structure_id: STRUCTURE_ID,
+            },
+        };
+        const flowStruct = appNodeToFlow(withStructure);
+        expect(getSourceOutputType([flowStruct], flowStruct.id, undefined, [])).toBe('dictionary');
+
+        const flowEdge = appNodeToFlow(simple);
+        const edges = [
+            {
+                id: 'e1',
+                source: 'other',
+                target: flowEdge.id,
+                targetHandle: 'structure',
+                sourceHandle: undefined,
+            },
+        ];
+        expect(getSourceOutputType([flowEdge], flowEdge.id, undefined, edges as any)).toBe('dictionary');
+    });
+
+    it('multimodalLLMCall: string vs dictionary with structure_id', () => {
+        const mm = minimalAppNodeFromManifestStep({
+            kind: 'skill',
+            skill_type: 'multimodal_llm',
+            react_flow_type: 'multimodalLLMCall',
+            pydantic_model: 'MultimodalLLMCallSkillNode',
+        } as ManifestStep);
+        const flowPlain = appNodeToFlow(mm);
+        expect(getSourceOutputType([flowPlain], flowPlain.id, undefined, [])).toBe('string');
+        const withStructure: AppGraphNode = {
+            ...(mm as Extract<AppGraphNode, { kind: 'skill' }>),
+            data: {
+                ...(mm as Extract<AppGraphNode, { kind: 'skill' }>).data,
+                structure_id: STRUCTURE_ID,
+            },
+        };
+        const flowStruct = appNodeToFlow(withStructure);
+        expect(getSourceOutputType([flowStruct], flowStruct.id, undefined, [])).toBe('dictionary');
     });
 });
