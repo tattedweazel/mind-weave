@@ -6,7 +6,7 @@ This script proves the workflow node actually executes, not just that schemas
 parse. It covers both supported V1 paths:
 
 1. saved artifact: `audio_file_artifacts` row -> sync WorkflowExecutor.run
-2. run-time upload: `run_stream` -> `input_required` -> deliver file bytes
+2. run-time upload: persisted run + SSE-shaped NDJSON compat -> `input_required` -> deliver file bytes
 
 Default mode mocks STT, so no external service calls are made. Pass
 `--real-stt --audio-file /path/to/clip.wav` to call the real STT bridge.
@@ -43,7 +43,10 @@ from sqlmodel import Session, select  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 from app.domain.audio_file_validation import validate_audio_upload  # noqa: E402
-from app.domain.services.workflow_executor import WorkflowExecutor  # noqa: E402
+from app.domain.workflow_inprocess_ndjson import (  # noqa: E402
+    iterate_scheduled_run_ndjson_dicts,
+    start_persisted_run_row,
+)
 from app.domain.workflow_executor.transcribe_pending import TranscribeWaitKey, complete_transcribe_wait  # noqa: E402
 from app.persistence.db import engine  # noqa: E402
 from app.persistence.tables import AudioFileArtifact, User, WorkflowDefinition, utc_now  # noqa: E402
@@ -192,37 +195,35 @@ async def _run_runtime_upload(session: Session, user_id: uuid.UUID, audio: bytes
     input_required_seen = False
     t0 = asyncio.get_event_loop().time()
 
-    async for raw in WorkflowExecutor(session, user_id).run_stream(wf):
-        chunk = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-        for part in chunk.splitlines():
-            if not part.strip():
-                continue
-            ev = json.loads(part)
-            if ev.get("event") == "input_required" and ev.get("kind") == "audio_file_input":
-                input_required_seen = True
-                elapsed = asyncio.get_event_loop().time() - t0
-                if elapsed > 5.0:
-                    print(f"Warning: input_required arrived after {elapsed:.1f}s", file=sys.stderr)
-                key = TranscribeWaitKey(
-                    run_id=uuid.UUID(str(ev["run_id"])),
-                    node_id=NODE_ID,
-                    for_loop_id=None,
-                    iteration=int(ev.get("for_loop_iteration") or 0),
-                )
-                ok = complete_transcribe_wait(
-                    key,
-                    audio,
-                    filename=filename,
-                    content_type=content_type,
-                )
-                if not ok:
-                    raise RuntimeError("complete_transcribe_wait returned False for runtime upload")
-            if ev.get("event") == "node_end" and ev.get("node_id") == NODE_ID:
-                out = (ev.get("result") or {}).get("output") or {}
-                if out.get("kind") == "string":
-                    text = (out.get("text") or "").strip()
-            if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
-                end_ok = True
+    run_row = start_persisted_run_row(session, workflow_id=wf.id, user_id=user_id)
+    executor = WorkflowExecutor(session, user_id)
+
+    async for ev in iterate_scheduled_run_ndjson_dicts(executor, wf, persist_run_record=run_row):
+        if ev.get("event") == "input_required" and ev.get("kind") == "audio_file_input":
+            input_required_seen = True
+            elapsed = asyncio.get_event_loop().time() - t0
+            if elapsed > 5.0:
+                print(f"Warning: input_required arrived after {elapsed:.1f}s", file=sys.stderr)
+            key = TranscribeWaitKey(
+                run_id=uuid.UUID(str(ev["run_id"])),
+                node_id=NODE_ID,
+                for_loop_id=None,
+                iteration=int(ev.get("for_loop_iteration") or 0),
+            )
+            ok = complete_transcribe_wait(
+                key,
+                audio,
+                filename=filename,
+                content_type=content_type,
+            )
+            if not ok:
+                raise RuntimeError("complete_transcribe_wait returned False for runtime upload")
+        if ev.get("event") == "node_end" and ev.get("node_id") == NODE_ID:
+            out = (ev.get("result") or {}).get("output") or {}
+            if out.get("kind") == "string":
+                text = (out.get("text") or "").strip()
+        if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
+            end_ok = True
 
     if not input_required_seen or not end_ok or not text:
         raise RuntimeError(f"runtime upload workflow failed: input_required={input_required_seen} end_ok={end_ok} text={text!r}")

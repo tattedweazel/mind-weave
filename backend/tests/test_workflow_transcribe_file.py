@@ -50,6 +50,9 @@ from app.persistence.tables import (
     WorkflowRun,
     utc_now,
 )
+from tests.executor_scheduled_helpers import execute_scheduled_collect_sse
+from tests.sse_helpers import sse_response_body_to_legacy_workflow_events
+from tests.workflow_sse_legacy import iter_sse_pairs_as_ndjson
 from app.providers.transcription import (
     SpeechTranscriptionProvider,
     enabled_provider_ids,
@@ -726,34 +729,56 @@ async def test_transcribe_file_run_stream_runtime_upload_completes(
     saw_input = False
     saw_complete = False
     end_ok = False
+    run_uid = uuid.uuid4()
+    db_session.add(
+        WorkflowRun(
+            id=run_uid,
+            workflow_id=wf.id,
+            started_by_user_id=uid,
+            status="queued",
+        )
+    )
+    db_session.commit()
+    persist = db_session.get(WorkflowRun, run_uid)
+    assert persist is not None
+
     t0 = time.monotonic()
-    async for raw in WorkflowExecutor(db_session, uid).run_stream(wf):
-        chunk = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-        for part in chunk.splitlines():
-            if not part.strip():
-                continue
-            ev = json.loads(part)
-            if ev.get("event") == "input_required" and ev.get("kind") == "transcribe_file":
-                assert time.monotonic() - t0 < 5.0
-                key = TranscribeWaitKey(
-                    run_id=uuid.UUID(str(ev["run_id"])),
-                    node_id="tf",
-                    for_loop_id=None,
-                    iteration=0,
-                )
-                assert complete_transcribe_wait(
-                    key,
-                    b"RIFF....WAVE",
-                    filename="runtime.wav",
-                    content_type="audio/wav",
-                )
-                saw_input = True
-            if ev.get("event") == "node_end" and ev.get("node_id") == "tf":
-                out = (ev.get("result") or {}).get("output") or {}
-                if out.get("kind") == "dictionary":
-                    saw_complete = (out.get("data") or {}).get("full_text") == "hello world"
-            if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
-                end_ok = True
+
+    def _complete_tf_upload(en: str, pl: dict[str, Any]) -> None:
+        if (
+            en == "input_required"
+            and pl.get("kind") == "transcribe_file"
+            and str(pl.get("node_id")) == "tf"
+        ):
+            key = TranscribeWaitKey(
+                run_id=uuid.UUID(str(pl["run_id"])),
+                node_id="tf",
+                for_loop_id=None,
+                iteration=0,
+            )
+            assert complete_transcribe_wait(
+                key,
+                b"RIFF....WAVE",
+                filename="runtime.wav",
+                content_type="audio/wav",
+            )
+
+    _, sse_pairs = await execute_scheduled_collect_sse(
+        WorkflowExecutor(db_session, uid),
+        wf,
+        persist_run_record=persist,
+        on_sse_event=_complete_tf_upload,
+    )
+    for ev in iter_sse_pairs_as_ndjson(sse_pairs):
+        if ev.get("event") == "input_required" and ev.get("kind") == "transcribe_file":
+            assert time.monotonic() - t0 < 5.0
+            saw_input = True
+        if ev.get("event") == "node_end" and ev.get("node_id") == "tf":
+            out = (ev.get("result") or {}).get("output") or {}
+            if out.get("kind") == "dictionary":
+                saw_complete = (out.get("data") or {}).get("full_text") == "hello world"
+        if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
+            end_ok = True
 
     assert saw_input and saw_complete and end_ok
     m_stt.assert_awaited_once()
@@ -1123,11 +1148,11 @@ async def test_lifespan_poller_start_stop_idempotent() -> None:
 
 
 # -----------------------------------------------------------------------------
-# Reattach stream endpoint
+# SSE events endpoint (replay + tail — replaces NDJSON reattach-stream)
 # -----------------------------------------------------------------------------
 
 
-def test_reattach_stream_replays_logs_and_jobs(client: TestClient, db_session: Session) -> None:
+def test_events_stream_replays_logs_and_jobs(client: TestClient, db_session: Session) -> None:
     user = db_session.exec(select(User).where(User.username == "testuser")).first()
     assert user is not None
     run_id = uuid.uuid4()
@@ -1137,17 +1162,14 @@ def test_reattach_stream_replays_logs_and_jobs(client: TestClient, db_session: S
             id=run_id,
             workflow_id=workflow_id,
             started_by_user_id=user.id,
-            status="ok",
+            status="completed",
         )
     )
     log = NodeRunLog(
         id=uuid.uuid4(),
         run_id=run_id,
-        workflow_id=workflow_id,
-        user_id=user.id,
         step_number=1,
         node_id="tf",
-        node_kind="skill",
         status="ok",
         latency_ms=10,
         output_data={"kind": "dictionary", "value": {"full_text": "hello"}},
@@ -1174,24 +1196,19 @@ def test_reattach_stream_replays_logs_and_jobs(client: TestClient, db_session: S
     )
     db_session.commit()
 
-    with client.stream("POST", f"/api/v1/workflow-runs/{run_id}/reattach-stream") as resp:
+    with client.stream("GET", f"/api/v1/workflow-runs/{run_id}/events") as resp:
         assert resp.status_code == 200
-        events: list[dict[str, Any]] = []
-        for line in resp.iter_lines():
-            if not line.strip():
-                continue
-            events.append(json.loads(line))
-            if events[-1].get("event") == "end":
-                break
+        raw = b"".join(resp.iter_bytes())
 
-    kinds = [e["event"] for e in events]
-    assert kinds[0] == "reattach_start"
+    events_legacy = sse_response_body_to_legacy_workflow_events(raw)
+    kinds = [e["event"] for e in events_legacy]
+    assert kinds[0] == "start"
     assert "node_end" in kinds
     assert "transcription_job_status" in kinds
     assert kinds[-1] == "end"
 
 
-def test_reattach_stream_404_for_other_users_run(
+def test_events_stream_404_for_other_users_run(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -1207,7 +1224,7 @@ def test_reattach_stream_404_for_other_users_run(
         )
     )
     db_session.commit()
-    resp = client.post(f"/api/v1/workflow-runs/{other_run_id}/reattach-stream")
+    resp = client.get(f"/api/v1/workflow-runs/{other_run_id}/events")
     assert resp.status_code == 404
 
 

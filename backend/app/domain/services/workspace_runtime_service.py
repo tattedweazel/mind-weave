@@ -123,7 +123,7 @@ PROPOSAL_TTL_SECONDS = 900
 _WORKSPACE_MAX_FAILED_NODE_SUMMARIES = 8
 _WORKSPACE_MAX_NODE_ERROR_CHARS = 400
 _MAX_NESTED_WORKFLOW_DEPTH_FOR_GMAIL_SCAN = 8
-# Match workflow run_stream keepalive: bytes during long LM awaits so nginx / NAT (~60s idle) do not drop SSE.
+# Match workflow Build GET …/events keepalive: bytes during long LM awaits so nginx / NAT (~60s idle) do not drop SSE.
 _WORKSPACE_SSE_KEEPALIVE_INTERVAL_SEC = 25.0
 _DEFAULT_SESSION_MEMORY_MAX_PROMPT_CHARS = 6000
 _DEFAULT_SESSION_MEMORY_MAX_STORED_CHARS = 8000

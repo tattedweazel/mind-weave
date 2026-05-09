@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     AUTH_REGISTER_RATE_LIMIT: str = "15/minute"
     AUTH_REFRESH_RATE_LIMIT: str = "60/minute"
     AUTH_GOOGLE_SESSION_RATE_LIMIT: str = "30/minute"
-    # POST workflow run + run_stream combined, per client IP (SE-029).
+    # POST workflow run + Build enqueue (/runs) combined, per client IP (SE-029).
     WORKFLOW_RUN_RATE_LIMIT: str = "60/minute"
 
     BIN_RETENTION_DAYS: int = 30
@@ -99,8 +99,14 @@ class Settings(BaseSettings):
     STT_BRIDGE_TOKEN: str = ""
     STT_BRIDGE_TIMEOUT: float = 600.0
     STT_AUDIO_WAIT_TIMEOUT: float = 300.0
-    """How long run_stream waits for the browser to POST recorded audio (seconds)."""
+    """How long execute_scheduled_run waits for the browser to POST recorded audio (seconds)."""
     STT_MAX_AUDIO_UPLOAD_BYTES: int = 78_643_200  # 75 MiB — keep aligned with stt-bridge and frontend
+
+    # Workflow async execution concurrency (SSE / POST runs path + sync /run).
+    WORKFLOW_MAX_CONCURRENT_NODES: int = 8
+    WORKFLOW_MAX_CONCURRENT_LLM_CALLS: int = 3
+    WORKFLOW_MAX_CONCURRENT_BROWSER_TASKS: int = 2
+    WORKFLOW_MAX_CONCURRENT_EXTERNAL_SKILL_TASKS: int = 4
 
     # Speech transcription providers (provider-abstracted `transcribe_file` skill).
     # local_whisper wraps the STT bridge; assemblyai is cloud STT (no outbound calls until a run uses it).

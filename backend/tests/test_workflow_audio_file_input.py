@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -15,6 +17,8 @@ from app.core.config import settings
 from app.domain.services.workflow_executor import WorkflowExecutor
 from app.domain.workflow_executor.transcribe_pending import TranscribeWaitKey, complete_transcribe_wait
 from app.persistence.tables import AudioFileArtifact, User, WorkflowDefinition, WorkflowRun, utc_now
+from tests.executor_scheduled_helpers import execute_scheduled_collect_sse
+from tests.workflow_sse_legacy import iter_sse_pairs_as_ndjson
 
 _STT_JSON = {"text": "file transcript", "language": "en", "segments": [], "duration_seconds": 1.25}
 
@@ -207,38 +211,59 @@ async def test_audio_file_input_run_stream_upload_completes(m_stt: AsyncMock, db
     wf = db_session.get(WorkflowDefinition, wf_uuid)
     assert wf is not None
 
+    run_uid = uuid.uuid4()
+    db_session.add(
+        WorkflowRun(
+            id=run_uid,
+            workflow_id=wf.id,
+            started_by_user_id=uid,
+            status="queued",
+        )
+    )
+    db_session.commit()
+    persist = db_session.get(WorkflowRun, run_uid)
+    assert persist is not None
+
+    def _complete_af_upload(en: str, pl: dict[str, Any]) -> None:
+        if (
+            en == "input_required"
+            and pl.get("kind") == "audio_file_input"
+            and str(pl.get("node_id")) == "af"
+        ):
+            key = TranscribeWaitKey(
+                run_id=uuid.UUID(str(pl["run_id"])),
+                node_id="af",
+                for_loop_id=None,
+                iteration=0,
+            )
+            assert complete_transcribe_wait(
+                key,
+                b"RIFF....WAVE",
+                filename="runtime.wav",
+                content_type="audio/wav",
+            )
+
     ex = WorkflowExecutor(db_session, uid)
-    ag = ex.run_stream(wf)
+    _, sse = await execute_scheduled_collect_sse(
+        ex,
+        wf,
+        persist_run_record=persist,
+        on_sse_event=_complete_af_upload,
+    )
+    events = iter_sse_pairs_as_ndjson(sse)
     saw_input = False
     node_ok = False
     end_ok = False
     t0 = time.monotonic()
-    async for raw in ag:
-        chunk = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-        for part in chunk.splitlines():
-            if not part.strip():
-                continue
-            ev = json.loads(part)
-            if ev.get("event") == "input_required" and ev.get("kind") == "audio_file_input":
-                assert time.monotonic() - t0 < 5.0
-                key = TranscribeWaitKey(
-                    run_id=uuid.UUID(str(ev["run_id"])),
-                    node_id="af",
-                    for_loop_id=None,
-                    iteration=0,
-                )
-                assert complete_transcribe_wait(
-                    key,
-                    b"RIFF....WAVE",
-                    filename="runtime.wav",
-                    content_type="audio/wav",
-                )
-                saw_input = True
-            if ev.get("event") == "node_end" and ev.get("node_id") == "af":
-                out = (ev.get("result") or {}).get("output") or {}
-                node_ok = out.get("kind") == "string" and out.get("text") == "file transcript"
-            if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
-                end_ok = True
+    for ev in events:
+        if ev.get("event") == "input_required" and ev.get("kind") == "audio_file_input":
+            assert time.monotonic() - t0 < 5.0
+            saw_input = True
+        if ev.get("event") == "node_end" and ev.get("node_id") == "af":
+            out = (ev.get("result") or {}).get("output") or {}
+            node_ok = out.get("kind") == "string" and out.get("text") == "file transcript"
+        if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
+            end_ok = True
 
     assert saw_input and node_ok and end_ok
     m_stt.assert_awaited_once()
@@ -262,23 +287,28 @@ async def test_audio_file_input_run_stream_timeout_clears_pending_wait(
     wf = db_session.get(WorkflowDefinition, wf_uuid)
     assert wf is not None
 
+    run_uid = uuid.uuid4()
+    db_session.add(
+        WorkflowRun(id=run_uid, workflow_id=wf.id, started_by_user_id=uid, status="queued")
+    )
+    db_session.commit()
+    persist = db_session.get(WorkflowRun, run_uid)
+    assert persist is not None
+
+    _, sse = await execute_scheduled_collect_sse(WorkflowExecutor(db_session, uid), wf, persist_run_record=persist)
+    events = iter_sse_pairs_as_ndjson(sse)
     saw_input = False
     run_id: uuid.UUID | None = None
     terminal_status: str | None = None
-    async for raw in WorkflowExecutor(db_session, uid).run_stream(wf):
-        chunk = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-        for part in chunk.splitlines():
-            if not part.strip():
-                continue
-            ev = json.loads(part)
-            if ev.get("event") == "input_required" and ev.get("kind") == "audio_file_input":
-                run_id = uuid.UUID(str(ev["run_id"]))
-                saw_input = True
-            if ev.get("event") == "node_end" and ev.get("node_id") == "af":
-                assert (ev.get("result") or {}).get("status") == "error"
-                assert "timed out" in ((ev.get("result") or {}).get("error") or "").lower()
-            if ev.get("event") == "end":
-                terminal_status = (ev.get("result") or {}).get("status")
+    for ev in events:
+        if ev.get("event") == "input_required" and ev.get("kind") == "audio_file_input":
+            run_id = uuid.UUID(str(ev["run_id"]))
+            saw_input = True
+        if ev.get("event") == "node_end" and ev.get("node_id") == "af":
+            assert (ev.get("result") or {}).get("status") == "error"
+            assert "timed out" in ((ev.get("result") or {}).get("error") or "").lower()
+        if ev.get("event") == "end":
+            terminal_status = (ev.get("result") or {}).get("status")
 
     assert saw_input and terminal_status in {"error", "partial"} and run_id is not None
     assert not complete_transcribe_wait(
@@ -302,28 +332,51 @@ async def test_audio_file_input_run_stream_abort_marks_run_error_and_clears_wait
     wf = db_session.get(WorkflowDefinition, wf_uuid)
     assert wf is not None
 
-    ag = WorkflowExecutor(db_session, uid).run_stream(wf)
-    run_id: uuid.UUID | None = None
-    async for raw in ag:
-        chunk = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-        for part in chunk.splitlines():
-            if not part.strip():
-                continue
-            ev = json.loads(part)
-            if ev.get("event") == "input_required" and ev.get("kind") == "audio_file_input":
-                run_id = uuid.UUID(str(ev["run_id"]))
-                await ag.aclose()
-                break
-        if run_id is not None:
-            break
+    run_uid = uuid.uuid4()
+    db_session.add(
+        WorkflowRun(id=run_uid, workflow_id=wf.id, started_by_user_id=uid, status="queued"),
+    )
+    db_session.commit()
+    persist = db_session.get(WorkflowRun, run_uid)
+    assert persist is not None
 
-    assert run_id is not None
+    executor = WorkflowExecutor(db_session, uid)
+    collected: list[tuple[str, dict[str, object]]] = []
+
+    async def pub(en: str, payload: dict[str, object]) -> int:
+        collected.append((en, dict(payload)))
+        return len(collected)
+
+    task = asyncio.create_task(
+        executor.execute_scheduled_run(
+            wf,
+            persist_run_record=persist,
+            sse_publish=pub,
+        )
+    )
+
+    captured_id: uuid.UUID | None = None
+    while not task.done():
+        await asyncio.sleep(0)
+        for en, payload in list(collected):
+            if en == "input_required" and payload.get("kind") == "audio_file_input":
+                captured_id = uuid.UUID(str(payload["run_id"]))
+                task.cancel()
+                break
+        if captured_id is not None:
+            break
+        await asyncio.sleep(0.001)
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert captured_id is not None
     db_session.expire_all()
-    run = db_session.get(WorkflowRun, run_id)
+    run = db_session.get(WorkflowRun, captured_id)
     assert run is not None
-    assert run.status == "error"
+    assert run.status == "failed"
     assert not complete_transcribe_wait(
-        TranscribeWaitKey(run_id=run_id, node_id="af", for_loop_id=None, iteration=0),
+        TranscribeWaitKey(run_id=captured_id, node_id="af", for_loop_id=None, iteration=0),
         b"RIFF....WAVE",
         filename="late.wav",
         content_type="audio/wav",

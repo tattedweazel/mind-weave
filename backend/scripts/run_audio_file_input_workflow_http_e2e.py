@@ -7,7 +7,7 @@ This intentionally uses the same API shape as the browser:
 1. start the FastAPI app on a local uvicorn port
 2. log in with cookies
 3. create an Audio File Input workflow via HTTP
-4. open POST /workflow-definitions/{id}/run_stream
+3. enqueue ``POST …/runs`` then consume ``GET …/workflow-runs/{run_id}/events`` (SSE)
 5. while that stream is open, POST multipart audio to
    /workflow-runs/{run_id}/audio-file-input
 
@@ -46,7 +46,7 @@ import httpx  # noqa: E402
 import uvicorn  # noqa: E402
 from sqlmodel import Session, select  # noqa: E402
 
-from app.core.config import settings  # noqa: E402
+from app.domain.workflow_http_sse_legacy_consumer import enqueue_and_iterate_build_events  # noqa: E402
 from app.core.security import get_password_hash  # noqa: E402
 from app.main import app  # noqa: E402
 from app.persistence.db import engine  # noqa: E402
@@ -252,33 +252,29 @@ async def _run_runtime_upload_http(
 
     async def _consume() -> str:
         nonlocal input_required_seen, text, upload_status
-        async with client.stream("POST", f"/api/v1/workflow-definitions/{wf_id}/run_stream", json={}) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line.strip():
-                    continue
-                event = json.loads(line)
-                if event.get("event") == "input_required" and event.get("kind") == "audio_file_input":
-                    input_required_seen = True
-                    upload_response = await _upload(str(event["run_id"]))
-                    upload_status = upload_response.status_code
-                    upload_response.raise_for_status()
-                    if upload_elapsed is not None and upload_elapsed > max_upload_elapsed:
-                        raise RuntimeError(
-                            f"multipart upload response took {upload_elapsed:.2f}s; "
-                            f"expected under {max_upload_elapsed:.2f}s"
-                        )
-                if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
-                    output = (event.get("result") or {}).get("output") or {}
-                    if output.get("kind") == "string":
-                        text = (output.get("text") or "").strip()
-                if event.get("event") == "end":
-                    result = event.get("result") or {}
-                    if result.get("status") != "ok":
-                        raise RuntimeError(f"stream ended non-ok: {event}")
-                    if not text:
-                        raise RuntimeError(f"stream ended without transcript: {event}")
-                    return text
+        sse_timeout = httpx.Timeout(connect=15.0, read=stream_timeout, write=60.0, pool=15.0)
+        async for event in enqueue_and_iterate_build_events(client, wf_id, {}, sse_timeout=sse_timeout):
+            if event.get("event") == "input_required" and event.get("kind") == "audio_file_input":
+                input_required_seen = True
+                upload_response = await _upload(str(event["run_id"]))
+                upload_status = upload_response.status_code
+                upload_response.raise_for_status()
+                if upload_elapsed is not None and upload_elapsed > max_upload_elapsed:
+                    raise RuntimeError(
+                        f"multipart upload response took {upload_elapsed:.2f}s; "
+                        f"expected under {max_upload_elapsed:.2f}s"
+                    )
+            if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
+                output = (event.get("result") or {}).get("output") or {}
+                if output.get("kind") == "string":
+                    text = (output.get("text") or "").strip()
+            if event.get("event") == "end":
+                result = event.get("result") or {}
+                if result.get("status") != "ok":
+                    raise RuntimeError(f"stream ended non-ok: {event}")
+                if not text:
+                    raise RuntimeError(f"stream ended without transcript: {event}")
+                return text
         raise RuntimeError("stream closed before end event")
 
     try:

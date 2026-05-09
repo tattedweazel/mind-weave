@@ -1,4 +1,4 @@
-/** One TTS clip waiting for end-of-workflow sequential playback (run_stream UX). */
+/** One TTS clip waiting for end-of-workflow sequential playback (editor Build SSE run UX). */
 export interface TtsQueuedClip {
     audio_base64: string;
     mime_type: string;

@@ -42,7 +42,7 @@ async def post_transcribe_file_input_for_run(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """Deliver a selected audio file to unblock a ``transcribe_file`` node in run_stream."""
+    """Deliver a selected audio file to unblock a ``transcribe_file`` node during an async Build run."""
     t0 = perf_counter()
     run = session.get(WorkflowRun, run_id)
     if not run or run.started_by_user_id != current_user.id:

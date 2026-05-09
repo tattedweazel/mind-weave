@@ -141,7 +141,14 @@ from .workflow_projects import (
     WorkflowProjectRead,
     WorkflowProjectUpdate,
 )
-from .workflow_run import MyWorkflowRunRead, NodeRunResult, WorkflowRunRequest, WorkflowRunResult
+from .workflow_run import (
+    MyWorkflowRunRead,
+    NodeRunResult,
+    WorkflowRunEnqueueResponse,
+    WorkflowRunRequest,
+    WorkflowRunResult,
+    WorkflowRunSnapshotRead,
+)
 
 __all__ = [
     "AudioNodeOutput",
@@ -277,7 +284,9 @@ __all__ = [
     "WorkflowProjectUpdate",
     "WorkflowRefNode",
     "WriteObjectToDocumentBodyUtilityNode",
+    "WorkflowRunEnqueueResponse",
     "WorkflowRunRequest",
     "WorkflowRunResult",
+    "WorkflowRunSnapshotRead",
     "XorControlNode",
 ]

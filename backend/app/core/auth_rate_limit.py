@@ -1,6 +1,6 @@
 """
 In-process rate limiting for auth POST endpoints (SE-007) and workflow
-execution POSTs (`/run`, `/run_stream`, SE-029).
+execution POSTs (`/run`, `/runs`, SE-029).
 
 Uses a fixed window per client IP — no third-party dependency. For multi-worker
 deployments, put a reverse proxy or Redis-based limiter in front instead.
@@ -53,9 +53,9 @@ def build_auth_rate_limit_rules(
 
 
 def build_workflow_run_rate_limit_rules(limit_spec: str) -> list[RateLimitRule]:
-    """Rate limit POST .../run and .../run_stream per client IP (shared bucket, SE-029)."""
+    """Rate limit POST ``.../run`` and ``.../runs`` enqueue per client IP (shared bucket, SE-029)."""
     n, w = parse_per_minute_limit(limit_spec)
-    wf_pat = re.compile(r"^/api/v1/workflow-definitions/[^/]+/(?:run|run_stream)$")
+    wf_pat = re.compile(r"^/api/v1/workflow-definitions/[^/]+/(?:run|runs)$")
     return [("POST", wf_pat, n, w)]
 
 

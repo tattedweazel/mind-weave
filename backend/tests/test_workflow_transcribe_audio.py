@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -16,7 +16,9 @@ from app.domain.workflow_executor.transcribe_pending import (
     TranscribeWaitKey,
     complete_transcribe_wait,
 )
-from app.persistence.tables import User, WorkflowDefinition
+from app.persistence.tables import User, WorkflowDefinition, WorkflowRun
+from tests.executor_scheduled_helpers import execute_scheduled_collect_sse
+from tests.workflow_sse_legacy import iter_sse_pairs_as_ndjson
 
 _TRANSCRIBE_GRAPH = {
     "nodes": [
@@ -78,34 +80,53 @@ async def test_transcribe_run_stream_emits_input_required_and_completes(m_stt: A
     wf = db_session.get(WorkflowDefinition, wf_uuid)
     assert wf is not None
 
+    run_uid = uuid.uuid4()
+    db_session.add(
+        WorkflowRun(
+            id=run_uid,
+            workflow_id=wf.id,
+            started_by_user_id=uid,
+            status="queued",
+        )
+    )
+    db_session.commit()
+    persist = db_session.get(WorkflowRun, run_uid)
+    assert persist is not None
+
     ex = WorkflowExecutor(db_session, uid)
-    ag = ex.run_stream(wf)
+
+    def _complete_voice_upload(en: str, pl: dict[str, Any]) -> None:
+        if (
+            en == "input_required"
+            and pl.get("kind") == "transcribe_audio"
+            and str(pl.get("node_id")) == "tr"
+        ):
+            k = TranscribeWaitKey(
+                run_id=uuid.UUID(str(pl["run_id"])),
+                node_id="tr",
+                for_loop_id=None,
+                iteration=0,
+            )
+            assert complete_transcribe_wait(k, b"\x00\x01")
+
+    _, sse = await execute_scheduled_collect_sse(
+        ex, wf, persist_run_record=persist, on_sse_event=_complete_voice_upload
+    )
+
     saw_input = False
     tr_end_ok = False
     end_ok = False
     t0 = time.monotonic()
-    async for raw in ag:
-        chunk = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-        for part in chunk.splitlines():
-            if not part.strip():
-                continue
-            ev = json.loads(part)
-            if ev.get("event") == "input_required" and ev.get("node_id") == "tr":
-                # Must not be delayed until the first asyncio.wait keepalive tick (~25s); see run_stream sleep(0).
-                assert time.monotonic() - t0 < 5.0, "input_required should flush immediately after node_start"
-                k = TranscribeWaitKey(
-                    run_id=uuid.UUID(str(ev["run_id"])),
-                    node_id="tr",
-                    for_loop_id=None,
-                    iteration=0,
-                )
-                assert complete_transcribe_wait(k, b"\x00\x01")
-                saw_input = True
-            if ev.get("event") == "node_end" and ev.get("node_id") == "tr":
-                out = (ev.get("result") or {}).get("output") or {}
-                if out.get("kind") == "string" and "hello from mock" in (out.get("text") or ""):
-                    tr_end_ok = True
-            if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
-                end_ok = True
+    for ev in iter_sse_pairs_as_ndjson(sse):
+        if ev.get("event") == "input_required" and ev.get("node_id") == "tr":
+            # Must not be delayed until executor keepalive waits (~25s); see asyncio.sleep(0) after spawning tasks.
+            assert time.monotonic() - t0 < 5.0, "input_required should flush immediately after node_start"
+            saw_input = True
+        if ev.get("event") == "node_end" and ev.get("node_id") == "tr":
+            out = (ev.get("result") or {}).get("output") or {}
+            if out.get("kind") == "string" and "hello from mock" in (out.get("text") or ""):
+                tr_end_ok = True
+        if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
+            end_ok = True
     m_stt.assert_awaited_once()
     assert saw_input and tr_end_ok and end_ok

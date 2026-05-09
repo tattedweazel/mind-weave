@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-Browser-faithful HTTP check: run a **persisted** workflow by id via **run_stream**.
+Browser-faithful HTTP check: run a **persisted** workflow by id via **POST …/runs** + **GET …/events** (SSE).
 
 Unlike ``run_upsert_document_http_e2e.py`` (synthetic ``POST /workflow-definitions/`` + ``POST /run``),
 this script:
 
 1. Logs in (cookie jar, same as the SPA)
 2. **GET** ``/api/v1/workflow-definitions/{id}`` — same JSON the Workflow Editor loaded from the DB
-3. **POST** ``/api/v1/workflow-definitions/{id}/run_stream`` — same entry point as
-   ``ApiClient.runWorkflowStream`` in the SPA
-4. Consumes NDJSON until ``event: end`` (or ``error``)
+3. **POST** ``/api/v1/workflow-definitions/{id}/runs`` — enqueue a persisted run (same as the editor Build button)
+4. **GET** ``/api/v1/workflow-runs/{run_id}/events`` — consume SSE until ``event: end`` (legacy-mapped) or ``error``
 
 Optional **``--assert-upsert-body-non-empty``** finds ``upsert_document`` steps (or ``--upsert-node-id``)
 and fails if document output ``markdown`` is blank; on failure, prints edges targeting that node from
 the GET graph (compare with ``analyze_workflow_definition.py --summarize``).
 
-Use the **owning user's** credentials; otherwise GET/run_stream return 404.
+Use the **owning user's** credentials; otherwise GET/enqueue return 404.
 
 Examples::
 
@@ -54,6 +53,7 @@ import uvicorn  # noqa: E402
 from sqlmodel import Session, select  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
+from app.domain.workflow_http_sse_legacy_consumer import enqueue_and_iterate_build_events  # noqa: E402
 from app.core.security import get_password_hash  # noqa: E402
 from app.main import app  # noqa: E402
 from app.persistence.db import engine  # noqa: E402
@@ -163,7 +163,7 @@ async def _login(client: httpx.AsyncClient, username: str, password: str) -> Non
     r.raise_for_status()
 
 
-async def _consume_run_stream(
+async def _consume_build_sse(
     client: httpx.AsyncClient,
     workflow_id: str,
     body: dict[str, Any],
@@ -171,38 +171,28 @@ async def _consume_run_stream(
     stream_timeout: float,
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """
-    POST run_stream; return (end_event_result_dict, node_id -> raw node_end result payload).
+    Enqueue run + GET events (SSE); return (end_event_result_dict, node_id -> raw node_end result payload).
     """
     node_ends: dict[str, dict[str, Any]] = {}
     end_payload: dict[str, Any] = {}
     timeout = httpx.Timeout(connect=15.0, read=stream_timeout, write=60.0, pool=15.0)
-    async with client.stream(
-        "POST",
-        f"/api/v1/workflow-definitions/{workflow_id}/run_stream",
-        json=body,
-        timeout=timeout,
-    ) as response:
-        response.raise_for_status()
-        async for line in response.aiter_lines():
-            if not line.strip():
-                continue
-            ev = json.loads(line)
-            kind = ev.get("event")
-            if kind == "node_end":
-                nid = ev.get("node_id")
-                if isinstance(nid, str):
-                    node_ends[nid] = dict(ev.get("result") or {})
-            elif kind == "end":
-                end_payload = dict(ev.get("result") or {})
-            elif kind == "error":
-                raise RuntimeError(f"run_stream error event: {ev}")
-            elif kind == "input_required":
-                raise RuntimeError(
-                    "run_stream stalled on input_required (this workflow expects browser upload "
-                    f"or other interactive input): {json.dumps(ev)[:800]}"
-                )
+    async for ev in enqueue_and_iterate_build_events(client, workflow_id, body, sse_timeout=timeout):
+        kind = ev.get("event")
+        if kind == "node_end":
+            nid = ev.get("node_id")
+            if isinstance(nid, str):
+                node_ends[nid] = dict(ev.get("result") or {})
+        elif kind == "end":
+            end_payload = dict(ev.get("result") or {})
+        elif kind == "error":
+            raise RuntimeError(f"build SSE error event: {ev}")
+        elif kind == "input_required":
+            raise RuntimeError(
+                "build SSE stalled on input_required (this workflow expects browser upload "
+                f"or other interactive input): {json.dumps(ev)[:800]}"
+            )
     if not end_payload:
-        raise RuntimeError("run_stream closed without an 'end' event (timeout or proxy drop?)")
+        raise RuntimeError("build SSE closed without an 'end' event (timeout or proxy drop?)")
     return end_payload, node_ends
 
 
@@ -227,11 +217,11 @@ async def _run(
         gid = wf_blob.get("id", workflow_id)
         print(f"Loaded workflow {gid!r} name={name!r} (GET /workflow-definitions)", file=sys.stderr)
 
-        end_result, node_ends = await _consume_run_stream(
+        end_result, node_ends = await _consume_build_sse(
             client, workflow_id, body, stream_timeout=stream_timeout
         )
         status = end_result.get("status")
-        print(f"run_stream finished: overall status={status!r}", file=sys.stderr)
+        print(f"build SSE finished: overall status={status!r}", file=sys.stderr)
         if status not in ("ok", "partial"):
             print(json.dumps(end_result, indent=2)[:4000], file=sys.stderr)
             return 1
@@ -303,7 +293,7 @@ async def _run(
 
 def main() -> int:
     p = argparse.ArgumentParser(
-        description="HTTP e2e: GET persisted workflow, POST run_stream (Workflow Editor parity).",
+        description="HTTP e2e: GET persisted workflow, POST /runs + GET /events (Workflow Editor parity).",
     )
     p.add_argument("--workflow-id", required=True, help="WorkflowDefinition UUID (owner must match --username).")
     p.add_argument("--username", default=DEFAULT_E2E_USERNAME, help="Login user (must own the workflow).")
@@ -318,7 +308,7 @@ def main() -> int:
         "--stream-timeout",
         type=float,
         default=600.0,
-        help="Seconds to wait for full run_stream body (default 600).",
+        help="Seconds to wait for the SSE body on GET …/workflow-runs/{id}/events (default 600).",
     )
     p.add_argument(
         "--input-overrides-json",

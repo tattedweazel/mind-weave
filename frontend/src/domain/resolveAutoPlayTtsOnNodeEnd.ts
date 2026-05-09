@@ -1,5 +1,5 @@
 /**
- * When Text-to-Speech playback runs during workflow run_stream (editor).
+ * When Text-to-Speech playback runs during workflow Build runs (SSE `GET …/workflow-runs/…/events`).
  */
 export type TtsPlaybackWhen = 'inline' | 'manual' | 'after_workflow';
 
@@ -25,7 +25,7 @@ function userDefaultPlaybackWhen(settings: Record<string, unknown> | undefined):
 }
 
 /**
- * Resolved playback timing for a TTS node during run_stream.
+ * Resolved playback timing for a TTS node during a Build SSE run.
  * Per-node `tts_playback_when` or legacy `auto_play_tts_on_node_end` overrides user default.
  */
 export function resolveTtsPlaybackWhen(

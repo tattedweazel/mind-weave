@@ -257,7 +257,7 @@ class WorkflowExecutorSkillsRunnerMixin:
 
         try:
             # Session is not safe for concurrent ORM use across parallel nodes; keep User read + decrypt
-            # inside the same lock as other executor DB access. Refresh after run_stream's early commits
+            # inside the same lock as other executor DB access. Refresh after enqueue commits the run row early
             # so api_keys is not a stale/expired in-memory JSON snapshot.
             async with self._async_session_lock:
                 user_row = self.session.get(User, self.user_id)

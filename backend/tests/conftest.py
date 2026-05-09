@@ -50,6 +50,12 @@ def db_session_fixture(client: TestClient):
 
 @pytest.fixture(name="client")
 def client_fixture():
+    import app.main as app_main_layer
+    import app.persistence.db as persistence_db_layer
+
+    persistence_db_layer.engine = engine
+    app_main_layer.engine = persistence_db_layer.engine
+
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         PersonaService(session).initialize_default_personas()
@@ -83,6 +89,12 @@ def client_fixture():
 @pytest.fixture(name="client_anonymous")
 def client_anonymous_fixture():
     """TestClient with DB session override but real JWT/cookie auth (for 401 tests)."""
+    import app.main as app_main_layer
+    import app.persistence.db as persistence_db_layer
+
+    persistence_db_layer.engine = engine
+    app_main_layer.engine = persistence_db_layer.engine
+
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         PersonaService(session).initialize_default_personas()

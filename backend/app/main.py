@@ -24,6 +24,7 @@ API routes:
   /api/v1/workspaces           — Workspace bootstrap, sessions, streaming turns (see docs/WORKSPACE.md)
 """
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -56,7 +57,7 @@ from app.api.v1 import (
     url_snapshot_artifacts,
     voice_samples,
     workflow_run_audio_file_input,
-    workflow_run_reattach_stream,
+    workflow_run_events,
     workflow_run_transcribe,
     workflow_run_transcribe_file,
     workspaces_api,
@@ -73,7 +74,7 @@ from app.core.auth_rate_limit import (
     build_workspace_turn_stream_rate_limit_rules,
 )
 from app.core.config import settings
-from app.core.security import get_password_hash
+from app.core.workflow_execution_hub import WorkflowExecutionHub
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.domain.sandbox.starter_workflow_seed import ensure_starter_sandbox_workflow
 from app.domain.services.palette_service import PaletteService
@@ -170,11 +171,19 @@ async def lifespan(app: FastAPI):
     # transcribe_file skill). Local Whisper jobs are sync and never enter this loop.
     await transcription_job_poller.start()
 
+    app.state.workflow_execution_hub = WorkflowExecutionHub()
+    app.state.workflow_background_tasks = set()
+
     _perf_logger.info("total startup %.0fms", (time.perf_counter() - t0) * 1000)
 
     try:
         yield
     finally:
+        task_set_raw = getattr(app.state, "workflow_background_tasks", None)
+        if task_set_raw:
+            for tsk in list(task_set_raw):
+                tsk.cancel()
+            await asyncio.gather(*task_set_raw, return_exceptions=True)
         await transcription_job_poller.stop()
 
 
@@ -246,7 +255,7 @@ app.include_router(
 app.include_router(workflow_run_transcribe.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(workflow_run_audio_file_input.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(workflow_run_transcribe_file.router, prefix=f"{api_v1}", tags=["workflow-runs"])
-app.include_router(workflow_run_reattach_stream.router, prefix=f"{api_v1}", tags=["workflow-runs"])
+app.include_router(workflow_run_events.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(transcription_router.router, prefix=f"{api_v1}", tags=["transcription"])
 app.include_router(stt.router, prefix=f"{api_v1}", tags=["stt"])
 app.include_router(workflow_projects_router.router, prefix=f"{api_v1}/workflow-projects", tags=["workflow-projects"])

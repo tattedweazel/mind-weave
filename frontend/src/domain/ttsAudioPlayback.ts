@@ -2,6 +2,9 @@
  * Decode workflow TTS output (base64 WAV) and play or download in the browser.
  */
 
+/** Treat as audible progress once currentTime exceeds this (handles float noise). */
+const PLAYBACK_PROGRESS_EPS = 1e-4;
+
 /** Normalize payload from API or pasted data URLs before `atob`. */
 export function normalizeAudioBase64Payload(raw: string): string {
     let s = raw.trim();
@@ -41,8 +44,26 @@ export function createObjectUrlForAudioBase64(base64: string, mimeType: string):
     return URL.createObjectURL(audioBase64ToBlob(base64, mimeType));
 }
 
+function isAbortError(err: unknown): boolean {
+    return err instanceof DOMException && err.name === 'AbortError';
+}
+
+function mediaShowsPlaybackProgress(el: HTMLAudioElement): boolean {
+    try {
+        if (el.currentTime > PLAYBACK_PROGRESS_EPS) {
+            return true;
+        }
+        return el.played.length > 0;
+    } catch {
+        return false;
+    }
+}
+
 /**
- * Play audio once; revokes the object URL after `ended` or `error`, or if `play()` rejects.
+ * Play audio once; revokes the object URL after `ended`, fatal `error`, or non-recoverable `play()` failure.
+ * Element `error` after playback has demonstrably started (`playing`, successful `play()`, `timeupdate`, or
+ * buffered progress) is treated as non-fatal (resolve). `AbortError` from `play()` is non-fatal.
+ * `NotAllowedError` is always propagated for autoplay messaging.
  */
 export async function playTtsAudioFromBase64(base64: string, mimeType: string): Promise<void> {
     const blob = audioBase64ToBlob(base64, mimeType);
@@ -57,43 +78,99 @@ export async function playTtsAudioFromBase64(base64: string, mimeType: string): 
     };
 
     await new Promise<void>((resolve, reject) => {
-        let playStarted = false;
-        const onEnded = () => {
-            audio.removeEventListener('ended', onEnded);
-            audio.removeEventListener('error', onError);
-            teardown();
+        let settled = false;
+        let playbackProgress = false;
+        let loadGatePassed = false;
+
+        const markPlaybackProgress = () => {
+            playbackProgress = true;
+        };
+
+        const settleResolve = () => {
+            if (settled) return;
+            settled = true;
             resolve();
         };
-        const onError = () => {
+
+        const settleReject = (reason: unknown) => {
+            if (settled) return;
+            settled = true;
+            reject(reason);
+        };
+
+        const detachAll = () => {
             audio.removeEventListener('ended', onEnded);
             audio.removeEventListener('error', onError);
+            audio.removeEventListener('playing', onPlaying);
+            audio.removeEventListener('timeupdate', onTimeUpdate);
             audio.removeEventListener('loadeddata', onLoaded);
             audio.removeEventListener('canplay', onLoaded);
+        };
+
+        const onPlaying = () => {
+            markPlaybackProgress();
+        };
+
+        const onTimeUpdate = () => {
+            if (audio.currentTime > PLAYBACK_PROGRESS_EPS) {
+                markPlaybackProgress();
+            }
+        };
+
+        const onEnded = () => {
+            detachAll();
             teardown();
+            settleResolve();
+        };
+
+        const onError = () => {
+            const progressed = playbackProgress || mediaShowsPlaybackProgress(audio);
+            detachAll();
+            teardown();
+            if (progressed) {
+                settleResolve();
+                return;
+            }
             const code = audio.error?.code;
             const msg = audio.error?.message;
-            reject(
+            settleReject(
                 new Error(
                     `Audio playback failed${code != null ? ` (MEDIA_ERR ${code})` : ''}${msg ? `: ${msg}` : ''}`,
                 ),
             );
         };
+
         const onLoaded = () => {
-            if (playStarted) {
+            if (loadGatePassed) {
                 return;
             }
-            playStarted = true;
+            loadGatePassed = true;
             audio.removeEventListener('loadeddata', onLoaded);
             audio.removeEventListener('canplay', onLoaded);
-            void audio.play().catch((err: unknown) => {
-                audio.removeEventListener('ended', onEnded);
-                audio.removeEventListener('error', onError);
-                teardown();
-                reject(err instanceof Error ? err : new Error(String(err)));
-            });
+            void audio
+                .play()
+                .then(() => {
+                    markPlaybackProgress();
+                })
+                .catch((err: unknown) => {
+                    detachAll();
+                    teardown();
+                    if (isAbortError(err)) {
+                        settleResolve();
+                        return;
+                    }
+                    if (typeof DOMException !== 'undefined' && err instanceof DOMException) {
+                        settleReject(err);
+                        return;
+                    }
+                    settleReject(err instanceof Error ? err : new Error(String(err)));
+                });
         };
+
         audio.addEventListener('ended', onEnded);
         audio.addEventListener('error', onError);
+        audio.addEventListener('playing', onPlaying);
+        audio.addEventListener('timeupdate', onTimeUpdate);
         // WebKit often fires `canplay` when `loadeddata` is skipped for short clips.
         audio.addEventListener('loadeddata', onLoaded);
         audio.addEventListener('canplay', onLoaded);

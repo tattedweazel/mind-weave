@@ -1,10 +1,10 @@
 # `workflow_executor` package
 
-Orchestration for running a **`WorkflowDefinition`** graph: validation, scheduling waves, executing nodes, nested workflows, and streaming NDJSON progress.
+Orchestration for running a **`WorkflowDefinition`** graph: validation, scheduling waves, executing nodes, nested workflows, and emitting lifecycle payloads for SSE consumers.
 
 ## Control flow
 
-1. **`WorkflowExecutor`** ([`executor.py`](executor.py)) — `run()` / `run_stream()`, graph validation, concurrency caps, run logging.
+1. **`WorkflowExecutor`** ([`executor.py`](executor.py)) — **`run()`** (sync/no persistence), **`execute_scheduled_run()`** for persisted **`WorkflowRun`** rows + optional **`sse_publish`**, graph validation, semaphore + wave caps, run logging.
 2. **Dispatch** ([`dispatch/`](dispatch/) / [`dispatch/execute_node_dispatch.py`](dispatch/execute_node_dispatch.py)) — `_execute_node` routes each parsed node (`isinstance` ladder) to existing instance methods (`_resolve_*`, `_await _run_*` skills).
 3. **Mixins** (same semantics as a single class; kept for file size):
    - [`skills_runner_mixin.py`](skills_runner_mixin.py) — async `_run_*` skills (LLM, multimodal, TTS, transcribe, Gmail/Calendar, fetch URL, snapshots, …). External calls resolve through the `executor` module where tests patch symbols (see `WorkflowExecutorSkillsRunnerMixin._exec_skill_deps`).

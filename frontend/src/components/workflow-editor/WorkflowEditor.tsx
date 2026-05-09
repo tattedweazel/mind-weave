@@ -112,6 +112,7 @@ import {
 } from '../../domain/workflowImportExport';
 import { resolveTtsPlaybackWhen, type TtsPlaybackWhen } from '../../domain/resolveAutoPlayTtsOnNodeEnd';
 import { sortTtsQueuedClips, type TtsQueuedClip } from '../../domain/ttsPlaybackQueue';
+import { isPlayableTtsAudioOutput, mergeLastRunNodeResult } from '../../domain/ttsPlayableOutput';
 import { playTtsAudioFromBase64 } from '../../domain/ttsAudioPlayback';
 import { unionLoopBodyNodeIds } from '../../domain/workflowLoopBodyNodeIds';
 import { mergeWorkflowDefinitionIntoList, workflowListEntryHasGraph } from '../../domain/workflowDefinitionListMerge';
@@ -322,8 +323,10 @@ export const WorkflowEditor: React.FC<Props> = ({
     });
     const nodesForUndoRef = useRef<Node[]>([]);
     const edgesForUndoRef = useRef<Edge[]>([]);
-    /** Clips to play in order after run_stream `end` when status is ok (`after_workflow` mode). */
+    /** Clips to play in order after `workflow.completed` (SSE) when status is ok (`after_workflow` mode). */
     const ttsAfterWorkflowQueueRef = useRef<TtsQueuedClip[]>([]);
+    /** Serializes all programmatic TTS autoplay (`inline` + end-of-run queue) so clips never overlap. */
+    const ttsAutoplayChainRef = useRef(Promise.resolve());
     const transcribeMediaRecorderRef = useRef<MediaRecorder | null>(null);
     const transcribeMediaStreamRef = useRef<MediaStream | null>(null);
     const transcribeChunksRef = useRef<Blob[]>([]);
@@ -332,7 +335,7 @@ export const WorkflowEditor: React.FC<Props> = ({
     // UI state
     const [runResult, setRunResult] = useState<WorkflowRunResult | null>(null);
     const [isRunning, setIsRunning] = useState(false);
-    const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
+    const [runningNodeIds, setRunningNodeIds] = useState(() => new Set<string>());
     const [isSaving, setIsSaving] = useState(false);
     /** Shown when Save fails (e.g. API error); cleared on success or when switching workflows. */
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -402,6 +405,7 @@ export const WorkflowEditor: React.FC<Props> = ({
     const [transcribeFileError, setTranscribeFileError] = useState<string | null>(null);
     const [transcriptionProviders, setTranscriptionProviders] = useState<TranscriptionProviderItem[]>([]);
     const workflowRunAbortRef = useRef<AbortController | null>(null);
+    const workflowStreamSeqRef = useRef(0);
 
     /** Local JSON text for list/dictionary primitives so paste + Normalize work before valid parse. */
     const [listPrimitiveEditorJson, setListPrimitiveEditorJson] = useState('');
@@ -902,7 +906,7 @@ export const WorkflowEditor: React.FC<Props> = ({
         setNodeDeleteKeyboardMessage(null);
         setDeletingEdgeId(null);
         setRunResult(null);
-        setRunningNodeId(null);
+        setRunningNodeIds(new Set());
         setLastRunId(null);
         setIsLastRunOpen(false);
         setLastRunNodeData({});
@@ -954,7 +958,7 @@ export const WorkflowEditor: React.FC<Props> = ({
         setPendingNodeDelete(null);
         setNodeDeleteKeyboardMessage(null);
         setRunResult(null);
-        setRunningNodeId(null);
+        setRunningNodeIds(new Set());
         setLastRunId(null);
 
         const folderId = wfWithGraph.project_id ?? sharedProjectId;
@@ -2427,21 +2431,41 @@ export const WorkflowEditor: React.FC<Props> = ({
         workflowRunAbortRef.current?.abort();
         const runAbort = new AbortController();
         workflowRunAbortRef.current = runAbort;
+        workflowStreamSeqRef.current = 0;
         setInspectorTab('logs');
         setIsRunning(true);
         setRunResult(null);
-        setRunningNodeId(null);
+        setRunningNodeIds(new Set());
 
         try {
-            await ApiClient.runWorkflowStream(activeWf.id, (event) => {
+            await ApiClient.runWorkflowStream(activeWf.id, (rawEvent: any) => {
+                    const incomingSeq = typeof rawEvent.seq === 'number' ? rawEvent.seq : undefined;
+                    if (
+                        incomingSeq !== undefined &&
+                        incomingSeq <= workflowStreamSeqRef.current
+                    ) {
+                        return;
+                    }
+                    if (incomingSeq !== undefined) {
+                        workflowStreamSeqRef.current = Math.max(
+                            workflowStreamSeqRef.current,
+                            incomingSeq,
+                        );
+                    }
+                    const event = rawEvent;
                     if (event.event === "start") {
                         ttsAfterWorkflowQueueRef.current = [];
+                        ttsAutoplayChainRef.current = Promise.resolve();
                         setLastRunNodeData({});
                         setLastRunId(event.run_id ?? null);
                         setIsLastRunOpen(true);
                         setRunResult({ workflow_id: activeWf.id, status: 'running' as any, node_results: [] });
                     } else if (event.event === "node_start") {
-                        setRunningNodeId(event.node_id);
+                        setRunningNodeIds(prev => {
+                            const next = new Set(prev);
+                            next.add(String(event.node_id));
+                            return next;
+                        });
                     } else if (event.event === "input_required" && event.kind === "transcribe_audio") {
                         setTranscribeCapture({
                             runId: String(event.run_id),
@@ -2487,33 +2511,40 @@ export const WorkflowEditor: React.FC<Props> = ({
                             nn => nn.id === nodeResult.node_id && nn.type === 'textToSpeech',
                         );
                         const ttsNodeData = ttsFlowNode?.data as Record<string, unknown> | undefined;
-                        const out = nodeResult.output as { kind?: string; mime_type?: string; audio_base64?: string } | undefined;
                         const playbackWhen: TtsPlaybackWhen = resolveTtsPlaybackWhen(
                             user?.settings as Record<string, unknown> | undefined,
                             ttsNodeData,
                         );
                         const hasAudio =
-                            nodeResult.status === 'ok' &&
-                            out?.kind === 'audio' &&
-                            typeof out.audio_base64 === 'string' &&
-                            out.audio_base64.length > 0;
-                        if (hasAudio && playbackWhen === 'after_workflow') {
+                            nodeResult.status === 'ok' && isPlayableTtsAudioOutput(nodeResult.output);
+                        const audioOut = hasAudio
+                            ? (nodeResult.output as { kind: 'audio'; audio_base64: string; mime_type?: string })
+                            : null;
+                        if (audioOut && playbackWhen === 'after_workflow') {
                             const mime =
-                                typeof out.mime_type === 'string' && out.mime_type ? out.mime_type : 'audio/wav';
+                                typeof audioOut.mime_type === 'string' && audioOut.mime_type
+                                    ? audioOut.mime_type
+                                    : 'audio/wav';
                             ttsAfterWorkflowQueueRef.current.push({
-                                audio_base64: out.audio_base64!,
+                                audio_base64: audioOut.audio_base64,
                                 mime_type: mime,
                                 step_number: nodeResult.step_number ?? 0,
                                 node_id: nodeResult.node_id,
                             });
-                        } else if (hasAudio && playbackWhen === 'inline') {
+                        } else if (audioOut && playbackWhen === 'inline') {
                             const mime =
-                                typeof out.mime_type === 'string' && out.mime_type ? out.mime_type : 'audio/wav';
-                            void (async () => {
+                                typeof audioOut.mime_type === 'string' && audioOut.mime_type
+                                    ? audioOut.mime_type
+                                    : 'audio/wav';
+                            ttsAutoplayChainRef.current = ttsAutoplayChainRef.current.then(async () => {
                                 try {
-                                    await playTtsAudioFromBase64(out.audio_base64!, mime);
+                                    await playTtsAudioFromBase64(audioOut.audio_base64, mime);
                                 } catch (e) {
-                                    console.warn('TTS auto-play failed', e);
+                                    console.warn(
+                                        'TTS auto-play failed',
+                                        e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+                                        e,
+                                    );
                                     const isNotAllowed =
                                         e instanceof DOMException && e.name === 'NotAllowedError';
                                     showStatusToast(
@@ -2523,36 +2554,44 @@ export const WorkflowEditor: React.FC<Props> = ({
                                         true,
                                     );
                                 }
-                            })();
+                            });
                         }
                         setLastRunNodeData(prev => {
                             const cur = prev[nodeResult.node_id];
-                            const sn = nodeResult.step_number ?? 0;
-                            const prevSn = cur?.step_number ?? 0;
-                            if (!cur || sn >= prevSn) {
-                                return { ...prev, [nodeResult.node_id]: nodeResult };
+                            const nextEntry = mergeLastRunNodeResult(cur, nodeResult);
+                            if (nextEntry === cur) {
+                                return prev;
                             }
-                            return prev;
+                            return { ...prev, [nodeResult.node_id]: nextEntry };
                         });
                         setRunResult(prev => {
                             if (!prev) return prev;
                             return { ...prev, node_results: [...prev.node_results, event.result] };
                         });
-                        setRunningNodeId(null);
+                        setRunningNodeIds(prev => {
+                            const next = new Set(prev);
+                            next.delete(nodeResult.node_id);
+                            return next;
+                        });
                     } else if (event.event === "end") {
                         const endResult = event.result;
                         setRunResult(endResult);
+                        setRunningNodeIds(new Set());
                         const ok = endResult?.status === 'ok';
                         const pending = ttsAfterWorkflowQueueRef.current;
                         if (ok && pending.length > 0) {
                             const sorted = sortTtsQueuedClips(pending);
                             ttsAfterWorkflowQueueRef.current = [];
-                            void (async () => {
-                                for (const clip of sorted) {
+                            for (const clip of sorted) {
+                                ttsAutoplayChainRef.current = ttsAutoplayChainRef.current.then(async () => {
                                     try {
                                         await playTtsAudioFromBase64(clip.audio_base64, clip.mime_type);
                                     } catch (e) {
-                                        console.warn('TTS queued playback failed', e);
+                                        console.warn(
+                                            'TTS queued playback failed',
+                                            e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+                                            e,
+                                        );
                                         const isNotAllowed =
                                             e instanceof DOMException && e.name === 'NotAllowedError';
                                         showStatusToast(
@@ -2562,13 +2601,15 @@ export const WorkflowEditor: React.FC<Props> = ({
                                             true,
                                         );
                                     }
-                                }
-                            })();
+                                });
+                            }
                         } else {
                             ttsAfterWorkflowQueueRef.current = [];
                         }
                     } else if (event.event === "error") {
                         ttsAfterWorkflowQueueRef.current = [];
+                        ttsAutoplayChainRef.current = Promise.resolve();
+                        setRunningNodeIds(new Set());
                         setRunResult({ workflow_id: activeWf.id, status: 'error', node_results: [], error: event.error } as any);
                         console.error("Workflow Execution Error", event.error);
                     }
@@ -2582,6 +2623,7 @@ export const WorkflowEditor: React.FC<Props> = ({
             );
         } catch (err: any) {
             ttsAfterWorkflowQueueRef.current = [];
+            ttsAutoplayChainRef.current = Promise.resolve();
             console.error(err);
             const msg = err instanceof Error ? err.message : String(err);
             setRunResult({ workflow_id: activeWf.id, status: 'error', node_results: [], error: msg } as any);
@@ -2599,7 +2641,7 @@ export const WorkflowEditor: React.FC<Props> = ({
             setTranscribeUi("idle");
             setTranscribeError(null);
             setIsRunning(false);
-            setRunningNodeId(null);
+            setRunningNodeIds(new Set());
             if (workflowRunAbortRef.current === runAbort) {
                 workflowRunAbortRef.current = null;
             }
@@ -2683,9 +2725,9 @@ export const WorkflowEditor: React.FC<Props> = ({
         
         setNodes(ns => ns.map(n => ({
             ...n,
-            data: { ...n.data, isRunning: n.id === runningNodeId }
+            data: { ...n.data, isRunning: runningNodeIds.has(n.id) },
         })));
-    }, [isRunning, runningNodeId, runResult]);
+    }, [isRunning, runningNodeIds, runResult]);
 
     // Delete
     const handleDeleteWf = async () => {
@@ -7536,7 +7578,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                         {/* ── Last Run section ─────────────────────────────── */}
                         {showInspectorLastRunExplorerSection(selectedNode.type) && (() => {
                             const nodeLog = lastRunNodeData[selectedNode.id];
-                            const isActiveNode = runningNodeId === selectedNode.id;
+                            const isActiveNode = runningNodeIds.has(selectedNode.id);
                             const inputsPayloadEditor = nodeLog
                                 ? lastRunInputsPayload(nodeLog.details as Record<string, unknown> | undefined)
                                 : null;

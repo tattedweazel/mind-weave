@@ -268,13 +268,13 @@ class WorkflowExecutorResolverMixin:
         recorder: Any,
         node_results: list[NodeRunResult],
         stream_run_id: Optional[uuid.UUID] = None,
-        stream_lines: Optional[list[str]] = None,
+        stream_evt_acc: Optional[list[tuple[str, dict[str, Any]]]] = None,
         execution_time_zone: Optional[str] = None,
         loop_list_carry: Optional[Dict[tuple[str, str], list[Any]]] = None,
         output_overrides_map: Optional[Dict[str, NodeOutputUnion]] = None,
         parallel_side_effects_lock: Optional[threading.Lock] = None,
     ) -> None:
-        with self._transcribe_stream_sink(stream_lines):
+        with self._transcribe_stream_sink(stream_evt_acc):
             plock = parallel_side_effects_lock
             inner_edges = [e for e in edges if e.source in body_ids and e.target in body_ids]
             in_degree, adjacency = _build_in_degree_and_adjacency(sorted(body_ids), inner_edges, nodes_by_id)
@@ -298,10 +298,10 @@ class WorkflowExecutorResolverMixin:
                 batch = pop_wave_batch(ready, order_index, wave_cap)
                 batch = split_batch_isolating_audio_steps(batch, ready, order_index, nodes_by_id)
 
-                if stream_lines is not None:
+                if stream_evt_acc is not None:
                     with contextlib.nullcontext() if plock is None else plock:
                         for nid in batch:
-                            stream_lines.append(json.dumps({"event": "node_start", "node_id": nid}) + "\n")
+                            stream_evt_acc.append(("node.started", {"node_id": nid}))
 
                 async def run_body_node(node_id: str):
                     node = nodes_by_id[node_id]
@@ -319,7 +319,7 @@ class WorkflowExecutorResolverMixin:
                             recorder,
                             node_results,
                             stream_run_id,
-                            stream_lines,
+                            stream_evt_acc,
                             execution_time_zone=execution_time_zone,
                             output_overrides_map=om,
                             parallel_side_effects_lock=plock,
@@ -382,16 +382,16 @@ class WorkflowExecutorResolverMixin:
                         )
                         node_results.append(node_run_result)
 
-                        if stream_lines is not None:
-                            stream_lines.append(
-                                json.dumps(
+                        if stream_evt_acc is not None:
+                            evn = "node.completed" if result["status"] == "ok" else "node.failed"
+                            stream_evt_acc.append(
+                                (
+                                    evn,
                                     {
-                                        "event": "node_end",
                                         "node_id": node_id,
                                         "result": node_run_result.model_dump(mode="json"),
-                                    }
+                                    },
                                 )
-                                + "\n"
                             )
 
                         if stream_run_id is not None:
@@ -458,7 +458,7 @@ class WorkflowExecutorResolverMixin:
         recorder: Any,
         node_results: list[NodeRunResult],
         stream_run_id: Optional[uuid.UUID] = None,
-        stream_lines: Optional[list[str]] = None,
+        stream_evt_acc: Optional[list[tuple[str, dict[str, Any]]]] = None,
         execution_time_zone: Optional[str] = None,
         output_overrides_map: Optional[Dict[str, NodeOutputUnion]] = None,
         parallel_side_effects_lock: Optional[threading.Lock] = None,
@@ -513,7 +513,7 @@ class WorkflowExecutorResolverMixin:
                     recorder,
                     node_results,
                     stream_run_id,
-                    stream_lines,
+                    stream_evt_acc,
                     execution_time_zone=execution_time_zone,
                     loop_list_carry=carry,
                     output_overrides_map=om,
@@ -594,7 +594,7 @@ class WorkflowExecutorResolverMixin:
                 recorder,
                 node_results,
                 stream_run_id,
-                stream_lines,
+                stream_evt_acc,
                 execution_time_zone=execution_time_zone,
                 loop_list_carry=loop_list_carry,
                 output_overrides_map=om,
@@ -674,23 +674,32 @@ class WorkflowExecutorResolverMixin:
         for_loop_iteration: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Dispatch to the correct handler based on node kind."""
-        ctx = ExecutionNodeContext(
-            node_id=node_id,
-            node=node,
-            upstream=upstream,
-            edges=edges,
-            outputs=outputs,
-            input_overrides=input_overrides,
-            workflow=workflow,
-            execution_stack=execution_stack,
-            execution_time_zone=execution_time_zone,
-            loop_list_carry=loop_list_carry,
-            for_loop_id=for_loop_id,
-            output_overrides_map=output_overrides_map,
-            stream_run_id=stream_run_id,
-            for_loop_iteration=for_loop_iteration,
-        )
-        return await dispatch_execute_node(self, ctx)
+        om = output_overrides_map or {}
+        if node_id in om:
+            forced = om[node_id]
+            return {
+                "status": "ok",
+                "output": forced,
+                "details": {"resolved_inputs": {}, "forced_output": True},
+            }
+        async with self._node_execution_scope(node):
+            ctx = ExecutionNodeContext(
+                node_id=node_id,
+                node=node,
+                upstream=upstream,
+                edges=edges,
+                outputs=outputs,
+                input_overrides=input_overrides,
+                workflow=workflow,
+                execution_stack=execution_stack,
+                execution_time_zone=execution_time_zone,
+                loop_list_carry=loop_list_carry,
+                for_loop_id=for_loop_id,
+                output_overrides_map=output_overrides_map,
+                stream_run_id=stream_run_id,
+                for_loop_iteration=for_loop_iteration,
+            )
+            return await dispatch_execute_node(self, ctx)
 
     # ------------------------------------------------------------------
     # Node handlers

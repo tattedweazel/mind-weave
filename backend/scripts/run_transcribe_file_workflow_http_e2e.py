@@ -7,8 +7,8 @@ Mirrors ``run_audio_file_input_workflow_http_e2e.py`` but exercises the new
 both audio source modes:
 
 1. saved artifact + ``local_whisper`` (sync)  → POST /run
-2. runtime upload + ``local_whisper`` (sync)  → run_stream + multipart upload
-3. saved artifact + ``assemblyai`` (async)    → run_stream + reattach-stream
+2. runtime upload + ``local_whisper`` (sync)  → ``POST …/runs`` + multipart upload during SSE
+3. saved artifact + ``assemblyai`` (async)    → ``POST …/runs`` + ``GET …/events`` replay (replaces reattach-stream)
 
 Default mode patches the local STT bridge and the AssemblyAI HTTP transport
 in-process so it never makes real outbound calls. Pass ``--real-stt`` to call
@@ -48,6 +48,10 @@ import uvicorn  # noqa: E402
 from sqlmodel import Session, select  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
+from app.domain.workflow_http_sse_legacy_consumer import (  # noqa: E402
+    enqueue_and_iterate_build_events,
+    iter_workflow_sse_as_legacy_ndjson_events,
+)
 from app.core.security import get_password_hash  # noqa: E402
 from app.main import app  # noqa: E402
 from app.persistence.db import engine  # noqa: E402
@@ -338,33 +342,27 @@ async def _run_runtime_upload_http(
 
     async def _consume() -> str:
         nonlocal input_required_seen, text, upload_status
-        async with client.stream(
-            "POST", f"/api/v1/workflow-definitions/{wf_id}/run_stream", json={},
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line.strip():
-                    continue
-                event = json.loads(line)
-                if event.get("event") == "input_required" and event.get("kind") == "transcribe_file":
-                    input_required_seen = True
-                    upload_response = await _upload(str(event["run_id"]))
-                    upload_status = upload_response.status_code
-                    upload_response.raise_for_status()
-                    if upload_elapsed is not None and upload_elapsed > max_upload_elapsed:
-                        raise RuntimeError(
-                            f"multipart upload response took {upload_elapsed:.2f}s; "
-                            f"expected under {max_upload_elapsed:.2f}s"
-                        )
-                if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
-                    text = _extract_transcript_text(event)
-                if event.get("event") == "end":
-                    result = event.get("result") or {}
-                    if result.get("status") != "ok":
-                        raise RuntimeError(f"stream ended non-ok: {event}")
-                    if not text:
-                        raise RuntimeError(f"stream ended without transcript: {event}")
-                    return text
+        sse_timeout = httpx.Timeout(connect=15.0, read=stream_timeout, write=60.0, pool=15.0)
+        async for event in enqueue_and_iterate_build_events(client, wf_id, {}, sse_timeout=sse_timeout):
+            if event.get("event") == "input_required" and event.get("kind") == "transcribe_file":
+                input_required_seen = True
+                upload_response = await _upload(str(event["run_id"]))
+                upload_status = upload_response.status_code
+                upload_response.raise_for_status()
+                if upload_elapsed is not None and upload_elapsed > max_upload_elapsed:
+                    raise RuntimeError(
+                        f"multipart upload response took {upload_elapsed:.2f}s; "
+                        f"expected under {max_upload_elapsed:.2f}s"
+                    )
+            if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
+                text = _extract_transcript_text(event)
+            if event.get("event") == "end":
+                result = event.get("result") or {}
+                if result.get("status") != "ok":
+                    raise RuntimeError(f"stream ended non-ok: {event}")
+                if not text:
+                    raise RuntimeError(f"stream ended without transcript: {event}")
+                return text
         raise RuntimeError("stream closed before end event")
 
     try:
@@ -404,48 +402,36 @@ async def _run_assemblyai_with_reattach(
     text_from_first_stream: str | None = None
     text_from_reattach: str | None = None
 
+    sse_timeout = httpx.Timeout(connect=15.0, read=stream_timeout, write=60.0, pool=15.0)
+
     async def _consume_first() -> None:
         nonlocal saw_start, run_id, text_from_first_stream
-        async with client.stream(
-            "POST", f"/api/v1/workflow-definitions/{wf_id}/run_stream", json={},
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line.strip():
-                    continue
-                event = json.loads(line)
-                if event.get("event") == "start":
-                    saw_start = True
-                    run_id = str(event.get("run_id") or "") or run_id
-                if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
-                    text_from_first_stream = _extract_transcript_text(event)
-                if event.get("event") == "end":
-                    return
+        async for event in enqueue_and_iterate_build_events(client, wf_id, {}, sse_timeout=sse_timeout):
+            if event.get("event") == "start":
+                saw_start = True
+                run_id = str(event.get("run_id") or "") or run_id
+            if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
+                text_from_first_stream = _extract_transcript_text(event)
+            if event.get("event") == "end":
+                return
 
     await asyncio.wait_for(_consume_first(), timeout=stream_timeout)
     if run_id is None or not saw_start:
         raise RuntimeError("assemblyai run never reported a run_id")
     if text_from_first_stream:
-        # Inline poll completed quickly enough; we still confirm reattach replays the row.
+        # Inline poll completed quickly enough; we still confirm replay on GET …/events.
         pass
 
-    # Now reattach. Even if the run already finished, we should see node_end + end events.
-    async with client.stream(
-        "POST", f"/api/v1/workflow-runs/{run_id}/reattach-stream",
-    ) as response:
-        response.raise_for_status()
-        async for line in response.aiter_lines():
-            if not line.strip():
-                continue
-            event = json.loads(line)
-            if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
-                text_from_reattach = _extract_transcript_text(event)
-            if event.get("event") == "end":
-                break
+    # Replay / tail uses the same events endpoint whether the client stayed connected or not.
+    async for event in iter_workflow_sse_as_legacy_ndjson_events(client, run_id, timeout=sse_timeout):
+        if event.get("event") == "node_end" and event.get("node_id") == NODE_ID:
+            text_from_reattach = _extract_transcript_text(event)
+        if event.get("event") == "end":
+            break
 
     final_text = text_from_first_stream or text_from_reattach
     if not final_text:
-        raise RuntimeError("AAI workflow produced no transcript via stream or reattach")
+        raise RuntimeError("AAI workflow produced no transcript via stream or events replay")
     return final_text, (1 if text_from_reattach else 0)
 
 

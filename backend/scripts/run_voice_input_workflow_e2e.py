@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 End-to-end: create a **Start → Voice input → Stop** graph in the DB, run
-``WorkflowExecutor.run_stream`` in-process, and supply audio by calling
+``WorkflowExecutor.execute_scheduled_run`` (NDJSON-compat events), and supply audio by calling
 ``complete_transcribe_wait`` the same way the API does after
 ``POST .../transcribe-audio``.
 
@@ -54,6 +54,7 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.domain.services.workflow_executor import WorkflowExecutor
+from app.domain.workflow_inprocess_ndjson import iterate_scheduled_run_ndjson_dicts, start_persisted_run_row
 from app.domain.workflow_executor.transcribe_pending import TranscribeWaitKey, complete_transcribe_wait
 from app.persistence.db import engine
 from app.persistence.tables import User, WorkflowDefinition
@@ -224,40 +225,36 @@ async def _run(args: argparse.Namespace) -> int:
         session.refresh(wf)
         wf_id = wf.id
 
-        ex = WorkflowExecutor(session, user_id)
-        ag = ex.run_stream(wf)
+        run_row = start_persisted_run_row(session, workflow_id=wf.id, user_id=user_id)
 
-        async for raw in ag:
-            chunk = raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
-            for part in chunk.splitlines():
-                if not part.strip():
-                    continue
-                ev = json.loads(part)
-                if ev.get("event") == "input_required" and ev.get("node_id") == VOICE_NODE_ID:
-                    t_input_required = asyncio.get_event_loop().time() - t0
-                    if audio_task is not None:
-                        abytes = await audio_task
-                    else:
-                        abytes = _silent_wav_bytes()
-                    rid = uuid.UUID(str(ev["run_id"]))
-                    fl = ev.get("for_loop_id")
-                    it = int(ev.get("for_loop_iteration") or 0)
-                    k = TranscribeWaitKey(
-                        run_id=rid,
-                        node_id=VOICE_NODE_ID,
-                        for_loop_id=fl if isinstance(fl, str) and fl.strip() else None,
-                        iteration=it,
-                    )
-                    if not complete_transcribe_wait(k, abytes):
-                        print("complete_transcribe_wait returned False (stale or duplicate key).", file=sys.stderr)
-                        return 1
-                if ev.get("event") == "node_end" and ev.get("node_id") == VOICE_NODE_ID and ev.get("result"):
-                    r = ev["result"] or {}
-                    out = r.get("output") or {}
-                    if out.get("kind") == "string":
-                        voice_text_out = (out.get("text") or "").strip()
-                if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
-                    end_ok = True
+        executor = WorkflowExecutor(session, user_id)
+
+        async for ev in iterate_scheduled_run_ndjson_dicts(executor, wf, persist_run_record=run_row):
+            if ev.get("event") == "input_required" and ev.get("node_id") == VOICE_NODE_ID:
+                t_input_required = asyncio.get_event_loop().time() - t0
+                if audio_task is not None:
+                    abytes = await audio_task
+                else:
+                    abytes = _silent_wav_bytes()
+                rid = uuid.UUID(str(ev["run_id"]))
+                fl = ev.get("for_loop_id")
+                it = int(ev.get("for_loop_iteration") or 0)
+                k = TranscribeWaitKey(
+                    run_id=rid,
+                    node_id=VOICE_NODE_ID,
+                    for_loop_id=fl if isinstance(fl, str) and fl.strip() else None,
+                    iteration=it,
+                )
+                if not complete_transcribe_wait(k, abytes):
+                    print("complete_transcribe_wait returned False (stale or duplicate key).", file=sys.stderr)
+                    return 1
+            if ev.get("event") == "node_end" and ev.get("node_id") == VOICE_NODE_ID and ev.get("result"):
+                r = ev["result"] or {}
+                out = r.get("output") or {}
+                if out.get("kind") == "string":
+                    voice_text_out = (out.get("text") or "").strip()
+            if ev.get("event") == "end" and (ev.get("result") or {}).get("status") == "ok":
+                end_ok = True
 
     if t_input_required is not None and t_input_required > 5.0:
         print(

@@ -30,7 +30,7 @@ _MAX_EXECUTION_TIME_ZONE_LEN = 120
 
 
 class WorkflowRunRequest(BaseModel):
-    """Optional request body for run/run_stream. Overrides null required inputs."""
+    """Optional request body for run and ``POST …/runs``. Overrides null required inputs."""
 
     input_overrides: Optional[Dict[str, Any]] = None
     output_overrides: Optional[Dict[str, Any]] = Field(
@@ -111,3 +111,24 @@ class MyWorkflowRunRead(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+
+class WorkflowRunEnqueueResponse(BaseModel):
+    """Returned immediately by ``POST …/workflow-definitions/{id}/runs``."""
+
+    run_id: uuid.UUID
+    workflow_id: uuid.UUID
+    status: Literal["queued"]
+
+
+class WorkflowRunSnapshotRead(BaseModel):
+    """Compact poll snapshot for ``GET …/workflow-runs/{run_id}``."""
+
+    run_id: uuid.UUID
+    workflow_id: uuid.UUID
+    status: str
+    last_event_seq: int = 0
+    created_at: datetime
+    updated_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None

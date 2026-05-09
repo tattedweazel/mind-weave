@@ -30,7 +30,7 @@ uv run python -m pytest tests/ -q
 
 ## Integration (Mind Weave API + in-process)
 
-From the `**backend/**` app tree, the script `**scripts/run_voice_input_workflow_e2e.py**` creates a **Start → Voice input → Stop** graph, runs `**run_stream`**, and uploads bytes to the in-process transcribe path. Use `**--real-stt --audio tts`** to hit this service with TTS-synthesized speech (see the script’s docstring).
+From the `**backend/**` app tree, the script `**scripts/run_voice_input_workflow_e2e.py**` creates a **Start → Voice input → Stop** graph, drives the in-process persisted-run + event fan-out path, and uploads bytes to the transcribe handoff. Use `**--real-stt --audio tts`** to hit this service with TTS-synthesized speech (see the script’s docstring).
 
 This bridge is also the **`local_whisper`** provider for the provider-abstracted **`transcribe_file`** skill (see [docs/WORKFLOW_SKILLS.md](../../docs/WORKFLOW_SKILLS.md#transcribe-file-provider-abstracted--skill-transcribe_file)). When `transcribe_file` runs against `local_whisper`, the API process calls the same `POST /v1/transcribe` endpoint. The script `**scripts/run_transcribe_file_workflow_e2e.py**` exercises this path (defaults mock the bridge; pass `--real-stt --audio-file …` to hit it for real).
 

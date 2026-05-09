@@ -363,7 +363,7 @@ export interface TextToSpeechSkillNode {
         /** When set, workflow run uses voice clone with this sample's ref audio + transcript. */
         voice_sample_id?: string | null;
         /**
-         * When set, overrides My Settings → TTS playback during run_stream (`inline` | `manual` | `after_workflow`).
+         * When set, overrides My Settings → TTS playback during Build SSE runs (`inline` | `manual` | `after_workflow`).
          * null/undefined: use user setting.
          */
         tts_playback_when?: 'inline' | 'manual' | 'after_workflow' | null;

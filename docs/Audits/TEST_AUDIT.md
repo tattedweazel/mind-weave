@@ -36,7 +36,7 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | Admin: list users, Google metadata | `test_google_oauth.py::test_list_users_includes_google_email` |
 | Admin: disassociate Google for another user | `test_google_oauth.py::test_admin_disassociate_google_for_user` |
 | Auth endpoint rate limits; invalid `N/minute` spec raises (`SE-033`) | `test_auth_rate_limit.py`, `test_config_security.py::test_settings_rejects_invalid_rate_limit_spec` |
-| Workflow `POST .../run` + `.../run_stream` combined per-IP rate limit | `test_auth_rate_limit.py::test_workflow_run_middleware_429_and_shared_bucket_per_ip` |
+| Workflow `POST .../run` + `.../runs` enqueue combined per-IP rate limit | `test_auth_rate_limit.py::test_workflow_run_middleware_429_and_shared_bucket_per_ip` |
 | PUT `/auth/me` settings (allowlisted keys only) | `test_api.py::test_update_me_settings_system_colors`, `::test_update_me_rejects_unknown_settings_key` |
 | GET `/auth/me` masks `api_keys`; storage encrypted | `test_api.py::test_get_me_masks_api_keys`, `::test_put_me_api_keys_encrypted_at_rest` |
 | Run logs: redact prompt-like keys + `error` URL stripping (`SE-030`) | `test_workflow_run_logs_api.py` |
@@ -64,7 +64,7 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | Personas list + full CRUD smoke | `test_api.py`, `test_workflow_executor.py` (list), `test_resources_crud_smoke.py::test_persona_crud_smoke` |
 | Workflow **execution** (large suite, LLM mocked; patch `app.domain.workflow_executor.executor.LMStudioProvider`) | `test_workflow_executor.py` |
 | Simple LLM Call: persona + optional additional context in system; user prompt as user message | `test_workflow_executor.py` (`test_simple_llm_persona_*additional*`) |
-| Workflow **REST**: list (`WorkflowDefinitionListItem` — no `graph`), get (full), put, delete, sync `/run`, `/run_stream`, `GET /runs`, `GET .../logs` | `test_workflow_definitions_api.py` |
+| Workflow **REST**: list (`WorkflowDefinitionListItem` — no `graph`), get (full), put, delete, sync `/run`, enqueue `/runs`, `GET …/workflow-runs/…/{events,snapshot}`, `GET /runs`, `GET .../logs` | `test_workflow_definitions_api.py` |
 | Persisted graph **`schema_version`** default on create | `test_workflow_definitions_api.py::test_workflow_definitions_crud_run_runs_delete` (asserts `graph.schema_version == 1`) |
 | **Slim list schemas** — list endpoints exclude heavy fields (`graph`, `body`, `system_prompt`); single-item GET returns full object | `test_workflow_definitions_api.py`, `test_resources_crud_smoke.py` |
 | **Step kind manifest** parity: every `shared/workflow_graph_step_kinds.json` row parses via `_parse_node` | `test_workflow_graph_step_kinds_parity.py` |
@@ -83,7 +83,7 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | **Workspace default Google connection** injected into **`gmail_list_messages`** / **`calendar_list_events`** graphs (deep copy; no DB mutation) | `test_workspace_google_graph.py` |
 | **Workspace Google injection** wired through **`WorkflowExecutor`** nested-schedule path | `test_workflow_executor_nested_google.py` |
 
-**Product note:** `WorkflowRun` rows (and thus `GET .../runs`) are created during **`run_stream`**, not during synchronous `POST .../run`. The lifecycle test documents that; changing it would require a product/code change.
+**Product note:** `WorkflowRun` rows (and thus `GET .../runs`) are created when enqueueing **`POST .../runs`**, not during synchronous **`POST .../run`**. Lifecycle tests encode that distinction.
 
 ---
 

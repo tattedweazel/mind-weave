@@ -12,7 +12,7 @@ _TTS_PLAYBACK_WHEN_VALUES = frozenset({"inline", "manual", "after_workflow"})
 
 
 def resolve_tts_playback_when(settings: Any) -> str:
-    """Workflow editor TTS timing during run_stream: inline | manual | after_workflow. Default inline."""
+    """Workflow editor TTS timing during Build runs (`GET …/events`): inline | manual | after_workflow. Default inline."""
     if not isinstance(settings, dict):
         return "inline"
     w = settings.get("tts_playback_when")
@@ -31,7 +31,7 @@ def _legacy_auto_play_bool(settings: dict) -> bool:
 
 
 def resolve_auto_play_tts_on_node_end(settings: Any) -> bool:
-    """When True (default), workflow editor may inline auto-play TTS on node_end during run_stream.
+    """When True (default), workflow editor may inline auto-play TTS on node completion during Build runs (`GET …/events`).
 
     Equivalent to resolve_tts_playback_when(settings) == \"inline\".
     """

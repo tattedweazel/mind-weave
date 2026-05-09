@@ -11,8 +11,8 @@ to ``transcribe_pending`` for runtime-upload audio.
 
 The poller does **not** attempt to resume the workflow run. Its only job is to keep the
 external transcription itself moving forward so the data survives client disconnects.
-A reattach via ``POST /api/v1/workflow-runs/{run_id}/reattach-stream`` exposes the row's
-state to the client.
+A reattach via ``GET /api/v1/workflow-runs/{run_id}/events`` exposes the row's
+state to the client (SSE replay + tail for the same workflow run).
 """
 
 from __future__ import annotations

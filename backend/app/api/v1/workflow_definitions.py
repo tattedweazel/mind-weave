@@ -8,17 +8,16 @@ CRUD endpoints for WorkflowDefinitions, plus a /run endpoint.
   GET    /api/v1/workflow-definitions/{id}    — get by ID
   PUT    /api/v1/workflow-definitions/{id}    — update (including graph)
   DELETE /api/v1/workflow-definitions/{id}    — delete
-  POST   /api/v1/workflow-definitions/{id}/run — execute the DAG
+  POST   /api/v1/workflow-definitions/{id}/run — execute the DAG synchronously
+  POST   /api/v1/workflow-definitions/{id}/runs — enqueue an async persisted run + SSE lifecycle
 """
 
-import contextlib
-import json
+import asyncio
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import Sequence
 from typing import Any, List
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from sqlmodel import Session, col, select
 
 from app.api.deps import get_current_user
@@ -29,6 +28,7 @@ from app.domain.schemas import (
     WorkflowDefinitionListItem,
     WorkflowDefinitionRead,
     WorkflowDefinitionUpdate,
+    WorkflowRunEnqueueResponse,
     WorkflowRunRequest,
     WorkflowRunResult,
 )
@@ -36,28 +36,11 @@ from app.domain.services.workflow_definition_service import WorkflowDefinitionSe
 from app.domain.services.workflow_executor import WorkflowExecutor
 from app.domain.workflow_input_overrides import validate_input_overrides_for_workflow
 from app.domain.workflow_output_overrides import validate_and_build_output_overrides
+from app.domain.workflow_run_runner import execute_workflow_run_job
 from app.persistence.db import get_session
-from app.persistence.tables import NodeRunLog, User, WorkflowDefinition, WorkflowRun
+from app.persistence.tables import NodeRunLog, User, WorkflowRun
 
 router = APIRouter()
-
-
-@contextlib.contextmanager
-def _app_db_session() -> Any:
-    """Use the same session factory as ``Depends(get_session)`` (including test overrides)."""
-    from app.main import app
-    from app.persistence.db import get_session as get_session_fn
-
-    factory = app.dependency_overrides.get(get_session_fn, get_session_fn)
-    g = factory()
-    session = next(g)
-    try:
-        yield session
-    finally:
-        try:
-            next(g)
-        except StopIteration:
-            pass
 
 
 def _serialize_run_logs(logs: Sequence[NodeRunLog]) -> list[dict[str, Any]]:
@@ -208,76 +191,68 @@ async def run_workflow(
         raise HTTPException(status_code=500, detail="Workflow execution failed.")
 
 
-@router.post("/{id}/run_stream")
-async def run_workflow_stream(
+@router.post("/{id}/runs", response_model=WorkflowRunEnqueueResponse)
+async def enqueue_workflow_run(
     id: uuid.UUID,
+    request: Request,
     body: WorkflowRunRequest | None = Body(default=None),
+    session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
-    """
-    Execute a WorkflowDefinition and stream the per-node results as NDJSON.
-    Optional body.input_overrides for required inputs that are null.
-    Optional body.output_overrides for forced node outputs.
+) -> WorkflowRunEnqueueResponse:
+    """Validate the graph like ``/run``, persist a queued ``WorkflowRun``, and schedule execution.
 
-    The DB session for execution is **opened inside the response body coroutine** and held for
-    the full stream. ``Depends(get_session)`` must not be used for the executor: with
-    ``StreamingResponse``, request-scoped sessions from a ``yield`` dependency can be closed
-    as soon as the route returns, before the async body runs — the client then receives no NDJSON
-    until errors or long timeouts (e.g. voice input appears to hang on "Running").
+    Stream lifecycle on ``GET /api/v1/workflow-runs/{run_id}/events`` (SSE).
     """
+    svc = WorkflowDefinitionService(session, current_user.id)
+    wf = svc.get_workflow(id)
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    svc.claim_orphan_if_needed(wf)
+
     overrides = body.input_overrides if body else None
     execution_tz = body.execution_time_zone.strip() if body and body.execution_time_zone else None
+    try:
+        validate_input_overrides_for_workflow(wf.graph, overrides)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        output_map = validate_and_build_output_overrides(
+            session,
+            current_user.id,
+            wf.graph,
+            body.output_overrides if body else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    with _app_db_session() as _prepare_session:
-        svc = WorkflowDefinitionService(_prepare_session, current_user.id)
-        wf = svc.get_workflow(id)
-        if not wf:
-            raise HTTPException(status_code=404, detail="Workflow not found")
-        svc.claim_orphan_if_needed(wf)
-        try:
-            validate_input_overrides_for_workflow(wf.graph, overrides)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        try:
-            output_map = validate_and_build_output_overrides(
-                _prepare_session,
-                current_user.id,
-                wf.graph,
-                body.output_overrides if body else None,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    wf_id = id
-
-    async def ndjson_stream() -> AsyncIterator[str]:
-        with _app_db_session() as stream_session:
-            wf_row = stream_session.get(WorkflowDefinition, wf_id)
-            if not wf_row:
-                yield (
-                    json.dumps(
-                        {"event": "error", "error": "Workflow not found after validation."},
-                    )
-                    + "\n"
-                )
-                return
-            executor = WorkflowExecutor(stream_session, current_user.id)
-            async for chunk in executor.run_stream(
-                wf_row,
-                input_overrides=overrides if isinstance(overrides, dict) else None,
-                output_overrides_map=output_map,
-                execution_time_zone=execution_tz or None,
-            ):
-                yield chunk
-
-    return StreamingResponse(
-        ndjson_stream(),
-        media_type="application/x-ndjson",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+    run_row = WorkflowRun(
+        workflow_id=wf.id,
+        started_by_user_id=current_user.id,
+        status="queued",
     )
+    session.add(run_row)
+    session.commit()
+    session.refresh(run_row)
+
+    hub_ready = getattr(request.app.state, "workflow_execution_hub", None)
+    task_set = getattr(request.app.state, "workflow_background_tasks", None)
+    if hub_ready is None or task_set is None:
+        raise HTTPException(status_code=503, detail="Workflow execution is not initialized")
+
+    coro = execute_workflow_run_job(
+        workflow_id=wf.id,
+        run_id=run_row.id,
+        user_id=current_user.id,
+        input_overrides=overrides if isinstance(overrides, dict) else None,
+        output_overrides_map=output_map if output_map else None,
+        execution_time_zone=execution_tz or None,
+    )
+    loop = asyncio.get_running_loop()
+    bg_task = loop.create_task(coro)
+    task_set.add(bg_task)
+    bg_task.add_done_callback(lambda t: task_set.discard(t))
+
+    return WorkflowRunEnqueueResponse(run_id=run_row.id, workflow_id=wf.id, status="queued")
 
 
 @router.get("/{id}/runs", response_model=List[WorkflowRun])

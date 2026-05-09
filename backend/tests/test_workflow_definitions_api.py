@@ -1,11 +1,13 @@
-"""WorkflowDefinition REST lifecycle, list runs, and run_stream (no LLM — primitive + stop only)."""
+"""WorkflowDefinition REST lifecycle, list runs, and async ``POST …/runs`` + SSE (no LLM)."""
 
 import json
+import time
 import uuid
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from tests.sse_helpers import parse_sse
 _MINIMAL_GRAPH = {
     "nodes": [
         {
@@ -57,11 +59,15 @@ def test_workflow_definitions_crud_run_runs_delete(client: TestClient):
     assert run.status_code == 200
     assert run.json()["status"] == "ok"
 
-    # Run rows are persisted on run_stream, not on synchronous /run (see WorkflowExecutor.run_stream).
+    # Persisted runs come from POST …/runs + background execution.
+    enq = client.post(f"/api/v1/workflow-definitions/{wf_id}/runs", json={})
+    assert enq.status_code == 200
+    run_id = enq.json()["run_id"]
+
+    time.sleep(0.05)
     with client.stream(
-        "POST",
-        f"/api/v1/workflow-definitions/{wf_id}/run_stream",
-        json={},
+        "GET",
+        f"/api/v1/workflow-runs/{run_id}/events",
     ) as stream_resp:
         assert stream_resp.status_code == 200
         _ = b"".join(stream_resp.iter_bytes())
@@ -98,7 +104,7 @@ def test_workflow_run_rejects_unknown_input_override(client: TestClient):
     assert "not allowed" in bad.json()["detail"].lower()
 
 
-def test_workflow_run_stream_returns_ndjson_lines(client: TestClient):
+def test_workflow_enqueue_run_streams_sse_lifecycle(client: TestClient):
     create = client.post(
         "/api/v1/workflow-definitions/",
         json={"name": "Stream API", "graph": _MINIMAL_GRAPH},
@@ -106,22 +112,29 @@ def test_workflow_run_stream_returns_ndjson_lines(client: TestClient):
     assert create.status_code == 201
     wf_id = create.json()["id"]
 
+    enq = client.post(f"/api/v1/workflow-definitions/{wf_id}/runs", json={})
+    assert enq.status_code == 200
+    run_id = enq.json()["run_id"]
+
+    time.sleep(0.05)
     with client.stream(
-        "POST",
-        f"/api/v1/workflow-definitions/{wf_id}/run_stream",
-        json={},
+        "GET",
+        f"/api/v1/workflow-runs/{run_id}/events",
     ) as response:
         assert response.status_code == 200
         raw = b"".join(response.iter_bytes())
-    lines = [ln for ln in raw.decode().strip().split("\n") if ln.strip()]
-    assert len(lines) >= 1
-    first = json.loads(lines[0])
-    assert first.get("event") == "start"
-    assert first.get("workflow_id") == wf_id
+
+    events = parse_sse(raw)
+    kinds = [ev for ev, _ in events]
+    assert "workflow.started" in kinds
+    payload0 = next(pl for ev, pl in events if ev == "workflow.started")
+    assert payload0.get("workflow_id") == str(wf_id)
+    assert payload0.get("run_id") == run_id
+    assert "workflow.completed" in kinds
 
 
-def test_workflow_run_stream_setup_failure_emits_terminal_error_event(client: TestClient):
-    """Failures after start but before the main loop (e.g. topological setup) must yield event: error last."""
+def test_workflow_enqueue_run_setup_failure_streams_workflow_failed_event(client: TestClient):
+    """Unhandled failures during DAG setup emit ``workflow.failed`` on SSE and persist ``failed``."""
     create = client.post(
         "/api/v1/workflow-definitions/",
         json={"name": "Stream topo boom", "graph": _MINIMAL_GRAPH},
@@ -133,23 +146,26 @@ def test_workflow_run_stream_setup_failure_emits_terminal_error_event(client: Te
         "app.domain.workflow_executor.executor._topological_order",
         side_effect=RuntimeError("boom"),
     ):
-        with client.stream(
-            "POST",
-            f"/api/v1/workflow-definitions/{wf_id}/run_stream",
-            json={},
-        ) as response:
-            assert response.status_code == 200
-            raw = b"".join(response.iter_bytes())
+        enq = client.post(f"/api/v1/workflow-definitions/{wf_id}/runs", json={})
+        assert enq.status_code == 200
+        run_id = enq.json()["run_id"]
+        time.sleep(0.25)
 
-    lines = [ln for ln in raw.decode().strip().split("\n") if ln.strip()]
-    events = [json.loads(ln) for ln in lines]
-    assert events[0].get("event") == "start"
-    assert events[-1].get("event") == "error"
-    assert "boom" in (events[-1].get("error") or "")
+    with client.stream(
+        "GET",
+        f"/api/v1/workflow-runs/{run_id}/events",
+    ) as response:
+        assert response.status_code == 200
+        raw = b"".join(response.iter_bytes())
+
+    events = parse_sse(raw)
+    kinds = [ev for ev, _ in events]
+    assert "workflow.started" in kinds
+    assert any(ev == "workflow.failed" for ev in kinds)
 
     runs = client.get(f"/api/v1/workflow-definitions/{wf_id}/runs")
     assert runs.status_code == 200
-    assert runs.json()[0]["status"] == "error"
+    assert runs.json()[0]["status"] == "failed"
 
 
 def test_workflow_update_coerces_invalid_project_id_to_shared(client: TestClient):

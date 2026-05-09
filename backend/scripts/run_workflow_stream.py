@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-Stream a workflow run to stdout as NDJSON — the same line-oriented events as
-``POST /api/v1/workflow-definitions/{id}/run_stream``.
+Stream a workflow run to stdout as NDJSON-shaped lines — parity with **`GET …/workflow-runs/{id}/events`**
+(and historic stream clients).
 
-Runs ``WorkflowExecutor.run_stream`` in-process against ``DATABASE_URL`` (no HTTP,
-no JWT). Uses the **same** LM Studio settings and DB file as the API: the script
-changes the process cwd to ``backend/`` before importing ``app`` so ``.env`` and
-``sqlite:///./mindweave.db`` resolve like ``uvicorn`` started from ``backend/``.
+Runs ``WorkflowExecutor.execute_scheduled_run`` in-process (persisted ``WorkflowRun`` row)
+against ``DATABASE_URL`` (no HTTP, no JWT). Uses the **same** LM Studio settings and DB
+file as the API: the script changes cwd to ``backend/`` before importing ``app``.
 
-**LLM calls** go through the same ``httpx`` code path as ``POST .../run_stream``.
+**LLM calls** use the same ``httpx`` path as Build SSE runs.
 If LM Studio shows no requests, check the stderr line printed at startup
-(``LMSTUDIO_BASE_URL``) matches your running API and that this process can reach
-that host (firewall, VPN, or remote agent vs local machine).
+(``LMSTUDIO_BASE_URL``) matches your running API host.
 
 Usage::
 
@@ -19,8 +17,7 @@ Usage::
     --workflow-id d51622c0-8781-4e7e-8f2a-f52f77bdde98 \\
     --input-json '{"input_overrides": {"user_input": "test"}}'
 
-Optional JSON body fields (same as the API): ``input_overrides``, ``output_overrides``,
-``execution_time_zone``.
+Optional JSON body fields: ``input_overrides``, ``output_overrides``, ``execution_time_zone``.
 
 Optional flags:
   --user-id — executor user (defaults to the workflow's ``user_id``, else the first row in ``users``).
@@ -42,12 +39,17 @@ from typing import Any
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 os.chdir(_BACKEND_ROOT)
 
-from sqlmodel import Session, select
+from sqlmodel import Session, select  # noqa: E402
 
-from app.core.config import settings
-from app.domain.workflow_executor.executor import WorkflowExecutor
-from app.persistence.db import engine
-from app.persistence.tables import User, WorkflowDefinition
+from app.core.config import settings  # noqa: E402
+from app.domain.workflow_executor.executor import WorkflowExecutor  # noqa: E402
+from app.domain.workflow_inprocess_ndjson import (  # noqa: E402
+    iterate_scheduled_run_ndjson_dicts,
+    start_persisted_run_row,
+)
+from app.domain.workflow_output_overrides import validate_and_build_output_overrides  # noqa: E402
+from app.persistence.db import engine  # noqa: E402
+from app.persistence.tables import User, WorkflowDefinition  # noqa: E402
 
 
 def _normalize_uuid(s: str) -> uuid.UUID:
@@ -75,8 +77,6 @@ async def _run_async(
     body: dict[str, Any],
     user_override: uuid.UUID | None,
 ) -> int:
-    from app.domain.workflow_output_overrides import validate_and_build_output_overrides
-
     with Session(engine) as session:
         wf = session.get(WorkflowDefinition, wf_id)
         if wf is None:
@@ -97,21 +97,25 @@ async def _run_async(
                 print(f"output_overrides: {e}", file=sys.stderr)
                 return 2
 
+        run_row = start_persisted_run_row(session, workflow_id=wf.id, user_id=user_id)
         executor = WorkflowExecutor(session, user_id)
-        async for line in executor.run_stream(
+
+        async for ev in iterate_scheduled_run_ndjson_dicts(
+            executor,
             wf,
+            persist_run_record=run_row,
             input_overrides=input_overrides if isinstance(input_overrides, dict) else None,
             output_overrides_map=om,
             execution_time_zone=etz if isinstance(etz, str) else None,
         ):
-            sys.stdout.write(line if line.endswith("\n") else line + "\n")
+            sys.stdout.write(json.dumps(ev, separators=(",", ":"), default=str) + "\n")
             sys.stdout.flush()
 
     return 0
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Run workflow run_stream (NDJSON to stdout).")
+    p = argparse.ArgumentParser(description="Run workflow persisted stream (NDJSON to stdout).")
     p.add_argument("--workflow-id", required=True, help="WorkflowDefinition UUID.")
     p.add_argument(
         "--user-id",

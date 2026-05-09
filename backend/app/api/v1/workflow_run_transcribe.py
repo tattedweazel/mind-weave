@@ -35,7 +35,7 @@ async def post_transcribe_audio_for_run(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """Deliver recorded audio to unblock the matching ``transcribe_audio`` node in run_stream."""
+    """Deliver recorded audio to unblock the matching ``transcribe_audio`` node during an async Build run."""
     run = session.get(WorkflowRun, run_id)
     if not run or run.started_by_user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Run not found")

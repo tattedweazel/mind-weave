@@ -1,4 +1,4 @@
-"""In-memory registry so run_stream can await browser-uploaded audio for STT nodes.
+"""In-memory registry so workflow runs (`GET …/events` / executor) can await browser-uploaded audio for STT nodes.
 
 Single-process only; multiple API workers require a shared store (not in MVP).
 """

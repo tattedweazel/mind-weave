@@ -4,7 +4,7 @@ Insert a **temporary** workflow (fetch_url → dictionary value by key ``body`` 
 stop), run it once against **https://books.toscrape.com/** with a **real HTTP** request, and print
 the **html_parse_basic** dictionary (title, `text_blocks` as `{tag, text}` list, links).
 
-This is the same executor path as **POST …/run_stream** / ``scripts/run_workflow_stream.py``, but
+This uses the same **sync** **`WorkflowExecutor.run`** path as **`POST …/run`** (and shares executor code with **`POST …/runs`**); see also ``scripts/run_workflow_stream.py`` for persisted-run NDJSON parity, but
 does not require you to hand-build the graph in the UI. Use it to inspect **`text_blocks`** (tag + text per block) on
 real pages (see **docs/OPERATIONS.md** in the repo: *Offline script (books.toscrape sample)*).
 

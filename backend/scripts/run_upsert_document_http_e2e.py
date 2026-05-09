@@ -13,7 +13,7 @@ Exercises the same API as the browser (`POST /workflow-definitions/`, `POST …/
 
 No LLM / STT / external network.
 
-For **Workflow Editor parity** (same **`GET`** definition row and **`POST …/run_stream`** as the SPA),
+For **Workflow Editor parity** against **sync POST `/run`** (same **`GET`** definition row as the SPA; **Build** uses **`POST …/runs`** + **`GET …/events`** instead),
 use **`run_persisted_workflow_stream_http_e2e.py`** with **`--workflow-id`** owned by your login user.
 
 Example::

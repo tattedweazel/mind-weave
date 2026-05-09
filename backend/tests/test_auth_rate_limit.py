@@ -30,13 +30,13 @@ def test_build_rules_paths():
 
 
 def test_workflow_run_middleware_429_and_shared_bucket_per_ip():
-    """POST run/run_stream share one counter per IP (not per workflow id)."""
+    """POST …/run and POST …/runs share one counter per IP (not per workflow id)."""
 
     async def ok(_):
         return PlainTextResponse("ok")
 
     p1 = "/api/v1/workflow-definitions/11111111-1111-1111-1111-111111111111/run"
-    p2 = "/api/v1/workflow-definitions/22222222-2222-2222-2222-222222222222/run"
+    p2 = "/api/v1/workflow-definitions/22222222-2222-2222-2222-222222222222/runs"
     inner = Starlette(
         routes=[
             Route(p1, ok, methods=["POST"]),

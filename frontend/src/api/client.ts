@@ -46,6 +46,7 @@ import {
     type WorkspaceStreamDoneMeta,
     type WorkspaceStreamStageEvent,
 } from './workspaceStream';
+import { consumeWorkflowRunSseResponse } from './workflowRunSse';
 
 const DEFAULT_STT_MAX_AUDIO_UPLOAD_BYTES = 75 * 1024 * 1024;
 const STT_MAX_AUDIO_UPLOAD_BYTES = (() => {
@@ -429,78 +430,57 @@ export class ApiClient {
             body.execution_time_zone = options.execution_time_zone;
         }
 
-        const response = await fetchWithCredentials(`${API_BASE}/workflow-definitions/${id}/run_stream`, {
+        const enqueueResp = await fetchWithCredentials(`${API_BASE}/workflow-definitions/${id}/runs`, {
             method: 'POST',
             headers,
             body: JSON.stringify(body),
             signal: options?.signal,
         });
 
-        if (!response.ok) {
-            const errBody = await readJsonBody(response);
-            throw apiErrorFromResponse(response, errBody);
+        if (!enqueueResp.ok) {
+            const errBody = await readJsonBody(enqueueResp);
+            throw apiErrorFromResponse(enqueueResp, errBody);
         }
 
-        if (!response.body) throw new Error("ReadableStream not yet supported in this browser.");
+        type EnqueueRow = { run_id: string };
+        const row = (await readJsonBody(enqueueResp)) as EnqueueRow;
+        const runId = row.run_id;
+        const streamResp = await fetchWithCredentials(`${API_BASE}/workflow-runs/${runId}/events`, {
+            signal: options?.signal,
+            headers: { Accept: 'text/event-stream' },
+        });
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
+        if (!streamResp.ok) {
+            const errBody = await readJsonBody(streamResp);
+            throw apiErrorFromResponse(streamResp, errBody);
+        }
+
         let sawEnd = false;
         let sawError = false;
 
-        while (true) {
-            let done: boolean;
-            let value: Uint8Array | undefined;
-            try {
-                ({ done, value } = await reader.read());
-            } catch (err) {
-                if (options?.signal?.aborted) {
-                    return;
-                }
-                throw err;
-            }
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? ""; // keep the last incomplete chunk
-
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                    const event = JSON.parse(line);
-                    if (event.event === "end") sawEnd = true;
-                    if (event.event === "error") sawError = true;
-                    onEvent(event);
-                } catch (err) {
-                    console.error("Failed to parse stream JSON chunk:", line, err);
-                }
-            }
-        }
-
-        // flush the rest
-        if (buffer.trim()) {
-            try {
-                const event = JSON.parse(buffer);
-                if (event.event === "end") sawEnd = true;
-                if (event.event === "error") sawError = true;
+        try {
+            await consumeWorkflowRunSseResponse(streamResp, event => {
+                if (event.event === 'end') sawEnd = true;
+                if (event.event === 'error') sawError = true;
                 onEvent(event);
-            } catch (err) {
-                console.error("Failed to parse stream JSON flush:", buffer, err);
+            });
+        } catch (err) {
+            if (options?.signal?.aborted) {
+                return;
             }
+            throw err;
         }
 
         if (!sawEnd && !sawError) {
             onEvent({
-                event: "error",
-                error: "Stream ended before completion (no end event). The run may have failed after validation.",
+                event: 'error',
+                error: 'SSE stream ended before completion (no end event).',
             });
         }
     }
 
     /**
-     * Upload recorded audio for a `transcribe_audio` node during `run_stream` (multipart).
+     * Upload recorded audio for a `transcribe_audio` node during an async Build run (`GET …/workflow-runs/…/events`) (multipart).
      * Completes the server-side wait; transcription runs on the API after the upload.
      */
     static async postWorkflowTranscribeAudio(
@@ -531,7 +511,7 @@ export class ApiClient {
     }
 
     /**
-     * Upload an audio file for an `audio_file_input` node during `run_stream` (multipart).
+     * Upload an audio file for an `audio_file_input` node during an async Build run (`GET …/workflow-runs/…/events`) (multipart).
      * Completes the server-side wait; transcription runs on the API after the upload.
      */
     static async postWorkflowAudioFileInput(
@@ -576,7 +556,7 @@ export class ApiClient {
     }
 
     /**
-     * Upload an audio file for a `transcribe_file` node during `run_stream` (multipart).
+     * Upload an audio file for a `transcribe_file` node during an async Build run (`GET …/workflow-runs/…/events`) (multipart).
      * The executor consumes the bytes, dispatches them to the provider, and (for async providers)
      * persists a transcription_job that survives client disconnects.
      */
@@ -632,59 +612,23 @@ export class ApiClient {
     }
 
     /**
-     * Reattach to a workflow run NDJSON stream after a disconnect/reload.
-     * Replays historical events and tails subsequent updates until the run is terminal.
+     * Reattach to a workflow run event stream (`GET …/workflow-runs/{id}/events`) after disconnect/reload.
+     * Historical events replay as SSE, then polling tails terminal transcription jobs until the run settles.
      */
     static async reattachWorkflowRunStream(
         runId: string,
         onEvent: (event: any) => void,
         signal?: AbortSignal,
     ): Promise<void> {
-        const response = await fetchWithCredentials(`${API_BASE}/workflow-runs/${runId}/reattach-stream`, {
-            method: 'POST',
+        const response = await fetchWithCredentials(`${API_BASE}/workflow-runs/${runId}/events`, {
             signal,
+            headers: { Accept: 'text/event-stream' },
         });
-        if (!response.ok || !response.body) {
+        if (!response.ok) {
             const errBody = await readJsonBody(response);
             throw apiErrorFromResponse(response, errBody);
         }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        try {
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                let nl = buffer.indexOf('\n');
-                while (nl !== -1) {
-                    const line = buffer.slice(0, nl).trim();
-                    buffer = buffer.slice(nl + 1);
-                    if (line) {
-                        try {
-                            onEvent(JSON.parse(line));
-                        } catch {
-                            // ignore malformed lines; the stream is best-effort
-                        }
-                    }
-                    nl = buffer.indexOf('\n');
-                }
-            }
-            const tail = buffer.trim();
-            if (tail) {
-                try {
-                    onEvent(JSON.parse(tail));
-                } catch {
-                    // ignore trailing malformed data
-                }
-            }
-        } finally {
-            try {
-                reader.releaseLock();
-            } catch {
-                // best effort
-            }
-        }
+        await consumeWorkflowRunSseResponse(response, onEvent);
     }
 
     // -------------------------------------------------------------------------

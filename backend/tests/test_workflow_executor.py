@@ -20,6 +20,7 @@ from sqlmodel import Session, select
 from app.persistence.tables import UrlSnapshotArtifact, User
 from app.providers.base import ProviderResponse
 from app.providers.lmstudio import LMStudioModelNotMultimodalError
+from tests.sse_helpers import sse_response_body_to_legacy_workflow_events
 
 
 def _resolved_inputs(details: dict | None) -> dict:
@@ -8676,16 +8677,19 @@ def test_parallel_for_loop_simple_llm_run_stream_completes(client: TestClient):
         mock_instance = AsyncMock()
         mock_instance.chat = AsyncMock(return_value=mock_response)
         MockProvider.return_value = mock_instance
-        with client.stream("POST", f"/api/v1/workflow-definitions/{wf_id}/run_stream", json={}) as response:
+        enqueue = client.post(f"/api/v1/workflow-definitions/{wf_id}/runs", json={})
+        assert enqueue.status_code == 200
+        run_uid = enqueue.json()["run_id"]
+        time.sleep(0.05)
+        with client.stream("GET", f"/api/v1/workflow-runs/{run_uid}/events") as response:
             assert response.status_code == 200
             raw = b"".join(response.iter_bytes())
         assert mock_instance.chat.await_count == 2
 
-    lines = [ln for ln in raw.decode().strip().split("\n") if ln.strip()]
-    events = [json.loads(ln) for ln in lines]
-    assert events[0].get("event") == "start"
-    assert events[-1].get("event") == "end"
-    assert not any(e.get("event") == "error" for e in events)
+        events = sse_response_body_to_legacy_workflow_events(raw)
+        assert events[0].get("event") == "start"
+        assert events[-1].get("event") == "end"
+        assert not any(e.get("event") == "error" for e in events)
 
 
 def test_parallel_for_loop_with_nested_inner_loop_returns_422(client: TestClient):
@@ -9251,7 +9255,7 @@ def test_for_loop_end_validation_requires_trigger_and_exports(client: TestClient
 
 
 def test_for_loop_end_validation_errors_run_stream_emits_error_after_start(client: TestClient):
-    """run_stream must yield error (not hang) when For Loop End validation fails after start."""
+    """SSE run must emit workflow.failed (not hang) when For Loop End validation fails after workflow.started."""
     fl_id = "n_fl"
     end_id = "n_end"
     workflow_res = client.post(
@@ -9290,19 +9294,23 @@ def test_for_loop_end_validation_errors_run_stream_emits_error_after_start(clien
     )
     assert workflow_res.status_code == 201
     wf_id = workflow_res.json()["id"]
-    with client.stream("POST", f"/api/v1/workflow-definitions/{wf_id}/run_stream", json={}) as response:
+    enq = client.post(f"/api/v1/workflow-definitions/{wf_id}/runs", json={})
+    assert enq.status_code == 200
+    run_uid = enq.json()["run_id"]
+
+    time.sleep(0.05)
+    with client.stream("GET", f"/api/v1/workflow-runs/{run_uid}/events") as response:
         assert response.status_code == 200
         raw = b"".join(response.iter_bytes())
-    lines = [ln for ln in raw.decode().strip().split("\n") if ln.strip()]
-    events = [json.loads(ln) for ln in lines]
-    assert events[0].get("event") == "start"
+
+    events = sse_response_body_to_legacy_workflow_events(raw)
+    assert events and events[0].get("event") == "start"
     assert any(e.get("event") == "error" for e in events)
     assert not any(e.get("event") == "end" for e in events)
 
     runs = client.get(f"/api/v1/workflow-definitions/{wf_id}/runs")
     assert runs.status_code == 200
-    assert runs.json()[0]["status"] == "error"
-
+    assert runs.json()[0]["status"] == "failed"
 
 _MINI_PNG_1X1 = (
     b"\x89PNG\r\n\x1a\n"
