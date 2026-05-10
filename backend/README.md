@@ -249,7 +249,7 @@ Full step-by-step order (find your IP, set backend and frontend env, start API a
 
 For a **capability matrix** (core behavior → tests), see [docs/Audits/TEST_AUDIT.md](../docs/Audits/TEST_AUDIT.md).
 
-**Palette OpenAPI subset (CI / drift check)** — Palette response models feed [`backend/scripts/dump_openapi_palette_subset.py`](scripts/dump_openapi_palette_subset.py). From repo root → **`frontend/`**: run **`npm run codegen:palette-types`** (writes **`openapi.palette.json`** + **`src/generated/palette-types.ts`**). **`npm run verify:palette-types`** fails if regenerated files drift from HEAD.
+**Palette OpenAPI subset (drift check)** — Palette response models feed [`backend/scripts/dump_openapi_palette_subset.py`](scripts/dump_openapi_palette_subset.py). From repo root → **`frontend/`**: run **`npm run codegen:palette-types`** (writes **`openapi.palette.json`** + **`src/generated/palette-types.ts`**). **`npm run verify:palette-types`** fails if regenerated files drift from HEAD.
 
 Install dev tools (includes `pytest-cov`) and run the suite:
 
@@ -279,7 +279,7 @@ Optional **coverage** for `app/` (summary only; nothing fails the run—we do **
 uv run pytest --cov=app --cov-report=term-missing:skip-covered
 ```
 
-Settings live in `pyproject.toml` under `[tool.coverage.*]`. Prefer the [test audit](../docs/Audits/TEST_AUDIT.md) for “what must not break”; only add `--cov-fail-under` in CI if you explicitly want to enforce a minimum later.
+Settings live in `pyproject.toml` under `[tool.coverage.*]`. Prefer the [test audit](../docs/Audits/TEST_AUDIT.md) for “what must not break”; only add `--cov-fail-under` in an automated pipeline if you explicitly want to enforce a minimum later.
 
 ### Important Notes on Authentication
 

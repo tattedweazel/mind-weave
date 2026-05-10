@@ -37,7 +37,7 @@ The frontend is structured into several key areas:
 
 ## Tests
 
-- From `frontend/`: **`npm run codegen:palette-types`** — Writes [`openapi.palette.json`](openapi.palette.json) from the backend subset script and regenerates **`src/generated/palette-types.ts`**. **`npm run verify:palette-types`** repeats codegen and **`git diff --exit-code`** on those artifacts (run in CI when you automate checks).
+- From `frontend/`: **`npm run codegen:palette-types`** — Writes [`openapi.palette.json`](openapi.palette.json) from the backend subset script and regenerates **`src/generated/palette-types.ts`**. **`npm run verify:palette-types`** repeats codegen and **`git diff --exit-code`** on those artifacts (run locally before merge to catch drift).
 - From `frontend/`: `npm run build` — type-check (`tsc`) plus production bundle.
 
 Project-wide conventions: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
