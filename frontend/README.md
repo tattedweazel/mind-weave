@@ -156,6 +156,10 @@ The application requires authentication. The **primary** session is **HttpOnly c
 
 **Deployment:** The frontend origin must be listed in the backend `CORS_ORIGINS`, and you must use the same cookie-capable setup (API origin + `VITE_API_BASE`) as described in the backend README. `index.html` includes a **baseline Content-Security-Policy** (`connect-src` allows local dev hosts and scheme-wide `http:` / `ws:` for LAN API origins; see **LAN / same-network devices** below). Browsers do not enforce `frame-ancestors` from a **meta** tag (it must be an HTTP response header), so the meta policy omits it; if you need to restrict embedding, set `Content-Security-Policy: frame-ancestors …` or `X-Frame-Options` on responses that serve the static app. **`media-src`** explicitly allows **`blob:`** and **`data:`** so workflow **Text-to-Speech** inline `<audio>` (object URLs from base64) is not blocked—without it, `media-src` falls back to `default-src 'self'`, which blocks blob media while **Download** still works. For production, narrow `connect-src` to your real API origin (or set CSP via reverse proxy and remove/override the meta tag); if you replace the policy, keep the same **`media-src`** allowance for TTS playback.
 
+## One-command startup with the backend (`make dev`)
+
+Prefer repo-root **`make dev`** when you want the SPA **and** API together (**`npm run dev:lan`** exports **`VITE_API_BASE`** for the spawned session). Prerequisites and troubleshooting: root [README.md](../README.md#quickstart); common failures also [README Troubleshooting](../README.md#troubleshooting).
+
 ## Setup & Running
 
 1. Navigate to the frontend directory:

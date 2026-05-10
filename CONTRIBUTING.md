@@ -5,16 +5,20 @@ Thanks for your interest in improving Mind Weave. This document is a short entry
 ## Before you start
 
 - Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for layering, single sources of truth, and how HTTP errors flow to the UI.
+- Read **[docs/NODE_TAXONOMY.md](docs/NODE_TAXONOMY.md)** when you add palette steps so **Skills vs Utilities vs Controls** land in the right category before you edit executor code.
 - For **what behavior must stay covered by tests**, see [docs/Audits/TEST_AUDIT.md](docs/Audits/TEST_AUDIT.md). When you change routes, auth, or user-visible behavior, update that mapping.
 - For style and cohesion, see [docs/Audits/CODE_QUALITY_AND_STYLE_AUDIT.md](docs/Audits/CODE_QUALITY_AND_STYLE_AUDIT.md).
 
 ## Development setup
 
-- **Backend:** Python **3.11+**, [`uv`](https://docs.astral.sh/uv/). The installable project is under **`backend/`** only (there is no repo-root `pyproject.toml`). From the repo root you can use `uv --project backend …` or `cd backend` then `uv sync`, `uv run pytest`, etc. See [backend/README.md](backend/README.md) and the root [README.md](README.md) for conventions (e.g. FastAPI dev command).
-- **Frontend:** Node.js (see [frontend/README.md](frontend/README.md)), `cd frontend && npm install`.
+- **Recommended — start API + SPA together:** from the repo root run **`make dev`** (`Makefile` invokes **`./startdev.sh`**). Prerequisites: **`uv`** + **`backend/`** synced (`uv sync --extra dev` from `backend/`, or **`uv sync --project backend --extra dev`** from root), **`npm install`** inside **`frontend/`** once so `node_modules` exists. **`Ctrl+C` stops both** processes. Details: **[README.md — Quickstart](README.md#quickstart)** and **[README.md — Troubleshooting](README.md#troubleshooting)**.
+- **Backend only:** Python **3.11+**, [`uv`](https://docs.astral.sh/uv/). The installable project is under **`backend/`** only (there is no repo-root `pyproject.toml`). From the repo root you can use `uv --project backend …` or `cd backend` then `uv sync`, `uv run pytest`, etc. See [backend/README.md](backend/README.md) and [README.md](README.md).
+- **Frontend only:** Node.js (see [frontend/README.md](frontend/README.md)), `cd frontend && npm install`; **`npm run dev`** vs **`npm run dev:lan`** per package README when not using **`make dev`**.
 - **Optional:** [services/stt-bridge/README.md](services/stt-bridge/README.md) and [services/tts-bridge/README.md](services/tts-bridge/README.md) for local speech bridges.
 
 ## Checks to run locally
+
+When you touch **`startdev.sh`**, run **`shellcheck startdev.sh`** (Homebrew **`brew install shellcheck`**).
 
 From **`backend/`**:
 

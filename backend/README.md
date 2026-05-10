@@ -193,6 +193,12 @@ The `WorkflowExecutor` runs a WorkflowDefinition DAG:
 | GET | `/api/v1/workflow-definitions/{id}/runs/{run_id}/logs` | Get node run logs for a run (prompt-like fields in JSON redacted; only if **you started** the run) |
 | DELETE | `/api/v1/workflow-definitions/{id}/runs/{run_id}` | Delete a run and its node logs (only if **you started** the run) |
 
+## One-command local dev (`make dev`)
+
+From the repository root **`make dev`** runs **`./startdev.sh`,** which launches **FastAPI** (`--host 0.0.0.0 --port 8000`) and **`npm run dev:lan`** together. It exports **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, **`FRONTEND_URL`**, and **`VITE_API_BASE`** for that session **without overwriting** **`backend/.env`**. Prerequisites: synced **`backend/.venv`** and **`frontend/node_modules`**. Troubleshooting matches root [README.md](../README.md#troubleshooting); Google OAuth nuances on LAN stay in **[docs/DEPLOYMENT_AND_NETWORK.md](../docs/DEPLOYMENT_AND_NETWORK.md)**.
+
+Use **Setup & Running** below when you **only** need this API process (custom ports, debuggers).
+
 ## Setup & Running
 
 If you prefer to stay at the **repository root**, use `uv --project backend …` (e.g. `uv sync --project backend --extra dev` or `uv sync --project backend --extra dev --extra url-snapshot`) instead of `cd backend` — there is no `pyproject.toml` at the repo root.
@@ -229,7 +235,9 @@ If you prefer to stay at the **repository root**, use `uv --project backend …`
 
 ### Same-network (LAN) access
 
-To use phones or other PCs on the same Wi‑Fi, the API must listen on all interfaces: add **`--host 0.0.0.0`** to **`fastapi dev`** or **uvicorn** (see above). In **`backend/.env`**, align **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, and **`FRONTEND_URL`** with your machine’s LAN address—use **JSON list** syntax for the first two (see [`.env.example`](.env.example)) and the [Environment Variables](#environment-variables) table.
+**Automated LAN alignment:** Prefer **`make dev`** from repo root (**[One-command local dev (`make dev`)](#one-command-local-dev-make-dev)**) unless you intentionally split processes or tweak `.env` by hand—it injects **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, and **`FRONTEND_URL`** for localhost **and** detected LAN IPs.
+
+**Manual LAN:** Listen on **`--host 0.0.0.0`** and align **`backend/.env`** (**`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, **`FRONTEND_URL`** with **JSON list** syntax for host allowlists — see [`.env.example`](.env.example) and [Environment Variables](#environment-variables)).
 
 Full step-by-step order (find your IP, set backend and frontend env, start API and Vite): **[frontend/README.md — LAN / same-network devices](../frontend/README.md#lan--same-network-devices)**.
 

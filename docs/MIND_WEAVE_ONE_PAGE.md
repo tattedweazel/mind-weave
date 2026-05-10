@@ -12,7 +12,7 @@ The application also stores reusable building blocks: **Personas** (named system
 
 **Explicit dataflow.** Inputs and outputs are wired visibly. **Optional forced outputs** let you inject a node’s result for a run (skipping that step) to explore downstream behavior without re-running expensive steps; overrides are session-only and validated on the server. Branching controls run only the **true** or **false** path that matches the current evaluation; boolean combinators (**And**, **Or**, **Xor**, **Not**) produce a single boolean for further wiring rather than splitting execution by themselves.
 
-**Composable building blocks.** **Primitives** hold static or resource-backed values. **Skills** perform LLM calls or integrations. **Utilities** reshape data (lists, strings, dictionaries, integers, document fields, and basic HTML structure via **`html_parse_basic`**). **Controls** express conditions, comparisons, loops, and aggregation. **Workflow** nodes nest other saved workflows so large systems stay modular.
+**Composable building blocks.** **Primitives** hold static or resource-backed values. **Skills** perform LLM calls or integrations. **Utilities** reshape data (lists, strings, dictionaries, integers, document fields, and basic HTML structure via **`html_parse_basic`**). **Controls** express conditions, comparisons, loops, and aggregation. **Workflow** nodes nest other saved workflows so large systems stay modular. Contributor-oriented framing (**utilities ≈ grammar**, **skills ≈ verbs**, placement exceptions): **[NODE_TAXONOMY.md](NODE_TAXONOMY.md)**.
 
 **Local-first LLM usage.** The default mental model is a machine running an OpenAI-compatible server; the app does not assume a single vendor cloud. Integration skills (email and calendar) are optional layers on top of that core.
 
@@ -168,28 +168,27 @@ The backend validates the graph (including cycle detection), derives an executio
 
 ## Node families in practice
 
+Conceptual taxonomy (Skills vs Utilities, placement guide, persisted **Document** utilities as an intentional exception): **[NODE_TAXONOMY.md](NODE_TAXONOMY.md)**. The collapsible palettes in **Build → Workflows editor** (**Primitives**, **Skills**, **Utilities**, **Controls**) are always the authoritative step list; below is a short field guide.
+
 ### Primitives
 
-Static or resource-backed values: text, JSON **list** or **dictionary**, boolean, integer, a saved **Structure** (schema), or a saved **Document** (stored **body** text plus metadata—the wire field is still named **`markdown`** for history). **Read Document Property** and runtime utilities (**Load / Upsert Document**, JSON parse/write/append, **Validate Against Structure**) operate on that text; Markdown remains a first-class authoring experience in **Configure → Documents** when you use it.
+Static or resource-backed values: text, JSON **list** / **dictionary**, booleans, integers, datetimes, **Structure**, **Document**, **Image**, **Gmail-shaped** payloads, sandbox-focused shapes where applicable (`shared/workflow_graph_step_kinds.json` + editor palettes stay exact). Stored **Document** bodies use the historical wire field **`markdown`**; authoring often happens in Markdown under **Configure → Documents**.
 
 ### Skills
 
-- **Simple LLM Call** — Persona-driven chat completion; optional structured output via **Structure**. Requires some initial configuration, ask an admin if this has been done before using
-- **Gmail List Messages** — search and list messages with configurable limits, time hints, inbox categories, and raw query strings as allowed by the Gmail API. Requires Google Workspace connection to be configured, which can be done in the My Settings section
-- **Fetch URL** — server-side HTTP GET/POST/… with optional headers, timeout, and cache policy; emits structured dictionary output (or a transport **`error`** object). Requests run on the host running the API—treat target URLs as trusted in multi-tenant deployments
-- **Calendar List Events** — list events in a time window with calendar-aware controls in the inspector. Requires Google Workspace connection to be configured, which can be done in the My Settings section
+Representative integrations: **Simple LLM Call**, **Multimodal LLM**, **Fetch URL**, **URL snapshot**, speech / TTS / transcription paths, Gmail and Calendar listings, optional provider-abstracted STT—all require correct local or cloud prerequisites (see **[WORKFLOW_TOOL_INVENTORY.md](WORKFLOW_TOOL_INVENTORY.md)**, **[WORKFLOW_SKILLS.md](WORKFLOW_SKILLS.md)**, **[OUTPUT_EXPLORER_UI.md](OUTPUT_EXPLORER_UI.md)**).
 
 ### Utilities
 
-Convert and extract data: list ↔ string, lengths, indexing, dictionary keys, document fields, **load/upsert** persisted documents, JSON-oriented document body helpers, schema validation against **Structures**, **Add to List** for building lists (including inside loops), and binary integer math.
+Transforms and validations: lists/strings/dictionaries/int math, **Read Document Property**, **Load / Upsert Document** (**first-party persisted resources**, still modeled as utilities—see taxonomy doc), HTML parse (**`html_parse_basic`**), JSON helpers (**Parse / Write / Append**), **Validate Against Structure**, **Add to List**.
 
 ### Controls
 
-**Conditional** routing (**Basic Conditional**, **Is?**, ordered comparisons, **Between**), boolean logic (**And**, **Or**, **Xor**, **Not**), **For Loop** with **For Loop End** for exporting aggregated results from loop bodies.
+Branching (**Basic Conditional**, **Is?**, **Is Empty?**, ordered comparisons, **Between**), boolean combinators (**And**, **Or**, **Xor**, **Not**), **Try / Catch**, **For Loop** / **For Loop End**.
 
 ### Start, Stop, Workflow
 
-**Start** and **Stop** frame every workflow. **Workflow** nodes compose other graphs with matching typed handles.
+**Start** supplies inputs; **Stop** defines outputs. **Workflow** nodes embed referenced definitions (**Custom Skill** UX when exposed); see palette sections above for drag/drop mechanics.
 
 ---
 

@@ -4,6 +4,11 @@ Operator-facing notes for upgrades. See [docs/OPERATIONS.md](docs/OPERATIONS.md)
 
 ## [Unreleased]
 
+### Contributor experience (local bootstrap + taxonomy docs)
+
+- **`make dev` / `./startdev.sh`** — Repo-root **`Makefile`** delegates to **`startdev.sh`**, which binds FastAPI (**`--host 0.0.0.0`**), launches **`npm run dev:lan`**, and exports session-only **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, **`FRONTEND_URL`**, and **`VITE_API_BASE`** (never overwrites **`backend/.env`**). **`Ctrl+C` stops both** processes. Prerequisites and troubleshooting live in **[README.md](README.md)**.
+- **`[docs/NODE_TAXONOMY.md](docs/NODE_TAXONOMY.md)`** — Single contributor-facing guide for **utilities ≈ grammar** vs **skills ≈ verbs**, controls/primitives/workflows, documented **Document** persistence helpers as utilities. Linked from **`[README.md](README.md)`**, **`[CONTRIBUTING.md](CONTRIBUTING.md)`**, **`[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)`**, and trimmed cross-links inside **`[docs/MIND_WEAVE_ONE_PAGE.md](docs/MIND_WEAVE_ONE_PAGE.md)`**.
+
 ### Workflow palettes (authority + consistency)
 
 - **Manifest-backed labels** — [`shared/workflow_graph_step_kinds.json`](shared/workflow_graph_step_kinds.json) carries **`palette_handle`** and **`editor_label`** per executable row; **`palette_extras`** documents pseudo-handles (annotations, **`any`**, **`workflow`**, families, **`start`** / **`stop`**, …). Backend parity tests require alignment with **`DEFAULT_PALETTE_COLORS`** in [`backend/app/domain/palette_defaults.py`](backend/app/domain/palette_defaults.py).

@@ -21,7 +21,9 @@ This document is the **single place** to choose how you expose Mind Weave (local
 
 ## Path A — Localhost (default)
 
-No extra deployment steps. From `backend/` run `uv run python -m fastapi dev app/main.py`; from `frontend/` run `npm run dev`. Defaults: API `http://localhost:8000`, SPA `http://localhost:5173`, `VITE_API_BASE=http://localhost:8000`.
+**Fastest onboarding:** From the repo root run **`make dev`** (delegates to **`./startdev.sh`**). That command binds **`0.0.0.0:8000` / Vite LAN mode**, aligns **`VITE_API_BASE`**, **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, and **`FRONTEND_URL`** for **localhost plus your detected LAN IPv4** via **temporary environment variables only** — it never edits **`backend/.env`**. Printed URLs supersede guesses; same caveats about **OAuth + private IPs** stand when you browse from **LAN IPs** versus **localhost** (**Path B**, below). See root [README.md](../README.md#quickstart).
+
+**Manual two-process localhost** (fine-grained `.env`): From `backend/` run `uv run python -m fastapi dev app/main.py`; from `frontend/` run `npm run dev`. Defaults: API `http://localhost:8000`, SPA `http://localhost:5173`, `VITE_API_BASE=http://localhost:8000`.
 
 - Setup detail: [backend README § Setup & Running](../backend/README.md#setup--running), [frontend README § Setup & Running](../frontend/README.md#setup--running).
 - Google OAuth: register redirect URIs that match **`GOOGLE_REDIRECT_URI`** and **`GOOGLE_WORKFLOW_REDIRECT_URI`** in [config defaults](#canonical-oauth-paths-and-env) (typically `http://localhost:8000/...`).
