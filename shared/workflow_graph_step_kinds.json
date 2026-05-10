@@ -477,6 +477,12 @@
     },
     {
       "kind": "control",
+      "control_type": "try_catch",
+      "react_flow_type": "tryCatchControl",
+      "pydantic_model": "TryCatchControlNode"
+    },
+    {
+      "kind": "control",
       "control_type": "for_loop",
       "react_flow_type": "forLoopControl",
       "pydantic_model": "ForLoopControlNode"

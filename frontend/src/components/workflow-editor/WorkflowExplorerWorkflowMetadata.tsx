@@ -1,6 +1,11 @@
 import { Copy } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-import type { WorkflowDefinition } from '../../api/types';
+import type {
+    WorkflowDefinition,
+    WorkflowExecutionLimitsEnvelope,
+    WorkflowExecutionLimitsOverrides,
+} from '../../api/types';
 import { useCopyWithFeedback } from '../../contexts/ClipboardFeedbackContext';
 import { InspectorSection } from './InspectorSection';
 
@@ -11,6 +16,16 @@ export interface WorkflowExplorerWorkflowMetadataProps {
     lastRunId: string | null;
     /** When set, shows Expose / Remove actions; persisted via API. */
     onExposeAsCustomSkillChange?: (value: boolean) => void;
+    /** Server ceilings + defaults (optional). */
+    executionLimitsEnvelope?: WorkflowExecutionLimitsEnvelope | null;
+    /** Draft graph.execution_limits persisted on Save. Null/undefined clears. */
+    graphExecutionLimitsDraft?: WorkflowExecutionLimitsOverrides | null;
+    /** Per-run overrides for the next streamed run only (sent in POST …/runs body). */
+    runExecutionLimitsDraft?: WorkflowExecutionLimitsOverrides | null;
+    /** Merge or replace workflow graph.execution_limits draft (persisted via Save). */
+    onGraphExecutionLimitsChange?: (next: WorkflowExecutionLimitsOverrides | null) => void;
+    /** Merge per-run overrides (omit empty object to clear). */
+    onRunExecutionLimitsChange?: (next: WorkflowExecutionLimitsOverrides) => void;
 }
 
 function CopyIdRow({
@@ -43,6 +58,296 @@ function CopyIdRow({
     );
 }
 
+function parsePositiveLimit(raw: string): number | undefined {
+    const n = Number(String(raw).trim());
+    if (!Number.isFinite(n)) return undefined;
+    return Math.max(1, Math.floor(n));
+}
+
+function WorkflowExecutionLimitsForm({
+    ceilings,
+    defaults,
+    graphDraft,
+    runDraft,
+    onGraphChange,
+    onRunChange,
+}: {
+    ceilings: WorkflowExecutionLimitsEnvelope['ceilings'] | null | undefined;
+    defaults: WorkflowExecutionLimitsEnvelope['defaults'] | null | undefined;
+    graphDraft: WorkflowExecutionLimitsOverrides | null | undefined;
+    runDraft: WorkflowExecutionLimitsOverrides | null | undefined;
+    onGraphChange?: (next: WorkflowExecutionLimitsOverrides | null) => void;
+    onRunChange?: (next: WorkflowExecutionLimitsOverrides) => void;
+}) {
+    const [ttlG, setTtlG] = useState('');
+    const [nodeG, setNodeG] = useState('');
+    const [loopG, setLoopG] = useState('');
+    const [depthG, setDepthG] = useState('');
+    const [ttlR, setTtlR] = useState('');
+    const [nodeR, setNodeR] = useState('');
+    const [loopR, setLoopR] = useState('');
+    const [depthR, setDepthR] = useState('');
+
+    useEffect(() => {
+        const d = graphDraft;
+        setTtlG(d?.workflow_ttl_seconds != null ? String(d.workflow_ttl_seconds) : '');
+        setNodeG(d?.max_node_executions != null ? String(d.max_node_executions) : '');
+        setLoopG(d?.max_loop_iterations != null ? String(d.max_loop_iterations) : '');
+        setDepthG(d?.max_nested_depth != null ? String(d.max_nested_depth) : '');
+    }, [
+        graphDraft?.workflow_ttl_seconds,
+        graphDraft?.max_node_executions,
+        graphDraft?.max_loop_iterations,
+        graphDraft?.max_nested_depth,
+    ]);
+
+    useEffect(() => {
+        const d = runDraft;
+        setTtlR(d?.workflow_ttl_seconds != null ? String(d.workflow_ttl_seconds) : '');
+        setNodeR(d?.max_node_executions != null ? String(d.max_node_executions) : '');
+        setLoopR(d?.max_loop_iterations != null ? String(d.max_loop_iterations) : '');
+        setDepthR(d?.max_nested_depth != null ? String(d.max_nested_depth) : '');
+    }, [
+        runDraft?.workflow_ttl_seconds,
+        runDraft?.max_node_executions,
+        runDraft?.max_loop_iterations,
+        runDraft?.max_nested_depth,
+    ]);
+
+    if (!onGraphChange && !onRunChange) return null;
+
+    const ceilLine =
+        ceilings != null ?
+            (
+                `Server max: TTL ${ceilings.workflow_ttl_seconds}s · node exec ${ceilings.max_node_executions} · loops ${ceilings.max_loop_iterations} · nested depth ${ceilings.max_nested_depth}`
+            )
+        :   'Ceilings loading… refine values after save if limits fail validation.';
+
+    const defHint =
+        defaults != null ?
+            (
+                <>
+                    Deploy defaults — TTL{' '}
+                    <span className="font-medium text-mw-text-primary">{defaults.workflow_ttl_seconds}s</span>, node{' '}
+                    <span className="font-medium text-mw-text-primary">{defaults.max_node_executions}</span>, loops{' '}
+                    <span className="font-medium text-mw-text-primary">{defaults.max_loop_iterations}</span>, depth{' '}
+                    <span className="font-medium text-mw-text-primary">{defaults.max_nested_depth}</span>.
+                </>
+            )
+        :   null;
+
+    const mergeGraphLimits = (): WorkflowExecutionLimitsOverrides | null => {
+        const draft = { ...(graphDraft ?? {}) } as WorkflowExecutionLimitsOverrides;
+        const t = parsePositiveLimit(ttlG);
+        const n = parsePositiveLimit(nodeG);
+        const l = parsePositiveLimit(loopG);
+        const d = parsePositiveLimit(depthG);
+        if (t !== undefined && ceilings) draft.workflow_ttl_seconds = Math.min(t, ceilings.workflow_ttl_seconds);
+        else if (t !== undefined) draft.workflow_ttl_seconds = t;
+        else delete draft.workflow_ttl_seconds;
+        if (n !== undefined && ceilings) draft.max_node_executions = Math.min(n, ceilings.max_node_executions);
+        else if (n !== undefined) draft.max_node_executions = n;
+        else delete draft.max_node_executions;
+        if (l !== undefined && ceilings) draft.max_loop_iterations = Math.min(l, ceilings.max_loop_iterations);
+        else if (l !== undefined) draft.max_loop_iterations = l;
+        else delete draft.max_loop_iterations;
+        if (d !== undefined && ceilings) draft.max_nested_depth = Math.min(d, ceilings.max_nested_depth);
+        else if (d !== undefined) draft.max_nested_depth = d;
+        else delete draft.max_nested_depth;
+        return Object.keys(draft).length > 0 ? draft : null;
+    };
+
+    const mergeRunLimits = (): WorkflowExecutionLimitsOverrides => {
+        const draft = { ...(runDraft ?? {}) } as WorkflowExecutionLimitsOverrides;
+        const t = parsePositiveLimit(ttlR);
+        const n = parsePositiveLimit(nodeR);
+        const l = parsePositiveLimit(loopR);
+        const d = parsePositiveLimit(depthR);
+        if (t !== undefined && ceilings) draft.workflow_ttl_seconds = Math.min(t, ceilings.workflow_ttl_seconds);
+        else if (t !== undefined) draft.workflow_ttl_seconds = t;
+        else delete draft.workflow_ttl_seconds;
+        if (n !== undefined && ceilings) draft.max_node_executions = Math.min(n, ceilings.max_node_executions);
+        else if (n !== undefined) draft.max_node_executions = n;
+        else delete draft.max_node_executions;
+        if (l !== undefined && ceilings) draft.max_loop_iterations = Math.min(l, ceilings.max_loop_iterations);
+        else if (l !== undefined) draft.max_loop_iterations = l;
+        else delete draft.max_loop_iterations;
+        if (d !== undefined && ceilings) draft.max_nested_depth = Math.min(d, ceilings.max_nested_depth);
+        else if (d !== undefined) draft.max_nested_depth = d;
+        else delete draft.max_nested_depth;
+        return draft;
+    };
+
+    return (
+        <>
+            {onGraphChange ?
+                <InspectorSection
+                    title="Execution caps (workflow)"
+                    description="Saved with this workflow JSON. Overrides must stay at or below the server ceilings; empty fields fall back to deployment defaults."
+                >
+                    <p className="text-[10px] text-mw-text-secondary leading-snug">{ceilLine}</p>
+                    {defHint ?
+                        <p className="text-[10px] text-mw-text-secondary leading-snug">{defHint}</p>
+                    :   null}
+                    <div className="grid grid-cols-1 gap-2">
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">workflow_ttl_seconds</label>
+                            <input
+                                value={ttlG}
+                                onChange={e => setTtlG(e.target.value)}
+                                onBlur={() => void onGraphChange(mergeGraphLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Graph override workflow TTL seconds"
+                                placeholder="deployment default"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                max_node_executions
+                            </label>
+                            <input
+                                value={nodeG}
+                                onChange={e => setNodeG(e.target.value)}
+                                onBlur={() => void onGraphChange(mergeGraphLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Graph override max node executions"
+                                placeholder="deployment default"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                max_loop_iterations
+                            </label>
+                            <input
+                                value={loopG}
+                                onChange={e => setLoopG(e.target.value)}
+                                onBlur={() => void onGraphChange(mergeGraphLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Graph override max loop iterations"
+                                placeholder="deployment default"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                max_nested_depth
+                            </label>
+                            <input
+                                value={depthG}
+                                onChange={e => setDepthG(e.target.value)}
+                                onBlur={() => void onGraphChange(mergeGraphLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Graph override max nested depth"
+                                placeholder="deployment default"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        className="w-full mt-2 px-3 py-1.5 text-[11px] font-medium rounded-lg border border-mw-border bg-mw-card-alt text-mw-text-primary hover:bg-mw-card"
+                        onClick={() => {
+                            setTtlG('');
+                            setNodeG('');
+                            setLoopG('');
+                            setDepthG('');
+                            onGraphChange(null);
+                        }}
+                    >
+                        Clear workflow overrides
+                    </button>
+                </InspectorSection>
+            :   null}
+            {onRunChange ?
+                <InspectorSection
+                    title="Execution caps (this run)"
+                    description="Optional per-run overlays only; merges over graph overrides for this run. Clear with the button below when you want server defaults plus any saved workflow caps."
+                >
+                    <p className="text-[10px] text-mw-text-secondary leading-snug">{ceilLine}</p>
+                    <div className="grid grid-cols-1 gap-2">
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">workflow_ttl_seconds</label>
+                            <input
+                                value={ttlR}
+                                onChange={e => setTtlR(e.target.value)}
+                                onBlur={() => onRunChange(mergeRunLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Run overlay workflow TTL seconds"
+                                placeholder="no overlay"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                max_node_executions
+                            </label>
+                            <input
+                                value={nodeR}
+                                onChange={e => setNodeR(e.target.value)}
+                                onBlur={() => onRunChange(mergeRunLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Run overlay max node executions"
+                                placeholder="no overlay"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                max_loop_iterations
+                            </label>
+                            <input
+                                value={loopR}
+                                onChange={e => setLoopR(e.target.value)}
+                                onBlur={() => onRunChange(mergeRunLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Run overlay max loop iterations"
+                                placeholder="no overlay"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                max_nested_depth
+                            </label>
+                            <input
+                                value={depthR}
+                                onChange={e => setDepthR(e.target.value)}
+                                onBlur={() => onRunChange(mergeRunLimits())}
+                                type="number"
+                                min={1}
+                                aria-label="Run overlay max nested depth"
+                                placeholder="no overlay"
+                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                            />
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        className="w-full mt-2 px-3 py-1.5 text-[11px] font-medium rounded-lg border border-mw-border bg-mw-card-alt text-mw-text-primary hover:bg-mw-card"
+                        onClick={() => {
+                            setTtlR('');
+                            setNodeR('');
+                            setLoopR('');
+                            setDepthR('');
+                            onRunChange({});
+                        }}
+                    >
+                        Clear run overlays
+                    </button>
+                </InspectorSection>
+            :   null}
+        </>
+    );
+}
 /**
  * Shown in the Explorer tab when no node or edge is selected: identifiers and counts
  * for support / DB queries (e.g. paste workflow definition UUID into SQL or chat).
@@ -53,6 +358,11 @@ export function WorkflowExplorerWorkflowMetadata({
     edgeCount,
     lastRunId,
     onExposeAsCustomSkillChange,
+    executionLimitsEnvelope,
+    graphExecutionLimitsDraft,
+    runExecutionLimitsDraft,
+    onGraphExecutionLimitsChange,
+    onRunExecutionLimitsChange,
 }: WorkflowExplorerWorkflowMetadataProps) {
     const copy = useCopyWithFeedback();
     const schemaVersion = workflow.graph?.schema_version;
@@ -123,6 +433,14 @@ export function WorkflowExplorerWorkflowMetadata({
                         </div>
                     </div>
                 </InspectorSection>
+                <WorkflowExecutionLimitsForm
+                    ceilings={executionLimitsEnvelope?.ceilings}
+                    defaults={executionLimitsEnvelope?.defaults}
+                    graphDraft={graphExecutionLimitsDraft ?? null}
+                    runDraft={runExecutionLimitsDraft ?? null}
+                    onGraphChange={onGraphExecutionLimitsChange}
+                    onRunChange={onRunExecutionLimitsChange}
+                />
             </div>
             {onExposeAsCustomSkillChange ? (
                 <div className="shrink-0 border-t border-mw-border bg-mw-card/90 dark:bg-mw-page/80 px-4 py-3 space-y-2">

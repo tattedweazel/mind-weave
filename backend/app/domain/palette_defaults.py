@@ -104,6 +104,7 @@ DEFAULT_PALETTE_COLORS: Dict[str, str] = {
     "max_ints": "#eab308",
     "not_control": "#6366f1",
     "between_control": "#c026d3",
+    "try_catch_control": "#0369a1",
     "for_loop_control": "#059669",
     "for_loop_end_control": "#047857",
     "annotation_note": "#94a3b8",

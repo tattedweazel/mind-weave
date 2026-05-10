@@ -122,7 +122,8 @@ Each utility typically includes `data.required_inputs`: `{ "key", "type", "value
 | `between` | Range test | `low`, `value`, `high` + branches | Inclusive range. |
 | `and`, `or`, `xor` | Boolean combine | inputs → **`output`** (boolean) | Logic without separate branch wires. |
 | `not` | Negate | `input` → **`output`** | |
-| `for_loop` | Iterate over a list | `input` (list), item output, **`signal_out`**, **`trigger`** | Body nodes run once per item. |
+| `try_catch` | **`try`** region first; failures route to **`catch`**; structured envelope output | **`trigger`** schedules the region; **`try`** / **`catch`** are signal handles for interior wiring; optional **`value`** binds a wired result **from inside `try`** (feeds **`{ ok: true, value }` when `try` succeeds); **`output`** / **`envelope`** emit dictionary payloads (**`ok`**, **`value`** or **`error`**). | Interior graphs are validated separately (overlap, missing **`try`** edge → **422**). Handled failures record **`handled_by_try_catch`** on the inner **`node.failed`** (and SSE metadata on streamed runs). **Global cycle detection** ignores edges that exist only to wire **`value`** (producer → **`value`** feedback is allowed). See [ARCHITECTURE.md](ARCHITECTURE.md). |
+| `for_loop` | Iterate over a list | **`input`** (list), **`item`**, **`signal_out`**, **`trigger`**; optional **`summary`** (**dictionary**: items processed/failed + per-item results/errors when enabled) | **`data.iteration_mode`**: **`sequential`** (default), **`parallel`** (same semantics as legacy **`parallel_iterations: true`**), **`batched`** (**`batch_size`**, capped by deployment ceiling **`WORKFLOW_MAX_LOOP_BATCH_SIZE_CEILING`**). Optional **`continue_on_error`**, **`max_iterations`**. List length is checked against resolved **`execution_limits.max_loop_iterations`** before the loop runs. |
 | `for_loop_end` | Aggregate named exports from the loop body | **`trigger`** from the paired For loop’s **`signal_out`**; **data** edges from body nodes with `target_handle` = export key → **`output`** (dictionary) | Persist `data.for_loop_id` as the **For Loop** node’s `id` (the workflow editor sets this when you wire **`signal_out` → `trigger`**; you can still override in the inspector). **Not** part of the per-iteration body—runs **once** on the main schedule after the loop completes. |
 
 **Suggested usage:** For branching controls, only **one** of **`true`** / **`false`** runs per evaluation. **For Loop End** must reference the correct **`for_loop_id`** and use **named** `target_handle` values matching your export keys.
@@ -141,7 +142,15 @@ Use these shapes when emitting JSON (ids must match your graph’s node `id` str
 }
 ```
 
-Wire the list to **`target_handle`: `input`**. The loop exposes **`item`** (and **`signal_out`**. **`trigger`**) per app wiring.
+Wire the list to **`target_handle`: `input`**. The loop exposes **`item`**, **`signal_out`**, and **`trigger`** per app wiring; optional **`summary`** is wired like other outputs when you need an aggregated **`dictionary`**.
+
+**Try / Catch** (`control_type`: `try_catch`):
+
+```json
+"data": {}
+```
+
+Schedule with **`trigger`**; wire the **`try`** handle for the happy path and **`catch`** for the recovery path. Optional **`value`** accepts a **data** edge from a node **inside** `try` (for example **Stop** output) when you want **`ok: true`** to carry that payload.
 
 **For loop end** (`control_type`: `for_loop_end`):
 

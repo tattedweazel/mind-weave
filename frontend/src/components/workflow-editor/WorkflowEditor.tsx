@@ -50,6 +50,9 @@ import {
     AudioFileArtifactRead,
     TranscriptionProviderItem,
     VoiceSampleListItem,
+    WorkflowGraph,
+    WorkflowExecutionLimitsEnvelope,
+    WorkflowExecutionLimitsOverrides,
 } from '../../api/types';
 import {
     Plus,
@@ -209,6 +212,27 @@ interface Props {
     routeWorkflowId?: string | null;
     /** Keep the browser URL in sync when the opened workflow changes (replaceState). */
     onSyncWorkflowPath?: (workflowId: string | null) => void;
+}
+
+function nonEmptyWorkflowExecutionLimits(
+    raw: WorkflowExecutionLimitsOverrides | null | undefined,
+): WorkflowExecutionLimitsOverrides | undefined {
+    if (raw == null || typeof raw !== 'object') return undefined;
+    const out: WorkflowExecutionLimitsOverrides = {};
+    for (const key of ['workflow_ttl_seconds', 'max_node_executions', 'max_loop_iterations', 'max_nested_depth'] as const) {
+        const v = raw[key];
+        if (typeof v === 'number' && Number.isFinite(v)) {
+            const n = Math.floor(v);
+            if (n >= 1) out[key] = n;
+        }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Compare persisted graph.execution_limits drafts (undefined = absent vs explicit null clears). */
+function stableGraphLimitsSnapshot(raw: WorkflowExecutionLimitsOverrides | null | undefined): string {
+    if (raw === undefined) return '__absent__';
+    return JSON.stringify(raw === null ? null : nonEmptyWorkflowExecutionLimits(raw) ?? null);
 }
 
 /** Resolved #rrggbb for `<input type="color">` when the stored value is a palette key or empty. */
@@ -406,6 +430,11 @@ export const WorkflowEditor: React.FC<Props> = ({
     const [transcriptionProviders, setTranscriptionProviders] = useState<TranscriptionProviderItem[]>([]);
     const workflowRunAbortRef = useRef<AbortController | null>(null);
     const workflowStreamSeqRef = useRef(0);
+    const [workflowExecutionEnvelope, setWorkflowExecutionEnvelope] =
+        useState<WorkflowExecutionLimitsEnvelope | null>(null);
+    const [runExecutionLimitsOverrides, setRunExecutionLimitsOverrides] = useState<WorkflowExecutionLimitsOverrides>(
+        {},
+    );
 
     /** Local JSON text for list/dictionary primitives so paste + Normalize work before valid parse. */
     const [listPrimitiveEditorJson, setListPrimitiveEditorJson] = useState('');
@@ -786,6 +815,16 @@ export const WorkflowEditor: React.FC<Props> = ({
     useEffect(() => { loadAll().finally(() => setIsDataLoading(false)); }, []);
 
     useEffect(() => {
+        void ApiClient.getWorkflowExecutionLimits()
+            .then(envelope => setWorkflowExecutionEnvelope(envelope))
+            .catch(() => setWorkflowExecutionEnvelope(null));
+    }, []);
+
+    useEffect(() => {
+        setRunExecutionLimitsOverrides({});
+    }, [activeWf?.id]);
+
+    useEffect(() => {
         if (!workflowImportNotice) return;
         const t = window.setTimeout(() => setWorkflowImportNotice(null), 12000);
         return () => clearTimeout(t);
@@ -936,7 +975,7 @@ export const WorkflowEditor: React.FC<Props> = ({
         );
         const filteredNodes = (wf.graph.nodes as AppGraphNode[]).filter(n => !responseNodeIds.has(n.id));
         const filteredEdges = wf.graph.edges.filter((e: { source: string; target: string }) => !responseNodeIds.has(e.source) && !responseNodeIds.has(e.target));
-        const wfWithGraph = { ...wf, graph: { nodes: filteredNodes, edges: filteredEdges } };
+        const wfWithGraph = { ...wf, graph: { ...wf.graph, nodes: filteredNodes, edges: filteredEdges } };
         graphHistoryRef.current.clear();
         setWorkflows(ws => mergeWorkflowDefinitionIntoList(ws, wfWithGraph));
         setActiveWf(wfWithGraph);
@@ -1607,12 +1646,26 @@ export const WorkflowEditor: React.FC<Props> = ({
                     ],
                 },
             }]);
+        } else if (type === 'tryCatchControl') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'tryCatchControl',
+                position,
+                data: {
+                    label: extra.label ?? 'Try / Catch',
+                    required_inputs: [{ key: 'value', type: 'any', value: null }],
+                },
+            }]);
         } else if (type === 'forLoopControl') {
             setNodes(ns => [...ns, {
                 id,
                 type: 'forLoopControl',
                 position,
-                data: { label: extra.label ?? 'For Loop', required_inputs: [{ key: 'input', type: 'list', value: null }] },
+                data: {
+                    label: extra.label ?? 'For Loop',
+                    required_inputs: [{ key: 'input', type: 'list', value: null }],
+                    iteration_mode: 'sequential',
+                },
             }]);
         } else if (type === 'forLoopEndControl') {
             const ex = (extra as { exports?: string[] }).exports;
@@ -2191,6 +2244,19 @@ export const WorkflowEditor: React.FC<Props> = ({
         [activeWf, setIsCustomSkillsOpen],
     );
 
+    const patchGraphExecutionLimits = useCallback((next: WorkflowExecutionLimitsOverrides | null) => {
+        setActiveWf(prev => {
+            if (!prev?.graph) return prev;
+            return {
+                ...prev,
+                graph: {
+                    ...prev.graph,
+                    execution_limits: next == null ? null : next,
+                },
+            };
+        });
+    }, []);
+
     // Save
     const handleSave = async () => {
         if (!activeWf) return;
@@ -2198,10 +2264,22 @@ export const WorkflowEditor: React.FC<Props> = ({
         setSaveError(null);
         try {
             const nodesToSave = resolveWorkflowRefLabels(nodes, workflows);
-            const graph = {
+            const prevGraph = activeWf.graph ?? { nodes: [], edges: [] };
+            const rawLimits = prevGraph.execution_limits;
+            let nextLimits: WorkflowExecutionLimitsOverrides | null | undefined;
+            if (rawLimits === null) nextLimits = null;
+            else if (rawLimits === undefined) nextLimits = undefined;
+            else nextLimits = nonEmptyWorkflowExecutionLimits(rawLimits) ?? null;
+            const graph: WorkflowGraph = {
+                ...prevGraph,
                 nodes: nodesToSave.map(flowNodeToApp),
                 edges: edges.map(flowEdgeToApp),
             };
+            if (nextLimits === undefined) {
+                delete graph.execution_limits;
+            } else {
+                graph.execution_limits = nextLimits;
+            }
             /** If the workflow references a deleted or unknown project, fall back to Shared (backend also coerces invalid ids). */
             const rawPid = activeWf.project_id ?? null;
             let resolvedProjectId: string | null = rawPid;
@@ -2239,7 +2317,11 @@ export const WorkflowEditor: React.FC<Props> = ({
         const nodesForCompare = resolveWorkflowRefLabels(nodes, workflows);
         const currNodesStr = JSON.stringify(nodesForCompare.map(flowNodeToApp));
         const currEdgesStr = JSON.stringify(edges.map(flowEdgeToApp));
-        const graphDirty = savedNodesStr !== currNodesStr || savedEdgesStr !== currEdgesStr;
+        const limitsDirty =
+            stableGraphLimitsSnapshot(activeWf.graph.execution_limits) !==
+            stableGraphLimitsSnapshot(lastSavedWf.graph.execution_limits);
+        const graphDirty =
+            savedNodesStr !== currNodesStr || savedEdgesStr !== currEdgesStr || limitsDirty;
         const metaDirty =
             activeWf.name !== lastSavedWf.name ||
             (activeWf.palette_id ?? null) !== (lastSavedWf.palette_id ?? null) ||
@@ -2432,6 +2514,7 @@ export const WorkflowEditor: React.FC<Props> = ({
         const runAbort = new AbortController();
         workflowRunAbortRef.current = runAbort;
         workflowStreamSeqRef.current = 0;
+        const runLim = nonEmptyWorkflowExecutionLimits(runExecutionLimitsOverrides);
         setInspectorTab('logs');
         setIsRunning(true);
         setRunResult(null);
@@ -2507,6 +2590,16 @@ export const WorkflowEditor: React.FC<Props> = ({
                         setTranscribeFileError(null);
                     } else if (event.event === "node_end") {
                         const nodeResult: NodeRunResult = event.result;
+                        const handledTcRaw = (event as { handled_by_try_catch?: unknown }).handled_by_try_catch;
+                        const handledTc =
+                            typeof handledTcRaw === 'string' && handledTcRaw.trim() !== ''
+                                ? handledTcRaw.trim()
+                                : null;
+                        if (handledTc && nodeResult.status === 'error') {
+                            showStatusToast(
+                                `Handled by Try / Catch (${handledTc}); see Run logs for the failed step.`,
+                            );
+                        }
                         const ttsFlowNode = nodes.find(
                             nn => nn.id === nodeResult.node_id && nn.type === 'textToSpeech',
                         );
@@ -2617,6 +2710,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 {
                     ...(inputOverrides ? { input_overrides: inputOverrides } : {}),
                     ...(Object.keys(outputOverrides).length > 0 ? { output_overrides: outputOverrides } : {}),
+                    ...(runLim ? { execution_limits: runLim } : {}),
                     execution_time_zone: resolveWorkflowTimeZone(user?.settings as Record<string, unknown> | undefined),
                     signal: runAbort.signal,
                 },
@@ -6559,41 +6653,226 @@ export const WorkflowEditor: React.FC<Props> = ({
                             );
                         })()}
 
+                        {selectedNode.type === 'tryCatchControl' && (() => {
+                            const d = selectedNode.data as { label?: string; required_inputs?: RequiredInput[] };
+                            let requiredInputs: RequiredInput[] = d?.required_inputs ?? [
+                                { key: 'value', type: 'any', value: null },
+                            ];
+                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'value')) {
+                                requiredInputs = [...requiredInputs, { key: 'value', type: 'any', value: null }];
+                            }
+                            const inputIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'value');
+                            const rawValPiece =
+                                inputIdx >= 0 && requiredInputs[inputIdx]?.value !== undefined
+                                    ? requiredInputs[inputIdx].value
+                                    : null;
+                            const rawValDisplay =
+                                rawValPiece === null || rawValPiece === undefined
+                                    ? ''
+                                    : typeof rawValPiece === 'string'
+                                      ? rawValPiece
+                                      : String(rawValPiece);
+                            const updateInput = (patch: Partial<RequiredInput>) => {
+                                if (inputIdx >= 0) {
+                                    const next = [...requiredInputs];
+                                    next[inputIdx] = { ...next[inputIdx], ...patch };
+                                    updateSelectedNodeData({ required_inputs: next });
+                                }
+                            };
+                            return (
+                                <>
+                                    <InspectorSection
+                                        title="About"
+                                        description="Try wires to the guarded body; Catch runs after a failing step inside Try. Outputs: value on success (optional wired input); envelope summarizes success vs caught errors."
+                                    />
+                                    <InspectorSection title="Optional value (wired)">
+                                        <p className="text-[10px] text-mw-text-secondary mb-2">
+                                            Normally leave empty and rely on upstream outputs; wire the left handle only when you want a surfaced value on successful runs.
+                                        </p>
+                                        <input
+                                            type="text"
+                                            value={rawValDisplay}
+                                            placeholder="manual test value (prefer wiring from upstream)"
+                                            onFocus={recordGraphBeforeMutation}
+                                            onChange={e => {
+                                                const t = e.target.value;
+                                                updateInput({ value: t.trim() === '' ? null : t });
+                                            }}
+                                            className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg font-mono"
+                                        />
+                                    </InspectorSection>
+                                </>
+                            );
+                        })()}
+
                         {selectedNode.type === 'forLoopControl' && (() => {
-                            const d = selectedNode.data as { parallel_iterations?: boolean };
+                            type IterMode = 'sequential' | 'parallel' | 'batched';
+                            const d = selectedNode.data as {
+                                iteration_mode?: IterMode;
+                                parallel_iterations?: boolean;
+                                batch_size?: number;
+                                continue_on_error?: boolean;
+                                max_iterations?: number;
+                                required_inputs?: RequiredInput[];
+                            };
+                            let iter: IterMode = 'sequential';
+                            if (typeof d.iteration_mode === 'string') {
+                                if (d.iteration_mode === 'parallel' || d.iteration_mode === 'batched')
+                                    iter = d.iteration_mode;
+                                else if (d.iteration_mode === 'sequential') iter = 'sequential';
+                            } else if (d.parallel_iterations === true) {
+                                iter = 'parallel';
+                            }
+                            const batchSizeRaw =
+                                typeof d.batch_size === 'number' && Number.isFinite(d.batch_size)
+                                    ? Math.max(1, Math.floor(d.batch_size))
+                                    : 2;
+                            const maxIterationsRaw =
+                                typeof d.max_iterations === 'number' && Number.isFinite(d.max_iterations)
+                                    ? Math.max(1, Math.floor(d.max_iterations))
+                                    : '';
+                            const onIterChange = (next: IterMode) => {
+                                if (next === 'parallel') {
+                                    updateSelectedNodeData(
+                                        {
+                                            iteration_mode: 'parallel',
+                                            parallel_iterations: true,
+                                            batch_size: undefined,
+                                            continue_on_error: undefined,
+                                        },
+                                        ['batch_size', 'continue_on_error'],
+                                    );
+                                } else if (next === 'batched') {
+                                    updateSelectedNodeData(
+                                        {
+                                            iteration_mode: 'batched',
+                                            parallel_iterations: undefined,
+                                            batch_size: batchSizeRaw,
+                                        },
+                                        ['parallel_iterations'],
+                                    );
+                                } else {
+                                    updateSelectedNodeData(
+                                        {
+                                            iteration_mode: 'sequential',
+                                            parallel_iterations: undefined,
+                                            batch_size: undefined,
+                                            continue_on_error: undefined,
+                                        },
+                                        ['parallel_iterations', 'batch_size', 'continue_on_error'],
+                                    );
+                                }
+                            };
                             return (
                                 <>
                                     <InspectorSection
                                         title="About"
                                         description={
                                             <>
-                                                Wire the <strong className="font-medium text-mw-text-primary">list</strong> input from a List node or any list output.
+                                                Wire the <strong className="font-medium text-mw-text-primary">list</strong>{' '}
+                                                input from a List node or any list output.
                                                 Use <strong className="font-medium text-mw-text-primary">signal</strong> and{' '}
-                                                <strong className="font-medium text-mw-text-primary">item</strong> to drive the loop body (e.g. Workflow ref): each list element is exposed on{' '}
-                                                <strong className="font-medium text-mw-text-primary">item</strong> for one body run.
+                                                <strong className="font-medium text-mw-text-primary">item</strong> to drive the
+                                                loop body (e.g. Workflow ref): each list element is exposed on{' '}
+                                                <strong className="font-medium text-mw-text-primary">item</strong> for one body
+                                                run. The{' '}
+                                                <strong className="font-medium text-mw-text-primary">summary</strong> output carries
+                                                an aggregated dictionary when batches or continuation options are enabled.
                                             </>
                                         }
                                     />
-                                    <InspectorSection title="Execution">
-                                        <label className="flex items-start gap-2 cursor-pointer">
+                                    <InspectorSection title="Execution mode">
+                                        <label className="text-xs font-medium text-mw-text-secondary block mb-1">Iterations</label>
+                                        <select
+                                            value={iter}
+                                            onChange={e => onIterChange(e.target.value as IterMode)}
+                                            className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                                            aria-label="For loop iteration mode"
+                                        >
+                                            <option value="sequential">Sequential (one item at a time)</option>
+                                            <option value="parallel">Parallel (every item concurrently)</option>
+                                            <option value="batched">Batched (chunks of items)</option>
+                                        </select>
+                                        {iter === 'parallel' ?
+                                            <p className="text-[10px] text-mw-text-secondary mt-2 leading-snug">
+                                                Each list item runs the loop body concurrently (isolated per item).
+                                                Nested For Loops inside the parallel body remain disallowed on the server.
+                                            </p>
+                                        : iter === 'batched' ?
+                                            <>
+                                                <div className="mt-2 space-y-1">
+                                                    <label className="text-xs font-medium text-mw-text-secondary block">
+                                                        Batch size
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        value={batchSizeRaw}
+                                                        onFocus={recordGraphBeforeMutation}
+                                                        onChange={e => {
+                                                            const v = parseInt(e.target.value, 10);
+                                                            if (Number.isNaN(v)) return;
+                                                            updateSelectedNodeData({
+                                                                batch_size: Math.max(1, Math.floor(v)),
+                                                            });
+                                                        }}
+                                                        className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                                                    />
+                                                    <label className="flex items-start gap-2 mt-3 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={d.continue_on_error === true}
+                                                            onChange={e =>
+                                                                updateSelectedNodeData({
+                                                                    continue_on_error: e.target.checked ? true : undefined,
+                                                                })
+                                                            }
+                                                            className="mt-0.5 w-4 h-4 rounded border border-mw-border text-amber-600 focus:ring-amber-500"
+                                                        />
+                                                        <span>
+                                                            <span className="text-xs font-medium text-mw-text-primary">
+                                                                Continue batch on inner errors (summary records failures)
+                                                            </span>
+                                                            <p className="text-[10px] text-mw-text-secondary mt-0.5 leading-snug">
+                                                                When unchecked, one failing iteration stops the batched loop.
+                                                                When checked, successes and errors are surfaced on the{' '}
+                                                                <strong className="font-medium text-mw-text-primary">summary</strong>{' '}
+                                                                output.
+                                                            </p>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </>
+                                        :   null}
+                                        <div className="mt-3 space-y-1">
+                                            <label className="text-xs font-medium text-mw-text-secondary block">
+                                                Max iterations (optional cap)
+                                            </label>
                                             <input
-                                                type="checkbox"
-                                                checked={d.parallel_iterations === true}
-                                                onChange={e =>
+                                                type="number"
+                                                min={1}
+                                                placeholder="no extra cap beyond server/graph limits"
+                                                value={maxIterationsRaw === '' ? '' : maxIterationsRaw}
+                                                onFocus={recordGraphBeforeMutation}
+                                                onChange={e => {
+                                                    const trimmed = e.target.value.trim();
+                                                    if (trimmed === '') {
+                                                        updateSelectedNodeData({ max_iterations: undefined });
+                                                        return;
+                                                    }
+                                                    const v = parseInt(trimmed, 10);
                                                     updateSelectedNodeData({
-                                                        parallel_iterations: e.target.checked ? true : undefined,
-                                                    })
-                                                }
-                                                className="mt-0.5 w-4 h-4 rounded border border-mw-border text-amber-600 focus:ring-amber-500"
+                                                        max_iterations: Number.isNaN(v)
+                                                            ? undefined
+                                                            : Math.max(1, Math.floor(v)),
+                                                    });
+                                                }}
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
                                             />
-                                            <span>
-                                                <span className="text-xs font-medium text-mw-text-primary">Run iterations in parallel</span>
-                                                <p className="text-[10px] text-mw-text-secondary mt-0.5 leading-snug">
-                                                    When enabled, each list item runs the loop body concurrently (isolated per item).{' '}
-                                                    <strong className="font-medium text-mw-text-primary">Add to List</strong> merges in list order. Nested For Loops in the body are not allowed with this option.
-                                                </p>
-                                            </span>
-                                        </label>
+                                            <p className="text-[10px] text-mw-text-secondary">
+                                                Additional guard on iteration count besides global execution ceilings.
+                                            </p>
+                                        </div>
                                     </InspectorSection>
                                 </>
                             );
@@ -7644,7 +7923,8 @@ export const WorkflowEditor: React.FC<Props> = ({
                                             )}
                                             {selectedNode && loopBodyNodeIds.has(selectedNode.id) && (
                                                 <p className="text-[10px] text-mw-text-secondary">
-                                                    Output overrides are not available for steps inside a loop body.
+                                                    Output overrides are not available for steps inside a For Loop body or a Try /
+                                                    Catch branch interior.
                                                 </p>
                                             )}
                                             {!nodeLog && !isActiveNode && (
@@ -7825,6 +8105,11 @@ export const WorkflowEditor: React.FC<Props> = ({
                                         edgeCount={edges.length}
                                         lastRunId={lastRunId}
                                         onExposeAsCustomSkillChange={handleExposeCustomSkillChange}
+                                        executionLimitsEnvelope={workflowExecutionEnvelope}
+                                        graphExecutionLimitsDraft={activeWf.graph.execution_limits ?? undefined}
+                                        runExecutionLimitsDraft={runExecutionLimitsOverrides}
+                                        onGraphExecutionLimitsChange={patchGraphExecutionLimits}
+                                        onRunExecutionLimitsChange={setRunExecutionLimitsOverrides}
                                     />
                                 </div>
                             ) : (

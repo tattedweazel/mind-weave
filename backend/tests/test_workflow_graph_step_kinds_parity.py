@@ -361,6 +361,8 @@ def _minimal_raw_step(step: Dict[str, Any]) -> Dict[str, Any]:
                     {"key": "input_b", "type": "boolean", "value": None},
                 ]
             }
+        elif ct == "try_catch":
+            base_ci["data"] = {}
         elif ct == "for_loop":
             base_ci["data"] = {
                 "required_inputs": [

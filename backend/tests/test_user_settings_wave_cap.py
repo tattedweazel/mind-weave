@@ -6,6 +6,7 @@ import pytest
 
 from app.domain.user_settings import (
     MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT,
+    parse_execution_limits_prefs_from_settings,
     resolve_auto_play_tts_on_node_end,
     resolve_max_concurrent_lm_studio_calls,
     resolve_tts_playback_when,
@@ -71,6 +72,24 @@ def test_resolve_max_concurrent_lm_studio_calls_invalid_types_fall_back():
         resolve_max_concurrent_lm_studio_calls({"max_concurrent_lm_studio_calls": "3"})
         == MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT
     )
+
+
+def test_parse_execution_limits_prefs_from_settings_absent_none():
+    assert parse_execution_limits_prefs_from_settings(None) is None
+    assert parse_execution_limits_prefs_from_settings({}) is None
+    assert parse_execution_limits_prefs_from_settings({"workflow_execution_limits_prefs": None}) is None
+
+
+def test_parse_execution_limits_prefs_from_settings_valid_sparse():
+    p = parse_execution_limits_prefs_from_settings({"workflow_execution_limits_prefs": {"max_loop_iterations": 500}})
+    assert p is not None
+    assert p.max_loop_iterations == 500
+    assert p.max_nested_depth is None
+
+
+def test_parse_execution_limits_prefs_from_settings_invalid_returns_none():
+    assert parse_execution_limits_prefs_from_settings({"workflow_execution_limits_prefs": "bad"}) is None
+    assert parse_execution_limits_prefs_from_settings({"workflow_execution_limits_prefs": {"max_loop_iterations": -1}}) is None
 
 
 @pytest.mark.parametrize(

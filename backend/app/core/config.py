@@ -108,6 +108,18 @@ class Settings(BaseSettings):
     WORKFLOW_MAX_CONCURRENT_BROWSER_TASKS: int = 2
     WORKFLOW_MAX_CONCURRENT_EXTERNAL_SKILL_TASKS: int = 4
 
+    # Workflow execution safety (defaults + hard ceilings; graph/run may request lower values only within ceilings).
+    WORKFLOW_EXECUTION_DEFAULT_TTL_SECONDS: int = 300
+    WORKFLOW_EXECUTION_CEILING_TTL_SECONDS: int = 86_400
+    WORKFLOW_EXECUTION_DEFAULT_MAX_NODE_EXECUTIONS: int = 500
+    WORKFLOW_EXECUTION_CEILING_MAX_NODE_EXECUTIONS: int = 500_000
+    WORKFLOW_EXECUTION_DEFAULT_MAX_LOOP_ITERATIONS: int = 50
+    WORKFLOW_EXECUTION_CEILING_MAX_LOOP_ITERATIONS: int = 10_000
+    WORKFLOW_EXECUTION_DEFAULT_MAX_NESTED_DEPTH: int = 5
+    WORKFLOW_EXECUTION_CEILING_MAX_NESTED_DEPTH: int = 32
+    WORKFLOW_DEFAULT_LOOP_BATCH_SIZE: int = 4
+    WORKFLOW_MAX_LOOP_BATCH_SIZE_CEILING: int = 128
+
     # Speech transcription providers (provider-abstracted `transcribe_file` skill).
     # local_whisper wraps the STT bridge; assemblyai is cloud STT (no outbound calls until a run uses it).
     # Operators can set TRANSCRIPTION_PROVIDERS_ENABLED=["local_whisper"] only to hide cloud from the editor.
@@ -172,6 +184,35 @@ class Settings(BaseSettings):
                 parse_per_minute_limit(spec)
             except ValueError as exc:
                 raise ValueError(f"{field_name}: {exc}") from exc
+
+        # Execution limit defaults must not exceed their ceilings (avoid misconfigured env).
+        if self.WORKFLOW_EXECUTION_DEFAULT_TTL_SECONDS > self.WORKFLOW_EXECUTION_CEILING_TTL_SECONDS:
+            raise ValueError("WORKFLOW_EXECUTION_DEFAULT_TTL_SECONDS must be <= WORKFLOW_EXECUTION_CEILING_TTL_SECONDS")
+        if (
+            self.WORKFLOW_EXECUTION_DEFAULT_MAX_NODE_EXECUTIONS
+            > self.WORKFLOW_EXECUTION_CEILING_MAX_NODE_EXECUTIONS
+        ):
+            raise ValueError(
+                "WORKFLOW_EXECUTION_DEFAULT_MAX_NODE_EXECUTIONS must be <= "
+                "WORKFLOW_EXECUTION_CEILING_MAX_NODE_EXECUTIONS"
+            )
+        if (
+            self.WORKFLOW_EXECUTION_DEFAULT_MAX_LOOP_ITERATIONS
+            > self.WORKFLOW_EXECUTION_CEILING_MAX_LOOP_ITERATIONS
+        ):
+            raise ValueError(
+                "WORKFLOW_EXECUTION_DEFAULT_MAX_LOOP_ITERATIONS must be <= "
+                "WORKFLOW_EXECUTION_CEILING_MAX_LOOP_ITERATIONS"
+            )
+        if self.WORKFLOW_EXECUTION_DEFAULT_MAX_NESTED_DEPTH > self.WORKFLOW_EXECUTION_CEILING_MAX_NESTED_DEPTH:
+            raise ValueError(
+                "WORKFLOW_EXECUTION_DEFAULT_MAX_NESTED_DEPTH must be <= "
+                "WORKFLOW_EXECUTION_CEILING_MAX_NESTED_DEPTH"
+            )
+        if self.WORKFLOW_DEFAULT_LOOP_BATCH_SIZE > self.WORKFLOW_MAX_LOOP_BATCH_SIZE_CEILING:
+            raise ValueError(
+                "WORKFLOW_DEFAULT_LOOP_BATCH_SIZE must be <= WORKFLOW_MAX_LOOP_BATCH_SIZE_CEILING"
+            )
         return self
 
 

@@ -114,6 +114,7 @@ const FLOW_TYPE_LABELS: Record<string, string> = {
     xorControl: 'Xor',
     notControl: 'Not',
     betweenControl: 'Between',
+    tryCatchControl: 'Try / Catch',
     forLoopControl: 'For Loop',
     forLoopEndControl: 'For Loop End',
     start: 'Start',

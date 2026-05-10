@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.domain.execution_limits import ExecutionLimitsOverrides
+
 from .outputs import NodeOutputUnion
 
 
@@ -42,6 +44,13 @@ class WorkflowRunRequest(BaseModel):
         description=(
             "Resolved IANA time zone from the client when the user's profile uses 'system'; "
             "used for Gmail after:/before: day mapping when workflow_time_zone is system."
+        ),
+    )
+    execution_limits: Optional[ExecutionLimitsOverrides] = Field(
+        default=None,
+        description=(
+            "Optional per-run caps; merged over workflow graph.execution_limits, "
+            "then validated against server ceilings."
         ),
     )
 

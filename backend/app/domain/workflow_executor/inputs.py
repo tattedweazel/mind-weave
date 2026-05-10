@@ -17,6 +17,7 @@ from app.domain.schemas import (
     StringNodeOutput,
     StructureNodeOutput,
 )
+from app.domain.workflow_executor.aux_outputs import get_for_loop_summary
 from app.domain.workflow_executor.gmail_llm_prompt import (
     format_gmail_message_dict_for_llm_prompt,
     is_gmail_like_message_dict,
@@ -35,6 +36,21 @@ def _get_slot_value(out: NodeOutputUnion, source_handle: Optional[str]) -> NodeO
     if isinstance(out, GmailNodeOutput):
         return out
     if not isinstance(out, StartNodeOutput):
+        if source_handle == "summary":
+            nid = getattr(out, "node_id", None)
+            if isinstance(nid, str):
+                blob = get_for_loop_summary(nid)
+                if blob is None:
+                    return DictionaryNodeOutput(
+                        node_id=nid,
+                        data={
+                            "items_processed": 0,
+                            "items_failed": 0,
+                            "results": [],
+                            "errors": [],
+                        },
+                    )
+                return DictionaryNodeOutput(node_id=nid, data=blob)
         return out
     if not source_handle:
         # Legacy: use first string output or full output

@@ -69,6 +69,11 @@ export function isValidWorkflowConnection(nodes: Node[], edges: Edge[], connecti
             if (branchControls.includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) {
                 return true;
             }
+            if (
+                sourceNode.type === 'tryCatchControl' &&
+                (sourceHandle === 'try' || sourceHandle === 'catch')
+            )
+                return true;
             return true;
         }
         if (sourceHandle === 'signal_out') return true;
@@ -83,6 +88,11 @@ export function isValidWorkflowConnection(nodes: Node[], edges: Edge[], connecti
             'betweenControl',
         ];
         if (branchControls.includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) return true;
+        if (
+            sourceNode.type === 'tryCatchControl' &&
+            (sourceHandle === 'try' || sourceHandle === 'catch')
+        )
+            return true;
         return false;
     }
     if (sourceHandle === 'signal_out') return false;

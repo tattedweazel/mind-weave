@@ -102,6 +102,7 @@ from app.domain.schemas import (
     TextToSpeechSkillNode,
     TranscribeAudioSkillNode,
     TranscribeFileSkillNode,
+    TryCatchControlNode,
     UpsertDocumentUtilityNode,
     ValidateAgainstStructureUtilityNode,
     WorkflowRefNode,
@@ -528,6 +529,11 @@ def coerce_raw_to_node_output(
         if not isinstance(raw, list):
             raise ValueError(f"output_overrides[{node_id!r}]: for loop requires a JSON array (list output)")
         return ListNodeOutput(node_id=node_id, data=list(raw))
+
+    if isinstance(parsed, TryCatchControlNode):
+        if not isinstance(raw, dict):
+            raise ValueError(f"output_overrides[{node_id!r}]: Try/Catch requires a JSON object (envelope)")
+        return DictionaryNodeOutput(node_id=node_id, data=dict(raw))
 
     if isinstance(parsed, ForLoopEndControlNode):
         if not isinstance(raw, dict):

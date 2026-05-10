@@ -3,7 +3,13 @@
  * Shape is versioned; mirrors persisted API graph + metadata.
  */
 
-import type { GraphNode, WorkflowDefinition, WorkflowDefinitionCreate, WorkflowGraph } from '../api/types';
+import type {
+    GraphNode,
+    WorkflowDefinition,
+    WorkflowDefinitionCreate,
+    WorkflowExecutionLimitsOverrides,
+    WorkflowGraph,
+} from '../api/types';
 
 export const WORKFLOW_EXPORT_KIND = 'mind_weave_workflow_export' as const;
 export const WORKFLOW_EXPORT_SCHEMA_VERSION = 1 as const;
@@ -57,6 +63,13 @@ function ensureGraph(raw: unknown): WorkflowGraph {
         }
         graph.schema_version = sv;
     }
+    const limitsRaw = raw.execution_limits;
+    if (limitsRaw !== undefined && limitsRaw !== null) {
+        if (!isRecord(limitsRaw)) {
+            throw new WorkflowImportError('Invalid graph: execution_limits must be a JSON object when present.');
+        }
+        graph.execution_limits = limitsRaw as WorkflowExecutionLimitsOverrides;
+    }
     return graph;
 }
 
@@ -76,6 +89,11 @@ export function buildWorkflowExportDocument(wf: WorkflowDefinition): WorkflowExp
                 nodes: wf.graph.nodes,
                 edges: wf.graph.edges,
                 schema_version: wf.graph.schema_version ?? undefined,
+                ...(wf.graph.execution_limits != null &&
+                typeof wf.graph.execution_limits === 'object' &&
+                Object.keys(wf.graph.execution_limits).length > 0
+                    ? { execution_limits: wf.graph.execution_limits }
+                    : {}),
             },
             palette_id: wf.palette_id ?? null,
         },

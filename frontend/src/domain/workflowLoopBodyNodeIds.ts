@@ -1,6 +1,7 @@
 /**
- * Mirrors backend `for_loop_body_node_ids` / loop-boundary rules so the UI can
- * disable output overrides for nodes inside a for-loop body (v1).
+ * Mirrors backend `for_loop_body_node_ids`, try/catch containment, and boundary
+ * rules so the UI can disable output overrides for nodes inside nested execution
+ * regions (v1).
  */
 
 export interface LoopBodyGraphNode {
@@ -86,6 +87,21 @@ export function forLoopBodyNodeIds(
     return forwardClosureFromSeeds(seeds, edges, new Set([forLoopId]), endIds);
 }
 
+function tryCatchBranchInterior(
+    tryCatchId: string,
+    edges: LoopBodyGraphEdge[],
+    seedHandle: 'try' | 'catch',
+): Set<string> {
+    const seeds = new Set<string>();
+    for (const e of edges) {
+        if (e.source !== tryCatchId) continue;
+        if ((e.sourceHandle || '') === seedHandle) {
+            seeds.add(e.target);
+        }
+    }
+    return forwardClosureFromSeeds(seeds, edges, new Set([tryCatchId]), new Set());
+}
+
 /** Union of all loop bodies in the graph (for override UI). */
 export function unionLoopBodyNodeIds(graph: {
     nodes?: LoopBodyGraphNode[];
@@ -94,11 +110,20 @@ export function unionLoopBodyNodeIds(graph: {
     const nodes = graph.nodes ?? [];
     const edges = graph.edges ?? [];
     const forLoopIds = nodes.filter(n => n.kind === 'control' && n.control_type === 'for_loop').map(n => n.id);
+    const tcIds = nodes.filter(n => n.kind === 'control' && n.control_type === 'try_catch').map(n => n.id);
     const out = new Set<string>();
     for (const fid of forLoopIds) {
         const body = forLoopBodyNodeIds(fid, edges, nodes);
         for (const b of body) {
             out.add(b);
+        }
+    }
+    for (const tc of tcIds) {
+        for (const seed of ['try', 'catch'] as const) {
+            const branch = tryCatchBranchInterior(tc, edges, seed);
+            for (const b of branch) {
+                out.add(b);
+            }
         }
     }
     return out;

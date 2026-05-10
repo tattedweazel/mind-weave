@@ -57,6 +57,8 @@ Every workflow graph includes **Start** and **Stop** (plus the steps between the
 
 **Projects** organize workflow definitions into **folders**. Each user has a seeded **Shared** folder; additional projects can be created. Workflows can be **moved** between projects, **imported** as JSON into a project, or **exported** from the editor toolbar. List ordering can follow **last updated** or **name**, with optional **filtering** by name prefix.
 
+**Execution safety** applies per run: optional saved **`execution_limits`** and optional per-run overrides (TTL, maximum step count, maximum list size for **For Loop** inputs, nested **Workflow** depth) merge under operator-configured ceilings; **`GET /api/v1/workflow-execution-limits/`** exposes those caps to the SPA. **Try / Catch** groups a **`try`** path and **`catch`** path with structured **`ok`** / **`error`** dictionaries; streamed runs can surface **`handled_by_try_catch`** when a failure is routed to **`catch`**. **For Loop** supports **sequential**, **parallel** (legacy **`parallel_iterations`**), or **batched** iteration with optional **`summary`** aggregation.
+
 ---
 
 ## Workflow Editor: layout

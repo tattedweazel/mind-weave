@@ -243,6 +243,7 @@ export const WORKFLOW_PALETTE_CONTROL_ITEMS: readonly WorkflowPaletteStepItem[] 
     { type: 'xorControl', label: 'Xor', extra: { label: 'Xor' }, paletteType: 'xor_control' },
     { type: 'notControl', label: 'Not', extra: { label: 'Not' }, paletteType: 'not_control' },
     { type: 'betweenControl', label: 'Between', extra: { label: 'Between' }, paletteType: 'between_control' },
+    { type: 'tryCatchControl', label: 'Try / Catch', extra: { label: 'Try / Catch' }, paletteType: 'try_catch_control' },
     { type: 'forLoopControl', label: 'For Loop', extra: { label: 'For Loop' }, paletteType: 'for_loop_control' },
     {
         type: 'forLoopEndControl',

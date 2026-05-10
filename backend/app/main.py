@@ -66,6 +66,7 @@ from app.api.v1 import (
     transcription as transcription_router,
 )
 from app.api.v1 import workflow_definitions as workflow_definitions_router
+from app.api.v1 import workflow_execution_limits as workflow_execution_limits_router
 from app.api.v1 import workflow_projects as workflow_projects_router
 from app.core.auth_rate_limit import (
     AuthEndpointRateLimitMiddleware,
@@ -252,6 +253,7 @@ app.include_router(workspaces_api.router, prefix=api_v1)
 app.include_router(
     workflow_definitions_router.router, prefix=f"{api_v1}/workflow-definitions", tags=["workflow-definitions"]
 )
+app.include_router(workflow_execution_limits_router.router, prefix=api_v1)
 app.include_router(workflow_run_transcribe.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(workflow_run_audio_file_input.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(workflow_run_transcribe_file.router, prefix=f"{api_v1}", tags=["workflow-runs"])

@@ -81,6 +81,7 @@ from app.domain.schemas import (
     TextToSpeechSkillNode,
     TranscribeAudioSkillNode,
     TranscribeFileSkillNode,
+    TryCatchControlNode,
     UpsertDocumentUtilityNode,
     ValidateAgainstStructureUtilityNode,
     WorkflowRefNode,
@@ -314,6 +315,8 @@ def _parse_node(raw: Dict[str, Any]):
             return NotControlNode(**raw)
         if ctype == "between":
             return BetweenControlNode(**raw)
+        if ctype == "try_catch":
+            return TryCatchControlNode(**raw)
         if ctype == "for_loop":
             return ForLoopControlNode(**raw)
         if ctype == "for_loop_end":

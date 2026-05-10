@@ -1476,12 +1476,52 @@ const BetweenControlComp: React.FC<{
     );
 };
 
+const TryCatchControlComp: React.FC<{
+    data: {
+        label: string;
+        isRunning?: boolean;
+        valueHasValue?: boolean;
+        paletteColors?: Record<string, string>;
+        required_inputs?: RequiredInput[];
+    };
+}> = ({ data }) => {
+    const req = data.required_inputs ?? [{ key: 'value', type: 'any' as const, value: null }];
+    const v = req.find(r => r.key === 'value')?.value;
+    const valueHasValue = data.valueHasValue ?? !(v === null || v === undefined || v === '');
+    const inputs: NodeSlot[] = [{ key: 'value', type: 'any', label: 'value', hasValue: valueHasValue }];
+    const outputs: NodeSlot[] = [
+        { key: 'try', type: 'signal', label: 'try' },
+        { key: 'catch', type: 'signal', label: 'catch' },
+        { key: 'output', type: 'any', label: 'output' },
+        { key: 'envelope', type: 'dictionary', label: 'envelope' },
+    ];
+    return (
+        <StyledNodeBase
+            typeLabel="Control"
+            nodeLabel={data.label}
+            inputs={inputs}
+            outputs={outputs}
+            borderColor={getHandleColor(data.paletteColors, 'try_catch_control')}
+            isRunning={data.isRunning}
+            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
+            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
+            minWidth={NODE_MIN_WIDTH.medium}
+            paletteColors={data.paletteColors}
+            triggerInput
+            signalOutput
+        />
+    );
+};
+
 const ForLoopControlComp: React.FC<{ data: { label: string; isRunning?: boolean; inputHasValue?: boolean; paletteColors?: Record<string, string>; required_inputs?: RequiredInput[] } }> = ({ data }) => {
     const req = data.required_inputs ?? [{ key: 'input', type: 'list' as const, value: null }];
     const listVal = req.find(r => r.key === 'input')?.value;
     const inputHasValue = data.inputHasValue ?? (Array.isArray(listVal) && listVal.length > 0);
     const inputs: NodeSlot[] = [{ key: 'input', type: 'list', label: 'list', hasValue: inputHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'item', type: 'any', label: 'item' }];
+    const outputs: NodeSlot[] = [
+        { key: 'item', type: 'any', label: 'item' },
+        { key: 'summary', type: 'dictionary', label: 'summary' },
+    ];
     return (
         <StyledNodeBase
             typeLabel="Control"
@@ -2654,6 +2694,7 @@ export const nodeTypes = {
     xorControl: XorNodeComp,
     notControl: NotControlComp,
     betweenControl: BetweenControlComp,
+    tryCatchControl: TryCatchControlComp,
     forLoopControl: ForLoopControlComp,
     forLoopEndControl: ForLoopEndControlComp,
     stringPrimitive: StringValueNodeComp,

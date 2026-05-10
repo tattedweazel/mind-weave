@@ -272,7 +272,8 @@ export function WorkflowRunReplayView({
                     )}
                     {selectedNode && loopBodyNodeIds.has(selectedNode.id) && onOutputOverridesChange && (
                         <p className="text-[10px] text-mw-text-secondary mb-3">
-                            Output overrides are not available for steps inside a loop body.
+                            Output overrides are not available for steps inside a For Loop body or a Try / Catch branch
+                            interior.
                         </p>
                     )}
                     {selectedNode && onOutputOverridesChange && (

@@ -38,6 +38,10 @@ from app.core.security import (
     verify_password,
 )
 from app.core.user_api_keys_crypto import decrypt_api_keys_store, encrypt_api_keys_store
+from app.domain.execution_limits import (
+    ExecutionLimitsOverrides,
+    _validate_layer_against_ceilings,
+)
 from app.domain.user_settings import (
     MAX_CONCURRENT_LM_STUDIO_CALLS_MAX,
     MAX_CONCURRENT_LM_STUDIO_CALLS_MIN,
@@ -117,6 +121,7 @@ _ALLOWED_SETTINGS_KEYS = frozenset(
         "max_concurrent_lm_studio_calls",
         "auto_play_tts_on_node_end",
         "tts_playback_when",
+        "workflow_execution_limits_prefs",
     }
 )
 _ALLOWED_THEME_MODES = frozenset({"light", "dark", "system"})
@@ -246,6 +251,23 @@ class UserUpdate(BaseModel):
                     f"settings.max_concurrent_lm_studio_calls must be between "
                     f"{MAX_CONCURRENT_LM_STUDIO_CALLS_MIN} and {MAX_CONCURRENT_LM_STUDIO_CALLS_MAX}",
                 )
+        if "workflow_execution_limits_prefs" in v:
+            wlp = v["workflow_execution_limits_prefs"]
+            if wlp is None:
+                v.pop("workflow_execution_limits_prefs", None)
+            elif not isinstance(wlp, dict):
+                raise ValueError("settings.workflow_execution_limits_prefs must be an object or null")
+            else:
+                try:
+                    ex_layer = ExecutionLimitsOverrides.model_validate(wlp)
+                except Exception as exc:
+                    raise ValueError("settings.workflow_execution_limits_prefs invalid") from exc
+                _validate_layer_against_ceilings(ex_layer, settings)
+                v["workflow_execution_limits_prefs"] = {
+                    fk: fv for fk, fv in ex_layer.model_dump(exclude_none=True).items()
+                }
+                if not v["workflow_execution_limits_prefs"]:
+                    del v["workflow_execution_limits_prefs"]
         raw = json.dumps(v)
         if len(raw.encode("utf-8")) > _MAX_SETTINGS_BYTES:
             raise ValueError("settings payload too large")

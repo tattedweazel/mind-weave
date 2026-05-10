@@ -49,6 +49,7 @@ import {
     Puzzle,
     Repeat,
     Save,
+    ShieldHalf,
     Ruler,
     Shuffle,
     Sparkles,
@@ -237,6 +238,8 @@ function paletteStepIcon(nodeType: string): React.ReactNode {
             return <CircleSlash size={size} />;
         case 'betweenControl':
             return <ArrowLeftRight size={size} />;
+        case 'tryCatchControl':
+            return <ShieldHalf size={size} />;
         case 'forLoopControl':
             return <Repeat size={size} />;
         case 'forLoopEndControl':

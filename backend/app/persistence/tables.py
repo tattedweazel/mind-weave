@@ -432,6 +432,11 @@ class WorkflowRun(SQLModel, table=True):
     started_at: Optional[datetime] = Field(default=None)
     completed_at: Optional[datetime] = Field(default=None)
     last_event_seq: int = Field(default=0, ge=0)
+    # Effective execution caps for this run (defaults + graph.execution_limits + request merge).
+    execution_limits_effective: Optional[Dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSON),
+    )
 
 
 class OAuthStateRecord(SQLModel, table=True):

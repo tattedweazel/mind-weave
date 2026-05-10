@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 from collections import deque
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, cast
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from jsonschema.exceptions import ValidationError
 from sqlalchemy import or_
 from sqlmodel import col, select
 
+from app.core.config import settings
 from app.core.run_log_redaction import redact_node_log_for_storage
 from app.domain.document_json import deterministic_json_dumps
 from app.domain.sandbox.constants import DECISION_ACTION_STRINGS
@@ -98,6 +100,7 @@ from app.domain.schemas import (
     StringTruncUtilityNode,
     StructureNodeOutput,
     StructurePrimitiveNode,
+    TryCatchControlNode,
     UpsertDocumentUtilityNode,
     ValidateAgainstStructureUtilityNode,
     WorkflowRefNode,
@@ -108,6 +111,7 @@ from app.domain.schemas import (
 from app.domain.schemas.sandbox import DecisionIntent, GridCell, SandboxTickInput
 from app.domain.services.document_service import DocumentService
 from app.domain.services.workflow_definition_service import WorkflowDefinitionService
+from app.domain.workflow_executor.aux_outputs import record_for_loop_summary
 from app.domain.workflow_executor.html_parse_basic import parse_html_basic
 from app.domain.workflow_output_overrides import filter_output_overrides_for_graph
 from app.persistence.tables import (
@@ -123,6 +127,9 @@ from .graph import (
     _build_in_degree_and_adjacency,
     _topological_order,
     for_loop_body_node_ids,
+    try_catch_catch_region,
+    try_catch_catch_seeds,
+    try_catch_try_region,
 )
 from .helpers import (
     _condition_to_bool,
@@ -205,8 +212,63 @@ class WorkflowExecutorResolverMixin:
         return StringNodeOutput(node_id=node_id, text=str(item))
 
     @staticmethod
-    def _for_loop_parallel_iterations(node: ForLoopControlNode) -> bool:
-        return (node.data or {}).get("parallel_iterations") is True
+    def _for_loop_iteration_mode(node: ForLoopControlNode) -> str:
+        data = node.data or {}
+        raw = data.get("iteration_mode")
+        if isinstance(raw, str):
+            m = raw.strip().lower()
+            if m in ("sequential", "parallel", "batched"):
+                return m
+        if data.get("parallel_iterations") is True:
+            return "parallel"
+        return "sequential"
+
+    @staticmethod
+    def _for_loop_continue_on_error(node: ForLoopControlNode) -> bool:
+        return (node.data or {}).get("continue_on_error") is True
+
+    def _for_loop_parallel_chunk_size(self, node: ForLoopControlNode, mode: str) -> int:
+        if mode == "batched":
+            raw_bs = (node.data or {}).get("batch_size", settings.WORKFLOW_DEFAULT_LOOP_BATCH_SIZE)
+            try:
+                bs = int(raw_bs)
+            except (TypeError, ValueError):
+                bs = settings.WORKFLOW_DEFAULT_LOOP_BATCH_SIZE
+            return max(1, min(bs, settings.WORKFLOW_MAX_LOOP_BATCH_SIZE_CEILING))
+        return self._wave_cap_for_run()
+
+    @staticmethod
+    def _slice_for_loop_max_iterations_node(node: ForLoopControlNode, items: list[Any]) -> list[Any]:
+        raw = (node.data or {}).get("max_iterations")
+        if raw is None:
+            return items
+        try:
+            cap = max(1, int(raw))
+        except (TypeError, ValueError):
+            return items
+        return items[:cap]
+
+    def _for_loop_record_summary(
+        self,
+        loop_node_id: str,
+        *,
+        processed: int,
+        results_track: List[Any],
+        errors_track: List[Dict[str, Any]],
+    ) -> None:
+        items_failed = sum(1 for v in results_track if v is None)
+        record_for_loop_summary(
+            loop_node_id,
+            {
+                "items_processed": processed,
+                "items_failed": items_failed,
+                "results": list(results_track),
+                "errors": list(errors_track),
+            },
+        )
+
+    def _for_loop_iteration_item_primitive(self, node_id: str, raw_item: Any) -> Any:
+        return node_output_to_input_override_value(self._item_json_to_node_output(node_id, raw_item))
 
     @staticmethod
     def _fork_outputs_for_loop_iteration(
@@ -253,6 +315,404 @@ class WorkflowExecutorResolverMixin:
             details=prev.details,
             step_number=prev.step_number,
         )
+
+    def _try_catch_structured_error_payload(
+        self,
+        *,
+        failed_node_id: str,
+        failed_node: Any,
+        message: str,
+        error_type: str = "node_execution_error",
+        extra_details: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        ctype: Any = None
+        if isinstance(failed_node, dict):
+            ctype = failed_node.get("control_type") or failed_node.get("primitive_type") or failed_node.get("skill_type")
+        else:
+            ctype = getattr(failed_node, "control_type", None) or getattr(failed_node, "primitive_type", None)
+            if ctype is None and isinstance(getattr(failed_node, "data", None), dict):
+                data = getattr(failed_node, "data") or {}
+                ctype = data.get("control_type") or data.get("primitive_type") or data.get("skill_type")
+        return {
+            "node_id": failed_node_id,
+            "node_type": str(ctype or type(failed_node).__name__),
+            "message": str(message),
+            "error_type": error_type,
+            "details": dict(extra_details or {}),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _resolve_try_catch_value_edge(
+        self, tc_id: str, edges: List[GraphEdge], outputs: Dict[str, NodeOutputUnion]
+    ) -> Any:
+        for e in edges:
+            if e.target != tc_id:
+                continue
+            if (e.target_handle or "") != "value":
+                continue
+            out = outputs.get(e.source)
+            if out is None:
+                continue
+            slot = _get_slot_value(out, e.source_handle)
+            return node_output_to_input_override_value(slot)
+        return None
+
+    async def _run_try_catch_region_waves(
+        self,
+        tc_id: str,
+        body_ids: set[str],
+        phase: Literal["try", "catch"],
+        edges: List[GraphEdge],
+        nodes_by_id: Dict[str, Any],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Optional[Dict[str, Any]],
+        workflow: WorkflowDefinition,
+        stack: frozenset,
+        recorder: Any,
+        node_results: list[NodeRunResult],
+        stream_run_id: Optional[uuid.UUID] = None,
+        stream_evt_acc: Optional[list[tuple[str, dict[str, Any]]]] = None,
+        execution_time_zone: Optional[str] = None,
+        output_overrides_map: Optional[Dict[str, NodeOutputUnion]] = None,
+        parallel_side_effects_lock: Optional[threading.Lock] = None,
+        halt_on_first_error: bool = False,
+        *,
+        seed_handle: str,
+    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        """Run a Try/Catch branch subgraph. Returns (ok, failure_snapshot)."""
+        with self._transcribe_stream_sink(stream_evt_acc):
+            plock = parallel_side_effects_lock
+            inner_edges = [e for e in edges if e.source in body_ids and e.target in body_ids]
+            in_degree, adjacency = _build_in_degree_and_adjacency(sorted(body_ids), inner_edges, nodes_by_id)
+            seed_counts: Dict[str, int] = {}
+            for e in edges:
+                if (
+                    e.source == tc_id
+                    and e.target in body_ids
+                    and (e.source_handle or "") == seed_handle
+                ):
+                    seed_counts[e.target] = seed_counts.get(e.target, 0) + 1
+            for _t, c in seed_counts.items():
+                in_degree[_t] += c
+            for _t, c in seed_counts.items():
+                in_degree[_t] -= c
+
+            ready = deque[str](nid for nid in body_ids if in_degree[nid] == 0)
+            order = _topological_order(sorted(body_ids), inner_edges)
+            order_index = {nid: i for i, nid in enumerate(order)}
+            ov = input_overrides or {}
+            om = output_overrides_map or {}
+            wave_cap = self._wave_cap_for_run()
+            failure_snapshot: Optional[dict[str, Any]] = None
+
+            while ready:
+                batch = pop_wave_batch(ready, order_index, wave_cap)
+                batch = split_batch_isolating_audio_steps(batch, ready, order_index, nodes_by_id)
+
+                batch_failed_early = False
+                if stream_evt_acc is not None:
+                    with contextlib.nullcontext() if plock is None else plock:
+                        for nid in batch:
+                            stream_evt_acc.append(("node.started", {"node_id": nid}))
+
+                async def run_body_node_tc(node_inner: str):
+                    bn = nodes_by_id[node_inner]
+                    t0 = time.monotonic()
+                    if isinstance(bn, ForLoopControlNode):
+                        r_inner = await self._run_for_loop_node(
+                            node_inner,
+                            bn,
+                            edges,
+                            outputs,
+                            ov,
+                            workflow,
+                            stack,
+                            nodes_by_id,
+                            recorder,
+                            node_results,
+                            stream_run_id,
+                            stream_evt_acc,
+                            execution_time_zone=execution_time_zone,
+                            output_overrides_map=om,
+                            parallel_side_effects_lock=plock,
+                        )
+                    elif isinstance(bn, TryCatchControlNode):
+                        r_inner = await self._run_try_catch_node(
+                            node_inner,
+                            bn,
+                            edges,
+                            outputs,
+                            ov,
+                            workflow,
+                            stack,
+                            nodes_by_id,
+                            recorder,
+                            node_results,
+                            stream_run_id,
+                            stream_evt_acc,
+                            execution_time_zone=execution_time_zone,
+                            output_overrides_map=om,
+                            parallel_side_effects_lock=plock,
+                        )
+                    else:
+                        upstream = _resolve_upstream_for_node(node_inner, edges, outputs)
+                        r_inner = await self._execute_node(
+                            node_inner,
+                            bn,
+                            upstream,
+                            edges,
+                            outputs,
+                            ov,
+                            workflow=workflow,
+                            execution_stack=stack,
+                            execution_time_zone=execution_time_zone,
+                            loop_list_carry=None,
+                            for_loop_id=None,
+                            output_overrides_map=om,
+                            stream_run_id=stream_run_id,
+                            for_loop_iteration=None,
+                        )
+                    elapsed_inner = (time.monotonic() - t0) * 1000
+                    return r_inner, elapsed_inner
+
+                gathered_tc = await asyncio.gather(
+                    *[run_body_node_tc(nid) for nid in batch],
+                    return_exceptions=True,
+                )
+
+                for node_inner, raw in zip(batch, gathered_tc):
+                    if isinstance(raw, BaseException):
+                        result = {"status": "error", "error": _format_exception(raw)}
+                        elapsed_ms = 0.0
+                    else:
+                        result, elapsed_ms = cast(tuple[dict[str, Any], float], raw)
+
+                    det_raw: Any = result.get("details") or {}
+                    det_inner: dict[str, Any] = dict(det_raw if isinstance(det_raw, dict) else {})
+                    det_inner["try_catch_phase"] = phase
+                    det_inner["try_catch_anchor_id"] = tc_id
+
+                    if halt_on_first_error and phase == "try" and result["status"] != "ok":
+                        det_inner["handled_by_try_catch"] = tc_id
+
+                    out_for_log_tc: Any = result.get("output")
+                    raw_output_tc: dict[str, Any] | None = None
+                    if out_for_log_tc is not None:
+                        md_tc = getattr(out_for_log_tc, "model_dump", None)
+                        if callable(md_tc):
+                            raw_output_tc = md_tc(mode="json")
+                    details_for_client_tc = merge_details_with_output_explorer(det_inner, raw_output_tc)
+
+                    with contextlib.nullcontext() if plock is None else plock:
+                        node_run_inner = NodeRunResult(
+                            node_id=node_inner,
+                            status=result["status"],
+                            output=result.get("output"),
+                            error=result.get("error"),
+                            latency_ms=round(elapsed_ms, 2),
+                            details=details_for_client_tc,
+                            step_number=recorder.next_step(),
+                        )
+                        node_results.append(node_run_inner)
+                        self.bump_node_execution_budget_after_step()
+
+                        if stream_evt_acc is not None:
+                            evn_tc = "node.completed" if result["status"] == "ok" else "node.failed"
+                            payload_tc: dict[str, Any] = {
+                                "node_id": node_inner,
+                                "result": node_run_inner.model_dump(mode="json"),
+                            }
+                            if halt_on_first_error and phase == "try" and result["status"] != "ok":
+                                payload_tc["handled_by_try_catch"] = tc_id
+                            stream_evt_acc.append((evn_tc, payload_tc))
+
+                        if stream_run_id is not None:
+                            safe_out_tc, safe_det_tc = redact_node_log_for_storage(
+                                raw_output_tc, cast(dict[str, Any], det_inner)
+                            )
+                            safe_det_tc = attach_output_explorer_after_redact(safe_out_tc, safe_det_tc)
+                            self.session.add(
+                                NodeRunLog(
+                                    run_id=stream_run_id,
+                                    node_id=node_inner,
+                                    step_number=node_run_inner.step_number,
+                                    status=result["status"],
+                                    output_data=safe_out_tc,
+                                    error=result.get("error"),
+                                    latency_ms=round(elapsed_ms, 2),
+                                    details=safe_det_tc,
+                                )
+                            )
+                            self.session.commit()
+
+                    if result["status"] != "ok":
+                        batch_failed_early = True
+                        if failure_snapshot is None:
+                            failure_snapshot = {
+                                "node_id": node_inner,
+                                "message": result.get("error") or "error",
+                                "result": dict(result),
+                            }
+
+                    if result["status"] == "ok" and result.get("output"):
+                        outputs[node_inner] = cast(NodeOutputUnion, result["output"])
+
+                    node_exec_inner: Any = nodes_by_id[node_inner]
+                    output_val_inner: Any = result.get("output")
+                    if isinstance(
+                        node_exec_inner,
+                        (
+                            BasicConditionalControlNode,
+                            BetweenControlNode,
+                            IsControlNode,
+                            IsEmptyControlNode,
+                            GtControlNode,
+                            LtControlNode,
+                            GteControlNode,
+                            LteControlNode,
+                        ),
+                    ) and isinstance(output_val_inner, ConditionalNodeOutput):
+                        for edge in inner_edges:
+                            if edge.source == node_inner and edge.source_handle == output_val_inner.branch:
+                                succ = edge.target
+                                if succ in body_ids:
+                                    in_degree[succ] -= 1
+                                    if in_degree[succ] == 0:
+                                        ready.append(succ)
+                        _executor_mod()._decrement_signal_out_triggers(
+                            node_inner,
+                            inner_edges,
+                            body_ids,
+                            in_degree,
+                            ready,
+                        )
+                    else:
+                        for succ in adjacency.get(node_inner, []):
+                            if succ not in body_ids:
+                                continue
+                            in_degree[succ] -= 1
+                            if in_degree[succ] == 0:
+                                ready.append(succ)
+
+                    if halt_on_first_error and result["status"] != "ok":
+                        break
+
+                if halt_on_first_error and batch_failed_early:
+                    ready.clear()
+
+            return failure_snapshot is None, failure_snapshot
+
+    async def _run_try_catch_node(
+        self,
+        node_id: str,
+        node: TryCatchControlNode,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Optional[Dict[str, Any]],
+        workflow: WorkflowDefinition,
+        stack: frozenset,
+        nodes_by_id: Dict[str, Any],
+        recorder: Any,
+        node_results: list[NodeRunResult],
+        stream_run_id: Optional[uuid.UUID] = None,
+        stream_evt_acc: Optional[list[tuple[str, dict[str, Any]]]] = None,
+        execution_time_zone: Optional[str] = None,
+        output_overrides_map: Optional[Dict[str, NodeOutputUnion]] = None,
+        parallel_side_effects_lock: Optional[threading.Lock] = None,
+    ) -> Dict[str, Any]:
+        ov = input_overrides or {}
+        om = output_overrides_map or {}
+        if node_id in om:
+            forced = om[node_id]
+            outputs[node_id] = forced
+            return {
+                "status": "ok",
+                "output": forced,
+                "details": {"resolved_inputs": {}, "forced_output": True},
+                "try_catch_branch": "try",
+            }
+
+        try_body = try_catch_try_region(node_id, edges)
+        catch_body = try_catch_catch_region(node_id, edges)
+        catch_seeds = try_catch_catch_seeds(node_id, edges)
+        ok_try, snap = await self._run_try_catch_region_waves(
+            node_id,
+            try_body,
+            "try",
+            edges,
+            nodes_by_id,
+            outputs,
+            ov,
+            workflow,
+            stack,
+            recorder,
+            node_results,
+            stream_run_id,
+            stream_evt_acc,
+            execution_time_zone=execution_time_zone,
+            output_overrides_map=om,
+            parallel_side_effects_lock=parallel_side_effects_lock,
+            halt_on_first_error=True,
+            seed_handle="try",
+        )
+        if ok_try:
+            payload_val = self._resolve_try_catch_value_edge(node_id, edges, outputs)
+            data_ok: dict[str, Any] = {"ok": True, "value": payload_val}
+            out_ok = DictionaryNodeOutput(node_id=node_id, data=data_ok)
+            outputs[node_id] = out_ok
+            return {
+                "status": "ok",
+                "output": out_ok,
+                "details": {"resolved_inputs": {"phase": "try_ok"}},
+                "try_catch_branch": "try",
+            }
+
+        fail_id = str((snap or {}).get("node_id") or "?")
+        fail_node = nodes_by_id.get(fail_id)
+        msg = str((snap or {}).get("message") or "try region failed")
+        err_blob = self._try_catch_structured_error_payload(
+            failed_node_id=fail_id,
+            failed_node=fail_node if fail_node is not None else {},
+            message=msg,
+            extra_details={"raw_result": (snap or {}).get("result") if isinstance((snap or {}).get("result"), dict) else {}},
+        )
+        data_fail: dict[str, Any] = {"ok": False, "error": err_blob}
+
+        if not catch_seeds:
+            return {
+                "status": "error",
+                "error": msg,
+                "details": {"try_catch": data_fail},
+            }
+
+        out_fail_pre = DictionaryNodeOutput(node_id=node_id, data=data_fail)
+        outputs[node_id] = out_fail_pre
+        await self._run_try_catch_region_waves(
+            node_id,
+            catch_body,
+            "catch",
+            edges,
+            nodes_by_id,
+            outputs,
+            ov,
+            workflow,
+            stack,
+            recorder,
+            node_results,
+            stream_run_id,
+            stream_evt_acc,
+            execution_time_zone=execution_time_zone,
+            output_overrides_map=om,
+            parallel_side_effects_lock=parallel_side_effects_lock,
+            halt_on_first_error=False,
+            seed_handle="catch",
+        )
+        return {
+            "status": "ok",
+            "output": DictionaryNodeOutput(node_id=node_id, data=dict(data_fail)),
+            "details": {"resolved_inputs": {"phase": "catch_run"}},
+            "try_catch_branch": "catch",
+        }
 
     async def _run_loop_body_waves(
         self,
@@ -308,6 +768,24 @@ class WorkflowExecutorResolverMixin:
                     t0 = time.monotonic()
                     if isinstance(node, ForLoopControlNode):
                         r = await self._run_for_loop_node(
+                            node_id,
+                            node,
+                            edges,
+                            outputs,
+                            ov,
+                            workflow,
+                            stack,
+                            nodes_by_id,
+                            recorder,
+                            node_results,
+                            stream_run_id,
+                            stream_evt_acc,
+                            execution_time_zone=execution_time_zone,
+                            output_overrides_map=om,
+                            parallel_side_effects_lock=plock,
+                        )
+                    elif isinstance(node, TryCatchControlNode):
+                        r = await self._run_try_catch_node(
                             node_id,
                             node,
                             edges,
@@ -381,6 +859,7 @@ class WorkflowExecutorResolverMixin:
                             step_number=recorder.next_step(),
                         )
                         node_results.append(node_run_result)
+                        self.bump_node_execution_budget_after_step()
 
                         if stream_evt_acc is not None:
                             evn = "node.completed" if result["status"] == "ok" else "node.failed"
@@ -474,12 +953,36 @@ class WorkflowExecutorResolverMixin:
                 "output": forced,
                 "details": {"resolved_inputs": {}, "forced_output": True},
             }
+
         body_ids = for_loop_body_node_ids(node_id, edges, nodes_by_id)
-        items = self._resolve_for_loop_list(node, edges, outputs, ov)
+        items = list(self._resolve_for_loop_list(node, edges, outputs, ov))
+        items = self._slice_for_loop_max_iterations_node(node, items)
+
         end_nid = _executor_mod()._paired_for_loop_end_id(node_id, nodes_by_id)
         if end_nid and end_nid in om:
             items = []
+
+        limits = getattr(self, "_resolved_execution_limits", None)
+        if limits is not None and items and len(items) > limits.max_loop_iterations:
+            return {
+                "status": "error",
+                "error": (
+                    f"For Loop list length ({len(items)}) exceeds maximum iterations "
+                    f"({limits.max_loop_iterations}) allowed for this run."
+                ),
+                "details": {"resolved_inputs": {"list_length": len(items), "limit": limits.max_loop_iterations}},
+            }
+
+        n_items = len(items)
+        mode = self._for_loop_iteration_mode(node)
+        cot = self._for_loop_continue_on_error(node)
+        use_parallel_outer = mode in ("parallel", "batched") and not cot
+
+        results_track: list[Any | None] = [None] * n_items
+        errors_track: list[dict[str, Any]] = []
+
         if not items:
+            self._for_loop_record_summary(node_id, processed=0, results_track=[], errors_track=[])
             outputs[node_id] = ListNodeOutput(node_id=node_id, data=[])
             return {
                 "status": "ok",
@@ -487,19 +990,35 @@ class WorkflowExecutorResolverMixin:
                 "details": {"resolved_inputs": {"input_list": [], "iteration_count": 0}},
             }
 
-        if self._for_loop_parallel_iterations(node):
+        def record_iteration_failure(i_iter: int, msg: str) -> dict[str, Any] | None:
+            results_track[i_iter] = None
+            errors_track.append({"iteration": i_iter, "message": msg})
+            if cot:
+                return None
+            return {
+                "status": "error",
+                "error": msg,
+                "details": {"for_loop_iteration": i_iter},
+            }
+
+        if use_parallel_outer:
             baseline: Dict[str, NodeOutputUnion] = {
                 k: v for k, v in outputs.items() if k not in body_ids and k != node_id
             }
             iter_lock = threading.Lock()
             last_out_item = self._item_json_to_node_output(node_id, items[-1])
+            chunk_sz = self._for_loop_parallel_chunk_size(node, mode)
+            merged_carry: Dict[tuple[str, str], list[Any]] = {}
+            fatal: dict[str, Any] | None = None
 
             async def run_one_iteration(
-                i: int, raw_item: Any
-            ) -> tuple[int, Dict[str, NodeOutputUnion], Dict[tuple[str, str], list[Any]]]:
+                i: int,
+                raw_item: Any,
+            ) -> tuple[int, Dict[str, NodeOutputUnion], Dict[tuple[str, str], list[Any]], bool, str]:
                 item_out = self._item_json_to_node_output(node_id, raw_item)
                 scratch = self._fork_outputs_for_loop_iteration(baseline, body_ids, node_id, item_out)
                 carry: Dict[tuple[str, str], list[Any]] = {}
+                before_ct = len(node_results)
                 await self._run_loop_body_waves(
                     node_id,
                     body_ids,
@@ -519,31 +1038,58 @@ class WorkflowExecutorResolverMixin:
                     output_overrides_map=om,
                     parallel_side_effects_lock=iter_lock,
                 )
-                return i, scratch, carry
+                chunk_res = node_results[before_ct:]
+                bad = [r for r in chunk_res if r.status != "ok"]
+                ok_i = not bad
+                err_m = "" if ok_i else str(bad[0].error or "error")
+                return i, scratch, carry, ok_i, err_m
 
-            # Respect User.settings max_concurrent_lm_studio_calls: do not run every iteration at once,
-            # or N iterations each doing LLM work would bypass the main graph wave cap.
-            iter_concurrency = self._wave_cap_for_run()
-            gathered_chunks: list[Any] = []
-            for chunk_start in range(0, len(items), iter_concurrency):
-                chunk_end = min(chunk_start + iter_concurrency, len(items))
+            scratch_final: Dict[str, NodeOutputUnion] = {}
+
+            stop_parallel = False
+            for chunk_start in range(0, n_items, chunk_sz):
                 chunk = await asyncio.gather(
-                    *[run_one_iteration(i, items[i]) for i in range(chunk_start, chunk_end)],
+                    *[run_one_iteration(i, items[i]) for i in range(chunk_start, min(chunk_start + chunk_sz, n_items))],
                     return_exceptions=True,
                 )
-                gathered_chunks.extend(chunk)
-            for g in gathered_chunks:
-                if isinstance(g, BaseException):
-                    raise g
+                for j, raw_chunk in enumerate(chunk):
+                    idx = chunk_start + j
+                    if isinstance(raw_chunk, BaseException):
+                        fatal = record_iteration_failure(idx, _format_exception(raw_chunk)) or {
+                            "status": "error",
+                            "error": _format_exception(raw_chunk),
+                            "details": {"for_loop_iteration": idx},
+                        }
+                        stop_parallel = True
+                        break
 
-            ordered = sorted(
-                cast(list[tuple[int, Dict[str, NodeOutputUnion], Dict[tuple[str, str], list[Any]]]], gathered_chunks),
-                key=lambda t: t[0],
-            )
-            merged_carry: Dict[tuple[str, str], list[Any]] = {}
-            for _i, _scratch, carry in ordered:
-                for ck, lst in carry.items():
-                    merged_carry.setdefault(ck, []).extend(lst)
+                    sub_i, scratch_i, carry_i, ok_i, err_msg = cast(
+                        tuple[int, Dict[str, NodeOutputUnion], Dict[tuple[str, str], list[Any]], bool, str],
+                        raw_chunk,
+                    )
+
+                    for ck, lst in carry_i.items():
+                        merged_carry.setdefault(ck, []).extend(lst)
+
+                    if not ok_i:
+                        fatal_resp = record_iteration_failure(sub_i, err_msg or "error") or {
+                            "status": "error",
+                            "error": err_msg or "error",
+                            "details": {"for_loop_iteration": sub_i},
+                        }
+                        fatal = fatal_resp
+                        stop_parallel = True
+                        break
+
+                    results_track[sub_i] = self._for_loop_iteration_item_primitive(node_id, items[sub_i])
+                    scratch_final = scratch_i
+
+                if stop_parallel:
+                    break
+
+            if fatal is not None:
+                self._for_loop_record_summary(node_id, processed=n_items, results_track=results_track, errors_track=errors_track)
+                return fatal
 
             for bid in body_ids:
                 bn = nodes_by_id.get(bid)
@@ -559,28 +1105,40 @@ class WorkflowExecutorResolverMixin:
                         merged_output=merged_out,
                     )
 
-            scratch_last = ordered[-1][1]
             for bid in body_ids:
                 if isinstance(nodes_by_id.get(bid), AddToListUtilityNode):
                     continue
-                if bid in scratch_last:
-                    outputs[bid] = scratch_last[bid]
+                if bid in scratch_final:
+                    outputs[bid] = scratch_final[bid]
 
             outputs[node_id] = last_out_item
+            self._for_loop_record_summary(node_id, processed=n_items, results_track=results_track, errors_track=errors_track)
+
             return {
                 "status": "ok",
                 "output": last_out_item,
-                "details": {"resolved_inputs": {"input_list": items, "iteration_count": len(items)}},
+                "details": {
+                    "resolved_inputs": {
+                        "input_list": items,
+                        "iteration_count": len(items),
+                        "iteration_mode": mode,
+                    }
+                },
             }
 
-        last_out: NodeOutputUnion = ListNodeOutput(node_id=node_id, data=[])
         loop_list_carry: Dict[tuple[str, str], list[Any]] = {}
+        last_out = ListNodeOutput(node_id=node_id, data=[])
+        fatal: dict[str, Any] | None = None
+
         for i, raw_item in enumerate(items):
             item_out = self._item_json_to_node_output(node_id, raw_item)
             outputs[node_id] = item_out
             last_out = item_out
+            before_ct = len(node_results)
+
             for bid in body_ids:
                 outputs.pop(bid, None)
+
             await self._run_loop_body_waves(
                 node_id,
                 body_ids,
@@ -601,8 +1159,20 @@ class WorkflowExecutorResolverMixin:
                 parallel_side_effects_lock=parallel_side_effects_lock,
             )
 
-        # Finalize Add to List outputs from carry so For Loop End and downstream can read
-        # even when the last iteration did not execute a given Add to List node.
+            bad = [r for r in node_results[before_ct:] if r.status != "ok"]
+            if bad:
+                resp = record_iteration_failure(i, str(bad[0].error or "error"))
+                if resp is not None:
+                    fatal = resp
+                    break
+                continue
+
+            results_track[i] = self._for_loop_iteration_item_primitive(node_id, raw_item)
+
+        if fatal is not None:
+            self._for_loop_record_summary(node_id, processed=n_items, results_track=results_track, errors_track=errors_track)
+            return fatal
+
         for bid in body_ids:
             bn = nodes_by_id.get(bid)
             if isinstance(bn, AddToListUtilityNode):
@@ -611,10 +1181,18 @@ class WorkflowExecutorResolverMixin:
                 outputs[bid] = ListNodeOutput(node_id=bid, data=lst)
 
         outputs[node_id] = last_out
+        self._for_loop_record_summary(node_id, processed=n_items, results_track=results_track, errors_track=errors_track)
         return {
             "status": "ok",
             "output": last_out,
-            "details": {"resolved_inputs": {"input_list": items, "iteration_count": len(items)}},
+            "details": {
+                "resolved_inputs": {
+                    "input_list": items,
+                    "iteration_count": len(items),
+                    "iteration_mode": mode,
+                    "continue_on_error": cot,
+                }
+            },
         }
 
     def _resolve_for_loop_end_node(
@@ -3964,6 +4542,18 @@ class WorkflowExecutorResolverMixin:
                 "details": {"resolved_inputs": {"input_overrides": parent_ov}},
             }
 
+        new_stack = execution_stack | (frozenset({parent_workflow.id}) if parent_workflow else frozenset())
+        depth_limits = getattr(self, "_resolved_execution_limits", None)
+        if depth_limits is not None and len(new_stack) > depth_limits.max_nested_depth:
+            return {
+                "status": "error",
+                "error": (
+                    f"Nested workflow depth exceeds maximum ({depth_limits.max_nested_depth}) "
+                    f"for workflow node '{node.id}'."
+                ),
+                "details": {"resolved_inputs": {"input_overrides": parent_ov}},
+            }
+
         sub_wf = WorkflowDefinitionService(self.session, self.user_id).get_workflow(sub_wf_id)
         if not sub_wf:
             return {
@@ -3983,7 +4573,6 @@ class WorkflowExecutorResolverMixin:
             slot = _get_slot_value(src_out, edge.source_handle)
             overrides[key] = node_output_to_input_override_value(slot)
 
-        new_stack = execution_stack | (frozenset({parent_workflow.id}) if parent_workflow else frozenset())
         nested_ov = filter_output_overrides_for_graph(sub_wf.graph, output_overrides_map or {})
         executor = _executor_mod().WorkflowExecutor(
             self.session,
@@ -3996,6 +4585,7 @@ class WorkflowExecutorResolverMixin:
             output_overrides_map=nested_ov,
             execution_stack=new_stack,
             execution_time_zone=execution_time_zone,
+            execution_limits=getattr(self, "_resolved_execution_limits", None),
         )
 
         if result.status != "ok":

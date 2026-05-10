@@ -13,6 +13,7 @@ from app.domain.schemas import (
     IsEmptyControlNode,
     LtControlNode,
     LteControlNode,
+    TryCatchControlNode,
 )
 
 
@@ -239,18 +240,23 @@ def validate_for_loop_bodies(nodes_by_id: dict[str, Any], edges: list[GraphEdge]
 
 
 def validate_parallel_for_loop_no_nested_loop(nodes_by_id: dict[str, Any], edges: list[GraphEdge]) -> None:
-    """For Loop nodes with data.parallel_iterations must not contain another For Loop in the body (v1)."""
+    """Parallel / batched for-loops must not contain another For Loop in the body (v1)."""
     for fid, node in nodes_by_id.items():
         if not isinstance(node, ForLoopControlNode):
             continue
-        if not (node.data or {}).get("parallel_iterations"):
+        data = node.data or {}
+        legacy_parallel = bool(data.get("parallel_iterations"))
+        raw_mode = (data.get("iteration_mode") or "sequential")
+        mode = raw_mode.strip().lower() if isinstance(raw_mode, str) else str(raw_mode).lower()
+        concurrent = legacy_parallel or mode in ("parallel", "batched")
+        if not concurrent:
             continue
         body = for_loop_body_node_ids(fid, edges, nodes_by_id)
         for bid in body:
             if isinstance(nodes_by_id.get(bid), ForLoopControlNode):
                 raise ValueError(
-                    f"For Loop '{fid}' has parallel_iterations enabled but its body contains "
-                    f"nested For Loop '{bid}'; parallel iterations are not supported with nested loops."
+                    f"For Loop '{fid}' uses parallel/batched iterations but its body contains "
+                    f"nested For Loop '{bid}'; unsupported in v1."
                 )
 
 
@@ -303,6 +309,69 @@ def validate_for_loop_end_configuration(nodes_by_id: dict[str, Any], edges: list
                     f"For Loop End '{eid}' export '{key}' source '{e.source}' must lie inside "
                     f"the body of For Loop '{fl_id}'."
                 )
+
+
+def try_catch_try_seeds(tc_id: str, edges: list[GraphEdge]) -> set[str]:
+    return {e.target for e in edges if e.source == tc_id and (e.source_handle or "") == "try"}
+
+
+def try_catch_catch_seeds(tc_id: str, edges: list[GraphEdge]) -> set[str]:
+    return {e.target for e in edges if e.source == tc_id and (e.source_handle or "") == "catch"}
+
+
+def try_catch_try_region(tc_id: str, edges: list[GraphEdge]) -> set[str]:
+    seeds = try_catch_try_seeds(tc_id, edges)
+    return _forward_closure_from_seeds(seeds, edges, {tc_id}, frozenset())
+
+
+def try_catch_catch_region(tc_id: str, edges: list[GraphEdge]) -> set[str]:
+    seeds = try_catch_catch_seeds(tc_id, edges)
+    return _forward_closure_from_seeds(seeds, edges, {tc_id}, frozenset())
+
+
+def validate_try_catch_regions(nodes_by_id: dict[str, Any], edges: list[GraphEdge]) -> dict[str, tuple[set[str], set[str]]]:
+    """Return try_catch_node_id -> (try_region, catch_region); raises ValueError on invalid semantics."""
+    tc_ids = sorted(nid for nid, n in nodes_by_id.items() if isinstance(n, TryCatchControlNode))
+    reg: dict[str, tuple[set[str], set[str]]] = {}
+    for tid in tc_ids:
+        t_seeds = try_catch_try_seeds(tid, edges)
+        if not t_seeds:
+            raise ValueError(f"Try/Catch node '{tid}' must have at least one outgoing edge with source_handle 'try'.")
+        tr = try_catch_try_region(tid, edges)
+        csr = try_catch_catch_seeds(tid, edges)
+        cr: set[str] = try_catch_catch_region(tid, edges) if csr else set()
+        inter = tr & cr
+        if inter:
+            raise ValueError(
+                f"Try/Catch '{tid}' has overlapping try and catch regions ({sorted(inter)}); "
+                "keep branches disjoint until after the node's output handle merges downstream."
+            )
+        reg[tid] = (tr, cr)
+    ids = list(reg.keys())
+    for i, a in enumerate(ids):
+        for b in ids[i + 1 :]:
+            ta, ca = reg[a]
+            tb, cb = reg[b]
+            union_a = ta | ca
+            union_b = tb | cb
+            inter_nodes = union_a & union_b
+            if not inter_nodes:
+                continue
+            nested_ok = a in union_b or b in union_a
+            if nested_ok:
+                continue
+            raise ValueError(
+                f"Try/Catch nodes '{a}' and '{b}' overlap on {sorted(inter_nodes)}; nest one Try/Catch inside "
+                "the other's branch or separate regions."
+            )
+    return reg
+
+
+def union_try_catch_interior_nodes(reg: dict[str, tuple[set[str], set[str]]]) -> set[str]:
+    out: set[str] = set()
+    for tr, cr in reg.values():
+        out |= tr | cr
+    return out
 
 
 def main_schedule_node_ids(all_ids: set[str], union_loop_body: set[str]) -> set[str]:

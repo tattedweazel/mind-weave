@@ -9,7 +9,13 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthClient } from '../../api/authClient';
 import { ApiClient } from '../../api/client';
-import type { GoogleWorkflowConnection, Palette, SystemPalette, TtsModelRead } from '../../api/types';
+import type {
+    GoogleWorkflowConnection,
+    Palette,
+    SystemPalette,
+    TtsModelRead,
+    WorkflowExecutionLimitsEnvelope,
+} from '../../api/types';
 import { sortWorkflowPalettesForDisplay } from '../../domain/paletteDefaults';
 import { sortSystemPalettesForDisplay } from '../../domain/systemPaletteDisplay';
 import {
@@ -32,6 +38,72 @@ const labelCls = MANAGER_LABEL_CLS;
 const MAX_CONCURRENT_LM_STUDIO_CALLS_MIN = 1;
 const MAX_CONCURRENT_LM_STUDIO_CALLS_MAX = 32;
 const MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT = 3;
+
+type ExecutionPrefsDraft = {
+    workflow_ttl_seconds: string;
+    max_node_executions: string;
+    max_loop_iterations: string;
+    max_nested_depth: string;
+};
+
+function emptyExecutionPrefsDraft(): ExecutionPrefsDraft {
+    return {
+        workflow_ttl_seconds: '',
+        max_node_executions: '',
+        max_loop_iterations: '',
+        max_nested_depth: '',
+    };
+}
+
+function execPrefsDraftFromSettings(settings?: Record<string, unknown>): ExecutionPrefsDraft {
+    const d = emptyExecutionPrefsDraft();
+    const raw = settings?.workflow_execution_limits_prefs;
+    if (!raw || typeof raw !== 'object' || raw === null) return d;
+    const o = raw as Record<string, unknown>;
+    const take = (k: keyof ExecutionPrefsDraft) => {
+        const v = o[k];
+        if (typeof v === 'number' && Number.isInteger(v)) {
+            d[k] = String(v);
+        }
+    };
+    take('workflow_ttl_seconds');
+    take('max_node_executions');
+    take('max_loop_iterations');
+    take('max_nested_depth');
+    return d;
+}
+
+function execPrefsDraftEquals(a: ExecutionPrefsDraft, b: ExecutionPrefsDraft): boolean {
+    return (
+        a.workflow_ttl_seconds === b.workflow_ttl_seconds &&
+        a.max_node_executions === b.max_node_executions &&
+        a.max_loop_iterations === b.max_loop_iterations &&
+        a.max_nested_depth === b.max_nested_depth
+    );
+}
+
+function clampPositiveInt(raw: string, ceil: number): number | null {
+    const n = Number.parseInt(raw.trim(), 10);
+    if (!Number.isFinite(n) || Number.isNaN(n)) return null;
+    return Math.min(ceil, Math.max(1, n));
+}
+
+/** Persisted prefs; null when every field blank (omit `workflow_execution_limits_prefs`). */
+function buildWorkflowExecutionPrefsForSave(
+    draft: ExecutionPrefsDraft,
+    ceilings: WorkflowExecutionLimitsEnvelope['ceilings'],
+): Record<string, number> | null {
+    const out: Record<string, number> = {};
+    const ttl = clampPositiveInt(draft.workflow_ttl_seconds, ceilings.workflow_ttl_seconds);
+    if (ttl != null) out.workflow_ttl_seconds = ttl;
+    const nodes = clampPositiveInt(draft.max_node_executions, ceilings.max_node_executions);
+    if (nodes != null) out.max_node_executions = nodes;
+    const loops = clampPositiveInt(draft.max_loop_iterations, ceilings.max_loop_iterations);
+    if (loops != null) out.max_loop_iterations = loops;
+    const depth = clampPositiveInt(draft.max_nested_depth, ceilings.max_nested_depth);
+    if (depth != null) out.max_nested_depth = depth;
+    return Object.keys(out).length ? out : null;
+}
 
 function parseMaxConcurrentLmStudioCalls(raw: unknown): number {
     if (typeof raw === 'number' && Number.isInteger(raw)) {
@@ -115,6 +187,12 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
     const [committedSystemMaxConcurrentLmCalls, setCommittedSystemMaxConcurrentLmCalls] = useState(
         MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT,
     );
+    const [workflowExecLimitsEnvelope, setWorkflowExecLimitsEnvelope] =
+        useState<WorkflowExecutionLimitsEnvelope | null>(null);
+    const [execPrefsDraft, setExecPrefsDraft] = useState<ExecutionPrefsDraft>(() => emptyExecutionPrefsDraft());
+    const [committedExecPrefsDraft, setCommittedExecPrefsDraft] = useState<ExecutionPrefsDraft>(() =>
+        emptyExecutionPrefsDraft(),
+    );
     const [isSavingSystem, setIsSavingSystem] = useState(false);
     const [ttsRegistry, setTtsRegistry] = useState<TtsModelRead[]>([]);
     const [ttsLoading, setTtsLoading] = useState(false);
@@ -126,6 +204,8 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
     const sidebarSections = user?.is_admin ? [...SECTIONS, TTS_ADMIN_SECTION] : SECTIONS;
     const profileTimezoneDirty = profileWorkflowTimeZone !== committedProfileWorkflowTimeZone;
     const systemConcurrentDirty = systemMaxConcurrentLmCalls !== committedSystemMaxConcurrentLmCalls;
+    const execPrefsDirty = !execPrefsDraftEquals(execPrefsDraft, committedExecPrefsDraft);
+    const systemSectionDirty = systemConcurrentDirty || execPrefsDirty;
     const ianaZoneOptions = useMemo(() => listIanaTimeZones(), []);
 
     useEffect(() => {
@@ -233,10 +313,29 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
     }, [isOpen, selectedSection, user?.is_admin]);
 
     useEffect(() => {
+        if (!isOpen || selectedSection !== 'system') return;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const env = await ApiClient.getWorkflowExecutionLimits();
+                if (!cancelled) setWorkflowExecLimitsEnvelope(env);
+            } catch {
+                if (!cancelled) setWorkflowExecLimitsEnvelope(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, selectedSection]);
+
+    useEffect(() => {
         if (!user || !isOpen || selectedSection !== 'system') return;
         const n = parseMaxConcurrentLmStudioCalls(user.settings?.max_concurrent_lm_studio_calls);
         setSystemMaxConcurrentLmCalls(n);
         setCommittedSystemMaxConcurrentLmCalls(n);
+        const ed = execPrefsDraftFromSettings(user.settings);
+        setExecPrefsDraft(ed);
+        setCommittedExecPrefsDraft(ed);
     }, [user, isOpen, selectedSection]);
 
     useEffect(() => {
@@ -376,14 +475,30 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
         setError(null);
         setSuccess(null);
         try {
+            const settingsPayload: Record<string, unknown> = {
+                ...user.settings,
+                max_concurrent_lm_studio_calls: systemMaxConcurrentLmCalls,
+            };
+            if (workflowExecLimitsEnvelope) {
+                const prefsObj = buildWorkflowExecutionPrefsForSave(
+                    execPrefsDraft,
+                    workflowExecLimitsEnvelope.ceilings,
+                );
+                if (prefsObj) {
+                    settingsPayload.workflow_execution_limits_prefs = prefsObj;
+                } else {
+                    delete settingsPayload.workflow_execution_limits_prefs;
+                }
+            } else if (execPrefsDirty) {
+                throw new Error('Server execution limits unavailable. Wait for loading to finish or refresh.');
+            }
+
             await AuthClient.updateMe({
-                settings: {
-                    ...user.settings,
-                    max_concurrent_lm_studio_calls: systemMaxConcurrentLmCalls,
-                },
+                settings: settingsPayload,
             });
             await checkAuth({ silent: true });
             setCommittedSystemMaxConcurrentLmCalls(systemMaxConcurrentLmCalls);
+            setCommittedExecPrefsDraft(execPrefsDraft);
             setSuccess('System settings saved.');
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Failed to save system settings');
@@ -604,11 +719,22 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
                     )}
 
                     {selectedSection === 'system' && (
-                        <div className="space-y-4 max-w-xl">
-                            <h3 className="text-lg font-bold text-mw-text-primary border-b border-mw-border pb-2">
-                                System Settings
-                            </h3>
+                        <div className="space-y-5 max-w-xl">
+                            <div>
+                                <h3 className="text-lg font-bold text-mw-text-primary border-b border-mw-border pb-2">
+                                    System Settings
+                                </h3>
+                                <p className="text-sm text-mw-text-secondary mt-2 leading-relaxed">
+                                    Tune parallel LM Studio workload, and optionally raise your{' '}
+                                    <strong className="text-mw-text-primary">personal baseline</strong> safety caps when
+                                    a workflow does not set them in Explorer workflow metadata or a run request.
+                                    Deployment ceilings always win—you cannot bypass operator caps.
+                                </p>
+                            </div>
                             <div className="rounded-lg border border-mw-border bg-mw-page/90 dark:bg-mw-card-alt/25 p-4 space-y-3">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-mw-text-secondary">
+                                    Parallel execution
+                                </p>
                                 <div>
                                     <div className="flex items-center gap-1 mb-1">
                                         <label
@@ -660,18 +786,173 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
                                         className={inputCls}
                                     />
                                 </div>
-                                {systemConcurrentDirty && (
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleSaveSystemSettings()}
-                                        disabled={isSavingSystem}
-                                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-mw-primary hover:bg-mw-primary-hover rounded-lg transition-colors disabled:opacity-50"
-                                    >
-                                        <Save size={16} />
-                                        Save system settings
-                                    </button>
+                            </div>
+
+                            <div className="rounded-lg border border-mw-border bg-mw-page/90 dark:bg-mw-card-alt/25 p-4 space-y-4">
+                                <div className="flex items-start gap-2 justify-between flex-wrap">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1 mb-1">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-mw-text-secondary">
+                                                Default run caps (advanced)
+                                            </p>
+                                            <ContextHelpModal
+                                                title="Default run caps"
+                                                triggerLabel="Help: default workflow run caps"
+                                            >
+                                                <div className="space-y-2 text-mw-text-secondary leading-relaxed">
+                                                    <p>
+                                                        These limits sit above deployment defaults only for fields you
+                                                        fill in. Explorer workflow metadata and per-run payloads still
+                                                        override where set.
+                                                    </p>
+                                                    <p>
+                                                        Values clip to server ceilings on save; leave a box empty to defer
+                                                        to deployment defaults unless a workflow/run supplies a limit.
+                                                    </p>
+                                                </div>
+                                            </ContextHelpModal>
+                                        </div>
+                                        <p className="text-xs text-mw-text-secondary">
+                                            {!workflowExecLimitsEnvelope
+                                                ? 'Loading allowed ranges…'
+                                                : 'Blank keeps each field unspecified here so downstream layers can decide.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {workflowExecLimitsEnvelope && (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label htmlFor="exec-pref-ttl" className={labelCls}>
+                                                Workflow run timeout (seconds)
+                                            </label>
+                                            <p className="text-xs text-mw-text-secondary mb-1">
+                                                Default{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.defaults.workflow_ttl_seconds}
+                                                </span>
+                                                , ceiling{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.ceilings.workflow_ttl_seconds}
+                                                </span>
+                                            </p>
+                                            <input
+                                                id="exec-pref-ttl"
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={execPrefsDraft.workflow_ttl_seconds}
+                                                onChange={e =>
+                                                    setExecPrefsDraft(p => ({
+                                                        ...p,
+                                                        workflow_ttl_seconds: e.target.value,
+                                                    }))
+                                                }
+                                                className={inputCls}
+                                                autoComplete="off"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="exec-pref-nodes" className={labelCls}>
+                                                Max node executions (budget)
+                                            </label>
+                                            <p className="text-xs text-mw-text-secondary mb-1">
+                                                Default{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.defaults.max_node_executions}
+                                                </span>
+                                                , ceiling{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.ceilings.max_node_executions}
+                                                </span>
+                                            </p>
+                                            <input
+                                                id="exec-pref-nodes"
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={execPrefsDraft.max_node_executions}
+                                                onChange={e =>
+                                                    setExecPrefsDraft(p => ({
+                                                        ...p,
+                                                        max_node_executions: e.target.value,
+                                                    }))
+                                                }
+                                                className={inputCls}
+                                                autoComplete="off"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="exec-pref-loops" className={labelCls}>
+                                                Max For Loop list length
+                                            </label>
+                                            <p className="text-xs text-mw-text-secondary mb-1">
+                                                Default{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.defaults.max_loop_iterations}
+                                                </span>
+                                                , ceiling{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.ceilings.max_loop_iterations}
+                                                </span>
+                                            </p>
+                                            <input
+                                                id="exec-pref-loops"
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={execPrefsDraft.max_loop_iterations}
+                                                onChange={e =>
+                                                    setExecPrefsDraft(p => ({
+                                                        ...p,
+                                                        max_loop_iterations: e.target.value,
+                                                    }))
+                                                }
+                                                className={inputCls}
+                                                autoComplete="off"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="exec-pref-depth" className={labelCls}>
+                                                Max nested workflow depth
+                                            </label>
+                                            <p className="text-xs text-mw-text-secondary mb-1">
+                                                Default{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.defaults.max_nested_depth}
+                                                </span>
+                                                , ceiling{' '}
+                                                <span className="text-mw-text-primary tabular-nums">
+                                                    {workflowExecLimitsEnvelope.ceilings.max_nested_depth}
+                                                </span>
+                                            </p>
+                                            <input
+                                                id="exec-pref-depth"
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={execPrefsDraft.max_nested_depth}
+                                                onChange={e =>
+                                                    setExecPrefsDraft(p => ({
+                                                        ...p,
+                                                        max_nested_depth: e.target.value,
+                                                    }))
+                                                }
+                                                className={inputCls}
+                                                autoComplete="off"
+                                            />
+                                        </div>
+                                    </div>
                                 )}
                             </div>
+
+                            {systemSectionDirty && (
+                                <button
+                                    type="button"
+                                    onClick={() => void handleSaveSystemSettings()}
+                                    disabled={isSavingSystem || (execPrefsDirty && !workflowExecLimitsEnvelope)}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-mw-primary hover:bg-mw-primary-hover rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    <Save size={16} />
+                                    Save system settings
+                                </button>
+                            )}
                         </div>
                     )}
 

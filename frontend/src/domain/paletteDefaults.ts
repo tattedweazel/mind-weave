@@ -156,6 +156,7 @@ export const PALETTE_KEY_TO_FAMILY: Partial<Record<string, WorkflowPaletteFamily
     xor_control: 'control',
     not_control: 'control',
     between_control: 'control',
+    try_catch_control: 'control',
     for_loop_control: 'control',
     for_loop_end_control: 'control',
 };
@@ -245,6 +246,7 @@ export const WORKFLOW_PALETTE_COLORS: Record<string, string> = {
     max_ints: '#eab308',
     not_control: '#6366f1',
     between_control: '#c026d3',
+    try_catch_control: '#0369a1',
     annotation_note: '#94a3b8',
     annotation_region: '#64748b',
 };

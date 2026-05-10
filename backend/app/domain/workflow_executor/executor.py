@@ -33,8 +33,14 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.core.workflow_execution_hub import SSE_KEEPALIVE_INTERVAL_SEC, sse_comment_keepalive
 from app.core.run_log_redaction import redact_node_log_for_storage
+from app.core.workflow_execution_hub import SSE_KEEPALIVE_INTERVAL_SEC, sse_comment_keepalive
+from app.domain.execution_limits import (
+    ResolvedExecutionLimits,
+    load_execution_limits_from_run_snapshot,
+    parse_execution_limits_from_graph,
+    resolve_execution_limits,
+)
 from app.domain.schemas import (
     AudioFileInputSkillNode,
     AudioNodeOutput,
@@ -66,15 +72,23 @@ from app.domain.schemas import (
     StructureNodeOutput,
     TranscribeAudioSkillNode,
     TranscribeFileSkillNode,
+    TryCatchControlNode,
     WorkflowRunResult,
     gmail_dict_to_node_output,
 )
-from app.domain.user_settings import resolve_max_concurrent_lm_studio_calls
+from app.domain.user_settings import (
+    parse_execution_limits_prefs_from_settings,
+    resolve_max_concurrent_lm_studio_calls,
+)
+from app.domain.workflow_executor.aux_outputs import (
+    attach_for_loop_summaries_token,
+    reset_for_loop_summaries_token,
+)
+from app.domain.workflow_executor.concurrency import workflow_node_extra_concurrency_bucket
 from app.domain.workflow_executor.transcribe_pending import (
     TranscribeWaitKey,
     cancel_transcribe_wait,
 )
-from app.domain.workflow_executor.concurrency import workflow_node_extra_concurrency_bucket
 from app.domain.workflow_run_status import terminal_status_for_aggregate
 from app.domain.workspace.workspace_google_graph import workflow_graph_with_default_google_connection
 from app.persistence.tables import (
@@ -92,9 +106,11 @@ from .graph import (
     _topological_order,
     edges_with_both_endpoints_in,
     main_schedule_node_ids,
+    union_try_catch_interior_nodes,
     validate_for_loop_bodies,
     validate_for_loop_end_configuration,
     validate_parallel_for_loop_no_nested_loop,
+    validate_try_catch_regions,
 )
 from .helpers import (
     _format_exception,
@@ -618,6 +634,17 @@ def _recover_upsert_miswired_body_into_content(
     return out
 
 
+def _edges_for_global_cycle_detection(edges: list[GraphEdge], nodes_by_id: Dict[str, Any]) -> list[GraphEdge]:
+    """Edges feeding a Try/Catch ``value`` input close the try-region wiring loop; omit from global DAG cycle checks."""
+    out: list[GraphEdge] = []
+    for e in edges:
+        tgt = nodes_by_id.get(e.target)
+        if isinstance(tgt, TryCatchControlNode) and (e.target_handle or "").strip() == "value":
+            continue
+        out.append(e)
+    return out
+
+
 def _decrement_signal_out_triggers(
     node_id: str,
     main_edges: List[GraphEdge],
@@ -650,6 +677,14 @@ async def _workflow_acquire_sem(sem: asyncio.Semaphore):
         sem.release()
 
 
+class _WorkflowSafetyAbort(Exception):
+    """Stop execution cleanly when workflow-level guards trip (budget, TTL is separate)."""
+
+    def __init__(self, message: str, *, error_type: str) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+
+
 class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunnerMixin):
     """Executes a WorkflowDefinition and returns a WorkflowRunResult."""
 
@@ -677,6 +712,20 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         self._sem_llm: asyncio.Semaphore | None = None
         self._sem_browser: asyncio.Semaphore | None = None
         self._sem_external: asyncio.Semaphore | None = None
+        self._resolved_execution_limits: Optional[ResolvedExecutionLimits] = None
+        self._node_execution_count_for_budget: int = 0
+
+    def bump_node_execution_budget_after_step(self) -> None:
+        """Increment node-step counter after each logged completion; respects ``max_node_executions``."""
+        self._node_execution_count_for_budget += 1
+        lim = self._resolved_execution_limits
+        if lim is None:
+            return
+        if self._node_execution_count_for_budget > lim.max_node_executions:
+            raise _WorkflowSafetyAbort(
+                f"Exceeded maximum node executions ({lim.max_node_executions}) for this run.",
+                error_type="max_node_executions",
+            )
 
     def _ensure_run_execution_semaphores(self) -> None:
         u = self.session.get(User, self.user_id)
@@ -800,6 +849,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         output_overrides_map: Optional[Dict[str, NodeOutputUnion]] = None,
         execution_stack: Optional[frozenset] = None,
         execution_time_zone: Optional[str] = None,
+        execution_limits: Optional[ResolvedExecutionLimits] = None,
     ) -> WorkflowRunResult:
         """
         Validate, sort, and execute the workflow graph.
@@ -823,17 +873,37 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
 
         edges = [GraphEdge(**e) for e in raw_edges]
 
+        if execution_limits is None:
+            u_lim_row = self.session.get(User, self.user_id)
+            user_layer = parse_execution_limits_prefs_from_settings(
+                getattr(u_lim_row, "settings", None) if u_lim_row else None
+            )
+            execution_limits = resolve_execution_limits(
+                settings,
+                user_limits=user_layer,
+                graph_limits=parse_execution_limits_from_graph(graph),
+                run_request_limits=None,
+            )
+        self._resolved_execution_limits = execution_limits
+        self._node_execution_count_for_budget = 0
+
         # --- Validation: cycle detection ---
-        cycle = _detect_cycle(list(nodes_by_id.keys()), edges)
+        cycle = _detect_cycle(list(nodes_by_id.keys()), _edges_for_global_cycle_detection(edges, nodes_by_id))
         if cycle:
             raise ValueError(f"Workflow graph contains a cycle involving nodes: {cycle}")
 
-        fl_bodies = validate_for_loop_bodies(nodes_by_id, edges)
-        validate_for_loop_end_configuration(nodes_by_id, edges)
-        validate_parallel_for_loop_no_nested_loop(nodes_by_id, edges)
+        try:
+            fl_bodies = validate_for_loop_bodies(nodes_by_id, edges)
+            validate_for_loop_end_configuration(nodes_by_id, edges)
+            validate_parallel_for_loop_no_nested_loop(nodes_by_id, edges)
+            try_catch_reg_map = validate_try_catch_regions(nodes_by_id, edges)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
         union_body: set[str] = set()
         for _fid, bset in fl_bodies.items():
             union_body |= bset
+        union_body |= union_try_catch_interior_nodes(try_catch_reg_map)
         main_ids = main_schedule_node_ids(set(nodes_by_id.keys()), union_body)
         main_edges = edges_with_both_endpoints_in(main_ids, edges)
 
@@ -871,131 +941,195 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                         "workflow editor, attach an audio file artifact to the node, or provide an output override."
                     )
 
-        async with self._scoped_run_semaphores():
-            while ready:
-                batch = pop_wave_batch(ready, order_index, wave_cap)
-                batch = split_batch_isolating_audio_steps(batch, ready, order_index, nodes_by_id)
+        async def _run_wave_schedule() -> WorkflowRunResult:
+            async with self._scoped_run_semaphores():
+                while ready:
+                    batch = pop_wave_batch(ready, order_index, wave_cap)
+                    batch = split_batch_isolating_audio_steps(batch, ready, order_index, nodes_by_id)
 
-                async def run_node(node_id: str):
-                    node = nodes_by_id[node_id]
-                    t0 = time.monotonic()
-                    if isinstance(node, ForLoopControlNode):
-                        result = await self._run_for_loop_node(
-                            node_id,
-                            node,
-                            edges,
-                            outputs,
-                            input_overrides,
-                            workflow,
-                            stack,
-                            nodes_by_id,
-                            recorder,
-                            node_results,
-                            execution_time_zone=etz,
-                            output_overrides_map=om,
-                        )
-                    elif isinstance(node, ForLoopEndControlNode):
-                        result = self._resolve_for_loop_end_node(node_id, node, edges, outputs, output_overrides_map=om)
-                    else:
-                        upstream = _resolve_upstream_for_node(node_id, edges, outputs)
-                        result = await self._execute_node(
-                            node_id,
-                            node,
-                            upstream,
-                            edges,
-                            outputs,
-                            input_overrides,
-                            workflow=workflow,
-                            execution_stack=stack,
-                            execution_time_zone=etz,
-                            output_overrides_map=om,
-                            stream_run_id=None,
-                            for_loop_id=None,
-                            for_loop_iteration=None,
-                        )
-                    elapsed_ms = (time.monotonic() - t0) * 1000
-                    return result, elapsed_ms
+                    async def run_node(node_id: str):
+                        node = nodes_by_id[node_id]
+                        t0 = time.monotonic()
+                        if isinstance(node, ForLoopControlNode):
+                            result = await self._run_for_loop_node(
+                                node_id,
+                                node,
+                                edges,
+                                outputs,
+                                input_overrides,
+                                workflow,
+                                stack,
+                                nodes_by_id,
+                                recorder,
+                                node_results,
+                                execution_time_zone=etz,
+                                output_overrides_map=om,
+                            )
+                        elif isinstance(node, ForLoopEndControlNode):
+                            result = self._resolve_for_loop_end_node(
+                                node_id, node, edges, outputs, output_overrides_map=om
+                            )
+                        elif isinstance(node, TryCatchControlNode):
+                            result = await self._run_try_catch_node(
+                                node_id,
+                                node,
+                                edges,
+                                outputs,
+                                input_overrides,
+                                workflow,
+                                stack,
+                                nodes_by_id,
+                                recorder,
+                                node_results,
+                                stream_run_id=None,
+                                stream_evt_acc=None,
+                                execution_time_zone=etz,
+                                output_overrides_map=om,
+                            )
+                        else:
+                            upstream = _resolve_upstream_for_node(node_id, edges, outputs)
+                            result = await self._execute_node(
+                                node_id,
+                                node,
+                                upstream,
+                                edges,
+                                outputs,
+                                input_overrides,
+                                workflow=workflow,
+                                execution_stack=stack,
+                                execution_time_zone=etz,
+                                output_overrides_map=om,
+                                stream_run_id=None,
+                                for_loop_id=None,
+                                for_loop_iteration=None,
+                            )
+                        elapsed_ms = (time.monotonic() - t0) * 1000
+                        return result, elapsed_ms
 
-                gathered = await asyncio.gather(
-                    *[run_node(node_id) for node_id in batch],
-                    return_exceptions=True,
-                )
-
-                for node_id, raw in zip(batch, gathered):
-                    if isinstance(raw, BaseException):
-                        result = {"status": "error", "error": _format_exception(raw)}
-                        elapsed_ms = 0.0
-                    else:
-                        result, elapsed_ms = cast(tuple[dict[str, Any], float], raw)
-
-                    out_for_result: Any = result.get("output")
-                    raw_output_result: dict[str, Any] | None = None
-                    if out_for_result is not None:
-                        md_r = getattr(out_for_result, "model_dump", None)
-                        if callable(md_r):
-                            raw_output_result = md_r(mode="json")
-                    raw_det_result = cast(dict[str, Any], result.get("details") or {})
-                    details_for_client = merge_details_with_output_explorer(raw_det_result, raw_output_result)
-
-                    node_results.append(
-                        NodeRunResult(
-                            node_id=node_id,
-                            status=result["status"],
-                            output=result.get("output"),
-                            error=result.get("error"),
-                            latency_ms=round(elapsed_ms, 2),
-                            details=details_for_client,
-                            step_number=recorder.next_step(),
-                        )
+                    gathered = await asyncio.gather(
+                        *[run_node(node_id) for node_id in batch],
+                        return_exceptions=True,
                     )
 
-                    if result["status"] == "ok" and result.get("output"):
-                        outputs[node_id] = cast(NodeOutputUnion, result["output"])
+                    for node_id, raw in zip(batch, gathered):
+                        if isinstance(raw, BaseException):
+                            result = {"status": "error", "error": _format_exception(raw)}
+                            elapsed_ms = 0.0
+                        else:
+                            result, elapsed_ms = cast(tuple[dict[str, Any], float], raw)
 
-                    node_exec: Any = nodes_by_id[node_id]
-                    output_val: Any = result.get("output")
-                    if isinstance(
-                        node_exec,
-                        (
-                            BasicConditionalControlNode,
-                            BetweenControlNode,
-                            IsControlNode,
-                            IsEmptyControlNode,
-                            GtControlNode,
-                            LtControlNode,
-                            GteControlNode,
-                            LteControlNode,
-                        ),
-                    ) and isinstance(output_val, ConditionalNodeOutput):
-                        for edge in main_edges:
-                            if edge.source == node_id and edge.source_handle == output_val.branch:
+                        out_for_result: Any = result.get("output")
+                        raw_output_result: dict[str, Any] | None = None
+                        if out_for_result is not None:
+                            md_r = getattr(out_for_result, "model_dump", None)
+                            if callable(md_r):
+                                raw_output_result = md_r(mode="json")
+                        raw_det_result = cast(dict[str, Any], result.get("details") or {})
+                        details_for_client = merge_details_with_output_explorer(
+                            raw_det_result, raw_output_result
+                        )
+
+                        node_results.append(
+                            NodeRunResult(
+                                node_id=node_id,
+                                status=result["status"],
+                                output=result.get("output"),
+                                error=result.get("error"),
+                                latency_ms=round(elapsed_ms, 2),
+                                details=details_for_client,
+                                step_number=recorder.next_step(),
+                            )
+                        )
+                        self.bump_node_execution_budget_after_step()
+
+                        if result["status"] == "ok" and result.get("output"):
+                            outputs[node_id] = cast(NodeOutputUnion, result["output"])
+
+                        node_exec: Any = nodes_by_id[node_id]
+                        output_val: Any = result.get("output")
+                        if isinstance(
+                            node_exec,
+                            (
+                                BasicConditionalControlNode,
+                                BetweenControlNode,
+                                IsControlNode,
+                                IsEmptyControlNode,
+                                GtControlNode,
+                                LtControlNode,
+                                GteControlNode,
+                                LteControlNode,
+                            ),
+                        ) and isinstance(output_val, ConditionalNodeOutput):
+                            for edge in main_edges:
+                                if edge.source == node_id and edge.source_handle == output_val.branch:
+                                    succ = edge.target
+                                    if succ in main_ids:
+                                        in_degree[succ] -= 1
+                                        if in_degree[succ] == 0:
+                                            ready.append(succ)
+                            _decrement_signal_out_triggers(node_id, main_edges, main_ids, in_degree, ready)
+                        elif isinstance(node_exec, TryCatchControlNode):
+                            branch = str(result.get("try_catch_branch") or "")
+                            for edge in main_edges:
+                                if edge.source != node_id:
+                                    continue
+                                sh = edge.source_handle or ""
                                 succ = edge.target
-                                if succ in main_ids:
+                                if succ not in main_ids:
+                                    continue
+                                take = False
+                                if sh in ("output", "envelope"):
+                                    take = True
+                                elif sh == "try" and branch == "try":
+                                    take = True
+                                elif sh == "catch" and branch == "catch":
+                                    take = True
+                                if take:
                                     in_degree[succ] -= 1
                                     if in_degree[succ] == 0:
                                         ready.append(succ)
-                        _decrement_signal_out_triggers(node_id, main_edges, main_ids, in_degree, ready)
-                    else:
-                        for succ in adjacency.get(node_id, []):
-                            in_degree[succ] -= 1
-                            if in_degree[succ] == 0:
-                                ready.append(succ)
+                        else:
+                            for succ in adjacency.get(node_id, []):
+                                in_degree[succ] -= 1
+                                if in_degree[succ] == 0:
+                                    ready.append(succ)
 
-            # Overall status: ok if all succeeded, partial if some failed, error if all failed.
-            statuses = {r.status for r in node_results}
-            if statuses == {"ok"}:
-                overall = "ok"
-            elif "ok" in statuses:
-                overall = "partial"
-            else:
-                overall = "error"
+                # Overall status: ok if all succeeded, partial if some failed, error if all failed.
+                statuses = {r.status for r in node_results}
+                if statuses == {"ok"}:
+                    overall = "ok"
+                elif "ok" in statuses:
+                    overall = "partial"
+                else:
+                    overall = "error"
 
-            return WorkflowRunResult(
-                workflow_id=workflow.id,
-                status=overall,
-                node_results=node_results,
-            )
+                return WorkflowRunResult(
+                    workflow_id=workflow.id,
+                    status=overall,
+                    node_results=node_results,
+                )
 
+        lim_run = self._resolved_execution_limits
+        if lim_run is None:
+            raise RuntimeError("execution limits not initialized")
+        tok_summ = attach_for_loop_summaries_token()
+        try:
+            try:
+                return await asyncio.wait_for(_run_wave_schedule(), timeout=float(lim_run.workflow_ttl_seconds))
+            except asyncio.TimeoutError:
+                return WorkflowRunResult(
+                    workflow_id=workflow.id,
+                    status="error",
+                    node_results=node_results,
+                )
+            except _WorkflowSafetyAbort:
+                return WorkflowRunResult(
+                    workflow_id=workflow.id,
+                    status="error",
+                    node_results=node_results,
+                )
+        finally:
+            reset_for_loop_summaries_token(tok_summ)
     async def execute_scheduled_run(
         self,
         workflow: WorkflowDefinition,
@@ -1058,7 +1192,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
 
             edges = [GraphEdge(**e) for e in raw_edges]
 
-            cycle = _detect_cycle(list(nodes_by_id.keys()), edges)
+            cycle = _detect_cycle(list(nodes_by_id.keys()), _edges_for_global_cycle_detection(edges, nodes_by_id))
             if cycle:
                 await _emit(
                     "workflow.failed",
@@ -1074,6 +1208,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                 fl_bodies = validate_for_loop_bodies(nodes_by_id, edges)
                 validate_for_loop_end_configuration(nodes_by_id, edges)
                 validate_parallel_for_loop_no_nested_loop(nodes_by_id, edges)
+                tc_reg_map = validate_try_catch_regions(nodes_by_id, edges)
             except ValueError as exc:
                 await _emit(
                     "workflow.failed",
@@ -1086,219 +1221,340 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                 {"workflow_id": str(workflow.id), "run_id": str(run_id)},
             )
 
-            union_body: set[str] = set()
-            for _fid, bset in fl_bodies.items():
-                union_body |= bset
-            main_ids = main_schedule_node_ids(set(nodes_by_id.keys()), union_body)
-            main_edges = edges_with_both_endpoints_in(main_ids, edges)
-
-            order = _topological_order(sorted(main_ids), main_edges)
-            order_index = {nid: i for i, nid in enumerate(order)}
-            in_degree, adjacency = _build_in_degree_and_adjacency(sorted(main_ids), main_edges, nodes_by_id)
-            ready = deque[str](nid for nid, deg in in_degree.items() if deg == 0)
+            u_sched = self.session.get(User, self.user_id)
+            user_lim_sched = parse_execution_limits_prefs_from_settings(
+                getattr(u_sched, "settings", None) if u_sched else None
+            )
+            self._resolved_execution_limits = load_execution_limits_from_run_snapshot(
+                settings,
+                workflow_graph=graph,
+                persisted_effective=getattr(persist_run_record, "execution_limits_effective", None),
+                user_limits=user_lim_sched,
+            )
+            self._node_execution_count_for_budget = 0
 
             outputs: Dict[str, NodeOutputUnion] = {}
-            node_results: list[NodeRunResult] = []
+            node_results = []
             recorder = _StepRecorder()
             om = output_overrides_map or {}
             self._max_concurrent_wave_cap = None
             wave_cap = self._wave_cap_for_run()
+            lim_e_sched = self._resolved_execution_limits
+            if lim_e_sched is None:
+                raise RuntimeError("execution limits not initialized")
 
-            async with self._scoped_run_semaphores():
-                while ready:
-                    batch = pop_wave_batch(ready, order_index, wave_cap)
-                    batch = split_batch_isolating_audio_steps(batch, ready, order_index, nodes_by_id)
+            try:
+                tok_summ = attach_for_loop_summaries_token()
+                try:
+                    async with asyncio.timeout(float(lim_e_sched.workflow_ttl_seconds)):
 
-                    await _emit("node.queued", {"node_ids": list(batch), "run_id": str(run_id)})
-                    for node_id in batch:
-                        await _emit(
-                            "node.started",
-                            {"workflow_id": str(workflow.id), "run_id": str(run_id), "node_id": node_id},
-                        )
+                        union_body: set[str] = set()
+                        for _fid, bset in fl_bodies.items():
+                            union_body |= bset
+                        union_body |= union_try_catch_interior_nodes(tc_reg_map)
+                        main_ids = main_schedule_node_ids(set(nodes_by_id.keys()), union_body)
+                        main_edges = edges_with_both_endpoints_in(main_ids, edges)
 
-                    async def run_node(node_id: str):
-                        node = nodes_by_id[node_id]
-                        t0 = time.monotonic()
-                        stream_bucket: list[tuple[str, dict[str, Any]]] = []
-                        if isinstance(node, ForLoopControlNode):
-                            result = await self._run_for_loop_node(
-                                node_id,
-                                node,
-                                edges,
-                                outputs,
-                                input_overrides,
-                                workflow,
-                                stack,
-                                nodes_by_id,
-                                recorder,
-                                node_results,
-                                run_id,
-                                stream_bucket,
-                                execution_time_zone=etz,
-                                output_overrides_map=om,
+                        order = _topological_order(sorted(main_ids), main_edges)
+                        order_index = {nid: i for i, nid in enumerate(order)}
+                        in_degree, adjacency = _build_in_degree_and_adjacency(sorted(main_ids), main_edges, nodes_by_id)
+                        ready = deque[str](nid for nid, deg in in_degree.items() if deg == 0)
+
+                        async with self._scoped_run_semaphores():
+                            while ready:
+                                batch = pop_wave_batch(ready, order_index, wave_cap)
+                                batch = split_batch_isolating_audio_steps(batch, ready, order_index, nodes_by_id)
+
+                                await _emit("node.queued", {"node_ids": list(batch), "run_id": str(run_id)})
+                                for node_id in batch:
+                                    await _emit(
+                                        "node.started",
+                                        {"workflow_id": str(workflow.id), "run_id": str(run_id), "node_id": node_id},
+                                    )
+
+                                async def run_node(node_id: str):
+                                    node = nodes_by_id[node_id]
+                                    t0 = time.monotonic()
+                                    stream_bucket: list[tuple[str, dict[str, Any]]] = []
+                                    if isinstance(node, ForLoopControlNode):
+                                        result = await self._run_for_loop_node(
+                                            node_id,
+                                            node,
+                                            edges,
+                                            outputs,
+                                            input_overrides,
+                                            workflow,
+                                            stack,
+                                            nodes_by_id,
+                                            recorder,
+                                            node_results,
+                                            run_id,
+                                            stream_bucket,
+                                            execution_time_zone=etz,
+                                            output_overrides_map=om,
+                                        )
+                                    elif isinstance(node, ForLoopEndControlNode):
+                                        result = self._resolve_for_loop_end_node(
+                                            node_id, node, edges, outputs, output_overrides_map=om
+                                        )
+                                    elif isinstance(node, TryCatchControlNode):
+                                        result = await self._run_try_catch_node(
+                                            node_id,
+                                            node,
+                                            edges,
+                                            outputs,
+                                            input_overrides,
+                                            workflow,
+                                            stack,
+                                            nodes_by_id,
+                                            recorder,
+                                            node_results,
+                                            run_id,
+                                            stream_bucket,
+                                            execution_time_zone=etz,
+                                            output_overrides_map=om,
+                                        )
+                                    else:
+                                        upstream = _resolve_upstream_for_node(node_id, edges, outputs)
+                                        result = await self._execute_node(
+                                            node_id,
+                                            node,
+                                            upstream,
+                                            edges,
+                                            outputs,
+                                            input_overrides,
+                                            workflow=workflow,
+                                            execution_stack=stack,
+                                            execution_time_zone=etz,
+                                            output_overrides_map=om,
+                                            stream_run_id=run_id,
+                                            for_loop_id=None,
+                                            for_loop_iteration=None,
+                                        )
+                                    elapsed_ms = (time.monotonic() - t0) * 1000
+                                    return result, elapsed_ms, stream_bucket
+
+                                _run_tasks = [asyncio.create_task(run_node(node_id)) for node_id in batch]
+                                await asyncio.sleep(0)
+                                _pending: set[asyncio.Task[Any]] = set(_run_tasks)
+                                ka_sec = SSE_KEEPALIVE_INTERVAL_SEC
+                                while _pending:
+                                    await self._flush_interstitial_sse(sse_publish, persist_run_record)
+                                    _, _pending = await asyncio.wait(_pending, timeout=ka_sec)
+                                    if _pending and sse_raw is not None:
+                                        await sse_raw(sse_comment_keepalive())
+                                await self._flush_interstitial_sse(sse_publish, persist_run_record)
+
+                                gathered = []
+                                for _t in _run_tasks:
+                                    try:
+                                        gathered.append(_t.result())
+                                    except BaseException as _exc:
+                                        gathered.append(_exc)
+
+                                for node_id, raw in zip(batch, gathered):
+                                    stream_bucket: list[tuple[str, dict[str, Any]]] = []
+                                    if isinstance(raw, BaseException):
+                                        result = {"status": "error", "error": _format_exception(raw)}
+                                        elapsed_ms = 0.0
+                                    else:
+                                        result, elapsed_ms, stream_bucket = cast(
+                                            tuple[dict[str, Any], float, list[tuple[str, dict[str, Any]]]], raw
+                                        )
+
+                                    for evn, tpl in stream_bucket:
+                                        seq = await sse_publish(evn, dict(tpl))
+                                        persist_run_record.last_event_seq = seq
+                                        self.session.add(persist_run_record)
+                                        self.session.commit()
+
+                                    out_for_log: Any = result.get("output")
+                                    raw_output: dict[str, Any] | None = None
+                                    if out_for_log is not None:
+                                        md = getattr(out_for_log, "model_dump", None)
+                                        if callable(md):
+                                            raw_output = md(mode="json")
+                                    raw_details: dict[str, Any] = cast(dict[str, Any], result.get("details") or {})
+                                    details_for_client = merge_details_with_output_explorer(raw_details, raw_output)
+
+                                    node_run_result = NodeRunResult(
+                                        node_id=node_id,
+                                        status=result["status"],
+                                        output=result.get("output"),
+                                        error=result.get("error"),
+                                        latency_ms=round(elapsed_ms, 2),
+                                        details=details_for_client,
+                                        step_number=recorder.next_step(),
+                                    )
+
+                                    node_results.append(node_run_result)
+                                    self.bump_node_execution_budget_after_step()
+
+                                    ev_done = "node.completed" if result["status"] == "ok" else "node.failed"
+                                    await _emit(
+                                        ev_done,
+                                        {
+                                            "workflow_id": str(workflow.id),
+                                            "run_id": str(run_id),
+                                            "node_id": node_id,
+                                            "result": node_run_result.model_dump(mode="json", serialize_as_any=True),
+                                        },
+                                    )
+
+                                    safe_out, safe_det = redact_node_log_for_storage(raw_output, raw_details)
+                                    safe_det = attach_output_explorer_after_redact(safe_out, safe_det)
+                                    node_log = NodeRunLog(
+                                        run_id=run_id,
+                                        node_id=node_id,
+                                        step_number=node_run_result.step_number,
+                                        status=result["status"],
+                                        output_data=safe_out,
+                                        error=result.get("error"),
+                                        latency_ms=round(elapsed_ms, 2),
+                                        details=safe_det,
+                                    )
+                                    self.session.add(node_log)
+                                    self.session.commit()
+
+                                    if result["status"] == "ok" and result.get("output"):
+                                        outputs[node_id] = cast(NodeOutputUnion, result["output"])
+
+                                    node_exec: Any = nodes_by_id[node_id]
+                                    output_val: Any = result.get("output")
+                                    if isinstance(
+                                        node_exec,
+                                        (
+                                            BasicConditionalControlNode,
+                                            BetweenControlNode,
+                                            IsControlNode,
+                                            IsEmptyControlNode,
+                                            GtControlNode,
+                                            LtControlNode,
+                                            GteControlNode,
+                                            LteControlNode,
+                                        ),
+                                    ) and isinstance(output_val, ConditionalNodeOutput):
+                                        for edge in main_edges:
+                                            if edge.source == node_id and edge.source_handle == output_val.branch:
+                                                succ = edge.target
+                                                if succ in main_ids:
+                                                    in_degree[succ] -= 1
+                                                    if in_degree[succ] == 0:
+                                                        ready.append(succ)
+                                        _decrement_signal_out_triggers(node_id, main_edges, main_ids, in_degree, ready)
+                                    elif isinstance(node_exec, TryCatchControlNode):
+                                        branch = str(result.get("try_catch_branch") or "")
+                                        for edge in main_edges:
+                                            if edge.source != node_id:
+                                                continue
+                                            sh = edge.source_handle or ""
+                                            succ = edge.target
+                                            if succ not in main_ids:
+                                                continue
+                                            take = False
+                                            if sh in ("output", "envelope"):
+                                                take = True
+                                            elif sh == "try" and branch == "try":
+                                                take = True
+                                            elif sh == "catch" and branch == "catch":
+                                                take = True
+                                            if take:
+                                                in_degree[succ] -= 1
+                                                if in_degree[succ] == 0:
+                                                    ready.append(succ)
+                                    else:
+                                        for succ in adjacency.get(node_id, []):
+                                            in_degree[succ] -= 1
+                                            if in_degree[succ] == 0:
+                                                ready.append(succ)
+                                _run_tasks = []
+
+                            statuses = {r.status for r in node_results}
+                            if statuses == {"ok"}:
+                                overall = "ok"
+                            elif "ok" in statuses:
+                                overall = "partial"
+                            else:
+                                overall = "error"
+
+                            final_result = WorkflowRunResult(
+                                workflow_id=workflow.id,
+                                status=overall,
+                                node_results=node_results,
                             )
-                        elif isinstance(node, ForLoopEndControlNode):
-                            result = self._resolve_for_loop_end_node(
-                                node_id, node, edges, outputs, output_overrides_map=om
-                            )
-                        else:
-                            upstream = _resolve_upstream_for_node(node_id, edges, outputs)
-                            result = await self._execute_node(
-                                node_id,
-                                node,
-                                upstream,
-                                edges,
-                                outputs,
-                                input_overrides,
-                                workflow=workflow,
-                                execution_stack=stack,
-                                execution_time_zone=etz,
-                                output_overrides_map=om,
-                                stream_run_id=run_id,
-                                for_loop_id=None,
-                                for_loop_iteration=None,
-                            )
-                        elapsed_ms = (time.monotonic() - t0) * 1000
-                        return result, elapsed_ms, stream_bucket
 
-                    _run_tasks = [asyncio.create_task(run_node(node_id)) for node_id in batch]
-                    await asyncio.sleep(0)
-                    _pending: set[asyncio.Task[Any]] = set(_run_tasks)
-                    ka_sec = SSE_KEEPALIVE_INTERVAL_SEC
-                    while _pending:
-                        await self._flush_interstitial_sse(sse_publish, persist_run_record)
-                        _, _pending = await asyncio.wait(_pending, timeout=ka_sec)
-                        if _pending and sse_raw is not None:
-                            await sse_raw(sse_comment_keepalive())
-                    await self._flush_interstitial_sse(sse_publish, persist_run_record)
-
-                    gathered = []
-                    for _t in _run_tasks:
-                        try:
-                            gathered.append(_t.result())
-                        except BaseException as _exc:
-                            gathered.append(_exc)
-
-                    for node_id, raw in zip(batch, gathered):
-                        stream_bucket: list[tuple[str, dict[str, Any]]] = []
-                        if isinstance(raw, BaseException):
-                            result = {"status": "error", "error": _format_exception(raw)}
-                            elapsed_ms = 0.0
-                        else:
-                            result, elapsed_ms, stream_bucket = cast(
-                                tuple[dict[str, Any], float, list[tuple[str, dict[str, Any]]]], raw
-                            )
-
-                        for evn, tpl in stream_bucket:
-                            seq = await sse_publish(evn, dict(tpl))
-                            persist_run_record.last_event_seq = seq
+                            persist_run_record.status = terminal_status_for_aggregate(overall)
+                            persist_run_record.completed_at = utc_now()
                             self.session.add(persist_run_record)
                             self.session.commit()
+                            self._cancel_active_transcribe_waits()
 
-                        out_for_log: Any = result.get("output")
-                        raw_output: dict[str, Any] | None = None
-                        if out_for_log is not None:
-                            md = getattr(out_for_log, "model_dump", None)
-                            if callable(md):
-                                raw_output = md(mode="json")
-                        raw_details: dict[str, Any] = cast(dict[str, Any], result.get("details") or {})
-                        details_for_client = merge_details_with_output_explorer(raw_details, raw_output)
+                            await _emit(
+                                "workflow.completed",
+                                {"workflow_id": str(workflow.id), "run_id": str(run_id), "result": final_result.model_dump(mode="json", serialize_as_any=True)},
+                            )
+                            return final_result
 
-                        node_run_result = NodeRunResult(
-                            node_id=node_id,
-                            status=result["status"],
-                            output=result.get("output"),
-                            error=result.get("error"),
-                            latency_ms=round(elapsed_ms, 2),
-                            details=details_for_client,
-                            step_number=recorder.next_step(),
-                        )
-                        node_results.append(node_run_result)
 
-                        ev_done = "node.completed" if result["status"] == "ok" else "node.failed"
-                        await _emit(
-                            ev_done,
-                            {
-                                "workflow_id": str(workflow.id),
-                                "run_id": str(run_id),
-                                "node_id": node_id,
-                                "result": node_run_result.model_dump(mode="json", serialize_as_any=True),
-                            },
-                        )
-
-                        safe_out, safe_det = redact_node_log_for_storage(raw_output, raw_details)
-                        safe_det = attach_output_explorer_after_redact(safe_out, safe_det)
-                        node_log = NodeRunLog(
-                            run_id=run_id,
-                            node_id=node_id,
-                            step_number=node_run_result.step_number,
-                            status=result["status"],
-                            output_data=safe_out,
-                            error=result.get("error"),
-                            latency_ms=round(elapsed_ms, 2),
-                            details=safe_det,
-                        )
-                        self.session.add(node_log)
-                        self.session.commit()
-
-                        if result["status"] == "ok" and result.get("output"):
-                            outputs[node_id] = cast(NodeOutputUnion, result["output"])
-
-                        node_exec: Any = nodes_by_id[node_id]
-                        output_val: Any = result.get("output")
-                        if isinstance(
-                            node_exec,
-                            (
-                                BasicConditionalControlNode,
-                                BetweenControlNode,
-                                IsControlNode,
-                                IsEmptyControlNode,
-                                GtControlNode,
-                                LtControlNode,
-                                GteControlNode,
-                                LteControlNode,
+                except asyncio.TimeoutError:
+                    await _emit(
+                        "workflow.failed",
+                        {
+                            "workflow_id": str(workflow.id),
+                            "run_id": str(run_id),
+                            "error": (
+                                "The workflow exceeded its maximum runtime "
+                                f"({lim_e_sched.workflow_ttl_seconds} seconds)."
                             ),
-                        ) and isinstance(output_val, ConditionalNodeOutput):
-                            for edge in main_edges:
-                                if edge.source == node_id and edge.source_handle == output_val.branch:
-                                    succ = edge.target
-                                    if succ in main_ids:
-                                        in_degree[succ] -= 1
-                                        if in_degree[succ] == 0:
-                                            ready.append(succ)
-                            _decrement_signal_out_triggers(node_id, main_edges, main_ids, in_degree, ready)
-                        else:
-                            for succ in adjacency.get(node_id, []):
-                                in_degree[succ] -= 1
-                                if in_degree[succ] == 0:
-                                    ready.append(succ)
-                    _run_tasks = []
+                            "error_type": "workflow_timeout",
+                        },
+                    )
+                    try:
+                        persist_run_record.status = "failed"
+                        persist_run_record.completed_at = utc_now()
+                        self.session.add(persist_run_record)
+                        self.session.commit()
+                    except Exception:
+                        logger.exception(
+                            "failed to persist timed-out run terminal for run_id=%s",
+                            run_id,
+                        )
+                    self._cancel_active_transcribe_waits()
+                    return WorkflowRunResult(
+                        workflow_id=workflow.id,
+                        status="error",
+                        node_results=node_results,
+                    )
 
-                statuses = {r.status for r in node_results}
-                if statuses == {"ok"}:
-                    overall = "ok"
-                elif "ok" in statuses:
-                    overall = "partial"
-                else:
-                    overall = "error"
+                except _WorkflowSafetyAbort as sa:
+                    await _emit(
+                        "workflow.failed",
+                        {
+                            "workflow_id": str(workflow.id),
+                            "run_id": str(run_id),
+                            "error": str(sa),
+                            "error_type": sa.error_type,
+                        },
+                    )
+                    try:
+                        persist_run_record.status = "failed"
+                        persist_run_record.completed_at = utc_now()
+                        self.session.add(persist_run_record)
+                        self.session.commit()
+                    except Exception:
+                        logger.exception(
+                            "failed to persist safety-aborted run terminal for run_id=%s",
+                            run_id,
+                        )
+                    self._cancel_active_transcribe_waits()
+                    return WorkflowRunResult(
+                        workflow_id=workflow.id,
+                        status="error",
+                        node_results=node_results,
+                    )
 
-                final_result = WorkflowRunResult(
-                    workflow_id=workflow.id,
-                    status=overall,
-                    node_results=node_results,
-                )
-
-                persist_run_record.status = terminal_status_for_aggregate(overall)
-                persist_run_record.completed_at = utc_now()
-                self.session.add(persist_run_record)
-                self.session.commit()
-                self._cancel_active_transcribe_waits()
-
-                await _emit(
-                    "workflow.completed",
-                    {"workflow_id": str(workflow.id), "run_id": str(run_id), "result": final_result.model_dump(mode="json", serialize_as_any=True)},
-                )
-                return final_result
+            finally:
+                reset_for_loop_summaries_token(tok_summ)
 
         except asyncio.CancelledError:
             logger.info("execute_scheduled_run cancelled workflow %s run_id=%s", workflow.id, run_id)

@@ -1196,12 +1196,30 @@ export interface BetweenControlNode {
     position: { x: number; y: number };
 }
 
+export interface TryCatchControlNode {
+    id: string;
+    kind: 'control';
+    control_type: 'try_catch';
+    label: string;
+    /** Optional wired value surfaced on handle `value` when the try branch succeeds without error. */
+    data: { required_inputs?: RequiredInput[] };
+    position: { x: number; y: number };
+}
+
 export interface ForLoopControlNode {
     id: string;
     kind: 'control';
     control_type: 'for_loop';
     label: string;
-    data: { required_inputs: RequiredInput[]; parallel_iterations?: boolean };
+    data: {
+        required_inputs: RequiredInput[];
+        /** @deprecated Prefer `iteration_mode`; kept for older graphs */
+        parallel_iterations?: boolean;
+        iteration_mode?: 'sequential' | 'parallel' | 'batched';
+        batch_size?: number;
+        continue_on_error?: boolean;
+        max_iterations?: number;
+    };
     position: { x: number; y: number };
 }
 
@@ -1275,6 +1293,7 @@ export type GraphNode =
     | XorControlNode
     | NotControlNode
     | BetweenControlNode
+    | TryCatchControlNode
     | ForLoopControlNode
     | ForLoopEndControlNode
     | StringPrimitiveNode
@@ -1301,11 +1320,27 @@ export type {
     SandboxSandboxStateJson,
 } from '../domain/sandbox/types';
 
+/** Optional overrides merged server-side under deployment ceilings (defaults + graph + run). */
+export interface WorkflowExecutionLimitsOverrides {
+    workflow_ttl_seconds?: number;
+    max_node_executions?: number;
+    max_loop_iterations?: number;
+    max_nested_depth?: number;
+}
+
+/** `GET /workflow-execution-limits/` payloads (defaults + ceilings). */
+export interface WorkflowExecutionLimitsEnvelope {
+    defaults: Required<WorkflowExecutionLimitsOverrides>;
+    ceilings: Required<WorkflowExecutionLimitsOverrides> & { max_loop_batch_size: number };
+}
+
 export interface WorkflowGraph {
     nodes: GraphNode[];
     edges: GraphEdge[];
     /** Present on API responses after save; omitted = legacy implicit v1 */
     schema_version?: number | null;
+    /** Saved with the graph JSON; merged at run-time with defaults and optional per-run overrides. */
+    execution_limits?: WorkflowExecutionLimitsOverrides | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1589,9 +1624,7 @@ export interface User {
     username: string;
     is_admin: boolean;
     /**
-     * May include avatar_url (data URL or external URL) for custom avatar,
-     * max_concurrent_lm_studio_calls (1–32, default 3) for parallel workflow wave size,
-     * tts_playback_when (`inline` | `manual` | `after_workflow`; preferred) and legacy auto_play_tts_on_node_end (boolean) for workflow editor TTS playback; Text-to-Speech nodes may override via data.
+     * May include `workflow_execution_limits_prefs` ({ workflow_ttl_seconds?, max_node_executions?, max_loop_iterations?, max_nested_depth? }), optional overlays merged between deployment defaults and graph/run limits under server ceilings.
      */
     settings: Record<string, unknown>;
     api_keys: Record<string, string>;

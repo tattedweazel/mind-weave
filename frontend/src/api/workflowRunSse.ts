@@ -28,13 +28,18 @@ export function ssePayloadToLegacyWorkflowEvent(
                 ...(seq !== undefined ? { seq } : {}),
             };
         case 'node.completed':
-        case 'node.failed':
+        case 'node.failed': {
+            const handledRaw = withSeq.handled_by_try_catch;
+            const handledTc =
+                typeof handledRaw === 'string' && handledRaw.trim() !== '' ? handledRaw.trim() : undefined;
             return {
                 event: 'node_end',
                 node_id: withSeq.node_id,
                 result: withSeq.result,
+                ...(handledTc !== undefined ? { handled_by_try_catch: handledTc } : {}),
                 ...(seq !== undefined ? { seq } : {}),
             };
+        }
         case 'workflow.completed':
             return {
                 event: 'end',

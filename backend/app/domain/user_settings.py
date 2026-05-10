@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
+
+from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from app.domain.execution_limits import ExecutionLimitsOverrides
 
 MAX_CONCURRENT_LM_STUDIO_CALLS_MIN = 1
 MAX_CONCURRENT_LM_STUDIO_CALLS_MAX = 32
@@ -36,6 +41,24 @@ def resolve_auto_play_tts_on_node_end(settings: Any) -> bool:
     Equivalent to resolve_tts_playback_when(settings) == \"inline\".
     """
     return resolve_tts_playback_when(settings) == "inline"
+
+
+def parse_execution_limits_prefs_from_settings(settings: Any) -> Optional["ExecutionLimitsOverrides"]:
+    """Optional overlays from ``User.settings['workflow_execution_limits_prefs']``. None if absent or invalid."""
+
+    from app.domain.execution_limits import ExecutionLimitsOverrides
+
+    if not isinstance(settings, dict):
+        return None
+    raw = settings.get("workflow_execution_limits_prefs")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return ExecutionLimitsOverrides.model_validate(raw)
+    except ValidationError:
+        return None
 
 
 def resolve_max_concurrent_lm_studio_calls(settings: Any) -> int:

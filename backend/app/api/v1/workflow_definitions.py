@@ -21,8 +21,14 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from sqlmodel import Session, col, select
 
 from app.api.deps import get_current_user
+from app.core.config import settings as app_settings
 from app.core.logging import logger
 from app.core.run_log_redaction import redact_error_for_api, redact_prompt_like
+from app.domain.execution_limits import (
+    parse_execution_limits_from_graph,
+    resolve_execution_limits,
+    resolved_execution_limits_to_json,
+)
 from app.domain.schemas import (
     WorkflowDefinitionCreate,
     WorkflowDefinitionListItem,
@@ -34,6 +40,7 @@ from app.domain.schemas import (
 )
 from app.domain.services.workflow_definition_service import WorkflowDefinitionService
 from app.domain.services.workflow_executor import WorkflowExecutor
+from app.domain.user_settings import parse_execution_limits_prefs_from_settings
 from app.domain.workflow_input_overrides import validate_input_overrides_for_workflow
 from app.domain.workflow_output_overrides import validate_and_build_output_overrides
 from app.domain.workflow_run_runner import execute_workflow_run_job
@@ -175,6 +182,18 @@ async def run_workflow(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        graph_limits = parse_execution_limits_from_graph(wf.graph)
+        run_limits = body.execution_limits if body else None
+        user_lim = parse_execution_limits_prefs_from_settings(current_user.settings)
+        eff_limits = resolve_execution_limits(
+            app_settings,
+            user_limits=user_lim,
+            graph_limits=graph_limits,
+            run_request_limits=run_limits,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     executor = WorkflowExecutor(session, current_user.id)
     try:
         return await executor.run(
@@ -182,6 +201,7 @@ async def run_workflow(
             input_overrides=overrides,
             output_overrides_map=output_map,
             execution_time_zone=execution_tz or None,
+            execution_limits=eff_limits,
         )
     except ValueError as exc:
         logger.error(f"run_workflow {id}: validation error — {exc}")
@@ -224,11 +244,24 @@ async def enqueue_workflow_run(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        graph_limits = parse_execution_limits_from_graph(wf.graph)
+        run_limits = body.execution_limits if body else None
+        user_lim = parse_execution_limits_prefs_from_settings(current_user.settings)
+        eff_limits = resolve_execution_limits(
+            app_settings,
+            user_limits=user_lim,
+            graph_limits=graph_limits,
+            run_request_limits=run_limits,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     run_row = WorkflowRun(
         workflow_id=wf.id,
         started_by_user_id=current_user.id,
         status="queued",
+        execution_limits_effective=resolved_execution_limits_to_json(eff_limits),
     )
     session.add(run_row)
     session.commit()

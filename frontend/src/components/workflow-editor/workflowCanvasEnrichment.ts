@@ -287,6 +287,15 @@ export function enrichNodesForCanvasFlow(
                     (Array.isArray(listVal) && listVal.length > 0);
                 return { ...n, data: { ...baseData, inputHasValue } };
             }
+            if (n.type === 'tryCatchControl') {
+                const d = n.data as any;
+                const req = d?.required_inputs ?? [{ key: 'value', type: 'any', value: null }];
+                const v = req.find((r: { key?: string }) => r?.key === 'value')?.value;
+                const valueHasValue =
+                    edges.some(e => e.target === n.id && (e.targetHandle === 'value' || e.targetHandle == null)) ||
+                    !(v === null || v === undefined || v === '');
+                return { ...n, data: { ...baseData, valueHasValue } };
+            }
             if (n.type === 'listItemByIndex') {
                 const d = n.data as any;
                 const req = d?.required_inputs ?? [];

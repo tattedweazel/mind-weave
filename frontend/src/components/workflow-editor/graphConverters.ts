@@ -3,6 +3,7 @@ import type {
     BinaryIntUtilityType,
     GraphNode as AppGraphNode,
     GraphEdge as AppGraphEdge,
+    ForLoopControlNode,
     MultimodalLLMCallSkillNode,
     RequiredInput,
     WorkflowDefinitionListItemHydrated,
@@ -1133,6 +1134,25 @@ export function appNodeToFlow(n: AppGraphNode): Node {
         }
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label, required_inputs: requiredInputs } };
     }
+    if (n.kind === 'control' && (n as any).control_type === 'try_catch') {
+        const tcData = (n.data as any) ?? {};
+        let requiredInputs =
+            Array.isArray(tcData.required_inputs) && tcData.required_inputs.length > 0
+                ? tcData.required_inputs.filter((r: { key?: string }) => r?.key === 'value')
+                : [{ key: 'value', type: 'any' as const, value: null }];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'value')) {
+            requiredInputs.push({ key: 'value', type: 'any' as const, value: null });
+        }
+        requiredInputs = requiredInputs.map((r: RequiredInput) =>
+            r.key === 'value' ? { ...r, type: 'any' as const } : r,
+        );
+        return {
+            id: n.id,
+            type: reactFlowTypeForAppNode(n),
+            position: pos,
+            data: { label: n.label, required_inputs: requiredInputs },
+        };
+    }
     if (n.kind === 'control' && (n as any).control_type === 'for_loop') {
         const d = n.data as any;
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
@@ -1149,6 +1169,19 @@ export function appNodeToFlow(n: AppGraphNode): Node {
                 label: n.label,
                 required_inputs: requiredInputs,
                 ...(d?.parallel_iterations === true ? { parallel_iterations: true } : {}),
+                ...(typeof d?.iteration_mode === 'string'
+                    ? { iteration_mode: d.iteration_mode }
+                    : d?.parallel_iterations === true &&
+                        !(typeof d?.iteration_mode === 'string' && d.iteration_mode !== '')
+                      ? { iteration_mode: 'parallel' as const }
+                      : {}),
+                ...(typeof d?.batch_size === 'number' && Number.isFinite(d.batch_size)
+                    ? { batch_size: d.batch_size }
+                    : {}),
+                ...(d?.continue_on_error === true ? { continue_on_error: true } : {}),
+                ...(typeof d?.max_iterations === 'number' && Number.isFinite(d.max_iterations)
+                    ? { max_iterations: d.max_iterations }
+                    : {}),
             },
         };
     }
@@ -1479,8 +1512,14 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (src.type === 'writeObjectToDocumentBody' || src.type === 'appendValueToDocument') return 'string';
     if (src.type === 'validateAgainstStructure') return 'any';
     if (src.type === 'addToList') return 'list';
+    if (src.type === 'forLoopControl' && sourceHandle === 'summary') return 'dictionary';
     if (src.type === 'forLoopControl' && sourceHandle === 'item') return 'any';
     if (src.type === 'forLoopEndControl' && sourceHandle === 'output') return 'dictionary';
+    if (
+        src.type === 'tryCatchControl' &&
+        (sourceHandle === 'output' || sourceHandle === 'envelope')
+    )
+        return 'dictionary';
     const branchControls = [
         'basicConditional',
         'isControl',
@@ -1683,6 +1722,33 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
     if (targetNode && targetNode.type === 'forLoopControl' && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'input';
     }
+    if (targetNode && targetNode.type === 'tryCatchControl' && (targetHandle == null || targetHandle === '')) {
+        const srcN = nodes.find(n => n.id === e.source);
+        const shEarly = sourceHandle ?? (e.source_handle as string | null | undefined) ?? '';
+        const branchControlsTrig = [
+            'basicConditional',
+            'isControl',
+            'isEmptyControl',
+            'gtControl',
+            'ltControl',
+            'gteControl',
+            'lteControl',
+            'betweenControl',
+        ].includes(srcN?.type ?? '');
+        const fromBranchTf = branchControlsTrig && (shEarly === 'true' || shEarly === 'false');
+        if (
+            shEarly === 'signal_out' ||
+            shEarly === 'try' ||
+            shEarly === 'catch' ||
+            fromBranchTf ||
+            srcN?.type === 'tryCatchControl' ||
+            srcN?.type === 'start'
+        ) {
+            targetHandle = 'trigger';
+        } else {
+            targetHandle = 'value';
+        }
+    }
     if (targetNode && targetNode.type === 'forLoopEndControl' && (targetHandle == null || targetHandle === '')) {
         const srcN = nodes.find(n => n.id === e.source);
         const fromFlSignal =
@@ -1749,9 +1815,10 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         targetHandle = 'message';
     }
     const sourceNode = nodes.find(n => n.id === e.source);
-    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'decisionActionPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxBehaviorPrimitive', 'sandboxTickItems', 'sandboxAvailableCells', 'sandboxWorldGrid', 'sandboxTickPet', 'sandboxFilterItemsByType', 'sandboxNearestItemByType', 'sandboxClosestItem', 'sandboxDecisionIntent', 'sandboxDecisionMoveTo', 'sandboxStarterDecision', 'sandboxPetHunger', 'sandboxPetEnergy', 'sandboxPetCell', 'sandboxIsNearby8', 'sandboxFirstNearbyFood', 'sandboxFirstFoodWorldOrder', 'workflowRef'];
+    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'decisionActionPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxBehaviorPrimitive', 'sandboxTickItems', 'sandboxAvailableCells', 'sandboxWorldGrid', 'sandboxTickPet', 'sandboxFilterItemsByType', 'sandboxNearestItemByType', 'sandboxClosestItem', 'sandboxDecisionIntent', 'sandboxDecisionMoveTo', 'sandboxStarterDecision', 'sandboxPetHunger', 'sandboxPetEnergy', 'sandboxPetCell', 'sandboxIsNearby8', 'sandboxFirstNearbyFood', 'sandboxFirstFoodWorldOrder', 'workflowRef'];
     if (sourceNode && targetNode && nodesWithTrigger.includes(targetNode.type ?? '') && (targetHandle == null || targetHandle === '') &&
-        (['basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl'].includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false'))) {
+        ((['basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl'].includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) ||
+            (sourceNode.type === 'tryCatchControl' && (sourceHandle === 'try' || sourceHandle === 'catch')))) {
         targetHandle = 'trigger';
     }
     if (sourceNode && (sourceHandle == null || sourceHandle === '') &&
@@ -1760,6 +1827,9 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
     }
     if (sourceNode && sourceNode.type === 'forLoopControl' && (sourceHandle == null || sourceHandle === '')) {
         sourceHandle = 'item';
+    }
+    if (sourceNode && sourceNode.type === 'tryCatchControl' && (sourceHandle == null || sourceHandle === '')) {
+        sourceHandle = 'output';
     }
     if (sourceNode && sourceNode.type === 'forLoopEndControl' && (sourceHandle == null || sourceHandle === '')) {
         sourceHandle = 'output';
@@ -1983,6 +2053,23 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             position: pos,
         };
     }
+    if (n.type === 'tryCatchControl') {
+        const d = n.data as any;
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'value')
+            : [{ key: 'value', type: 'any' as const, value: null }];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'value')) {
+            requiredInputs.push({ key: 'value', type: 'any' as const, value: null });
+        }
+        return {
+            id: n.id,
+            kind: 'control',
+            control_type: 'try_catch',
+            label: d?.label ?? 'Try / Catch',
+            data: { required_inputs: requiredInputs },
+            position: pos,
+        };
+    }
     if (n.type === 'forLoopControl') {
         const d = n.data as any;
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
@@ -1991,18 +2078,36 @@ export function flowNodeToApp(n: Node): AppGraphNode {
         if (!requiredInputs.some((r: { key?: string }) => r?.key === 'input')) {
             requiredInputs.push({ key: 'input', type: 'list' as const, value: null });
         }
-        const data: { required_inputs: typeof requiredInputs; parallel_iterations?: boolean } = {
+        const dm =
+            typeof d?.iteration_mode === 'string' && (d.iteration_mode === 'parallel' || d.iteration_mode === 'batched')
+                ? d.iteration_mode
+                : typeof d?.iteration_mode === 'string' && d.iteration_mode === 'sequential'
+                  ? 'sequential'
+                  : d?.parallel_iterations === true
+                    ? 'parallel'
+                    : 'sequential';
+        const apiData: ForLoopControlNode['data'] = {
             required_inputs: requiredInputs,
         };
-        if (d?.parallel_iterations === true) {
-            data.parallel_iterations = true;
+        if (dm === 'parallel' || dm === 'batched') {
+            apiData.iteration_mode = dm;
+        }
+        if (dm === 'parallel') {
+            apiData.parallel_iterations = true;
+        }
+        if (dm === 'batched' && typeof d?.batch_size === 'number' && Number.isFinite(d.batch_size)) {
+            apiData.batch_size = Math.floor(d.batch_size);
+        }
+        if (d?.continue_on_error === true) apiData.continue_on_error = true;
+        if (typeof d?.max_iterations === 'number' && Number.isFinite(d.max_iterations)) {
+            apiData.max_iterations = Math.floor(d.max_iterations);
         }
         return {
             id: n.id,
             kind: 'control',
             control_type: 'for_loop',
             label: d?.label ?? 'For Loop',
-            data,
+            data: apiData,
             position: pos,
         };
     }

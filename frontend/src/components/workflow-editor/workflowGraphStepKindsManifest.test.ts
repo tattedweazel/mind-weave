@@ -576,6 +576,16 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 position: pos,
             };
         }
+        if (ct === 'try_catch') {
+            return {
+                id: nodeId,
+                kind: 'control',
+                control_type: 'try_catch',
+                label,
+                data: { required_inputs: [{ key: 'value', type: 'any', value: null }] },
+                position: pos,
+            };
+        }
         if (ct === 'for_loop') {
             return {
                 id: nodeId,
@@ -680,6 +690,7 @@ describe('getSourceOutputType vs manifest react_flow_type', () => {
         gteControl: 'true',
         lteControl: 'true',
         betweenControl: 'true',
+        tryCatchControl: 'output',
         andControl: 'true',
         orControl: 'true',
         xorControl: 'true',
@@ -717,13 +728,13 @@ describe('getSourceOutputType vs manifest react_flow_type', () => {
         const flowPlain = appNodeToFlow(simple);
         expect(getSourceOutputType([flowPlain], flowPlain.id, undefined, [])).toBe('string');
 
-        const withStructure: AppGraphNode = {
+        const withStructure = {
             ...(simple as Extract<AppGraphNode, { kind: 'skill' }>),
             data: {
                 ...(simple as Extract<AppGraphNode, { kind: 'skill' }>).data,
                 structure_id: STRUCTURE_ID,
             },
-        };
+        } as AppGraphNode;
         const flowStruct = appNodeToFlow(withStructure);
         expect(getSourceOutputType([flowStruct], flowStruct.id, undefined, [])).toBe('dictionary');
 
@@ -749,13 +760,13 @@ describe('getSourceOutputType vs manifest react_flow_type', () => {
         } as ManifestStep);
         const flowPlain = appNodeToFlow(mm);
         expect(getSourceOutputType([flowPlain], flowPlain.id, undefined, [])).toBe('string');
-        const withStructure: AppGraphNode = {
+        const withStructure = {
             ...(mm as Extract<AppGraphNode, { kind: 'skill' }>),
             data: {
                 ...(mm as Extract<AppGraphNode, { kind: 'skill' }>).data,
                 structure_id: STRUCTURE_ID,
             },
-        };
+        } as AppGraphNode;
         const flowStruct = appNodeToFlow(withStructure);
         expect(getSourceOutputType([flowStruct], flowStruct.id, undefined, [])).toBe('dictionary');
     });

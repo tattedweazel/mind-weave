@@ -1003,7 +1003,19 @@ class ForLoopControlNode(BaseModel):
     label: str
     data: Dict[str, Any] = Field(
         default_factory=dict,
-    )  # required_inputs: list on key "input"; optional parallel_iterations (bool, default off)
+    )  # required_inputs: list on key "input"; parallel_iterations (bool, legacy parallel);
+    # iteration_mode: sequential | parallel | batched; batch_size; continue_on_error; max_iterations
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class TryCatchControlNode(BaseModel):
+    """Runs try subgraph; structured failure triggers catch branch and envelope output."""
+
+    id: str
+    kind: Literal["control"] = "control"
+    control_type: Literal["try_catch"] = "try_catch"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
@@ -1103,6 +1115,7 @@ GraphNode = Union[
     BetweenControlNode,
     ForLoopControlNode,
     ForLoopEndControlNode,
+    TryCatchControlNode,
     StartGraphNode,
     StopGraphNode,
     WorkflowRefNode,

@@ -545,6 +545,46 @@ def test_update_me_rejects_max_concurrent_lm_studio_calls_non_int(client: TestCl
     assert r.status_code == 422
 
 
+def test_update_me_settings_workflow_execution_limits_prefs_sparse(client: TestClient):
+    r = client.put(
+        "/api/v1/auth/me",
+        json={"settings": {"workflow_execution_limits_prefs": {"max_loop_iterations": 77}}},
+    )
+    assert r.status_code == 200
+    assert r.json()["settings"]["workflow_execution_limits_prefs"] == {"max_loop_iterations": 77}
+
+
+def test_update_me_workflow_execution_limits_prefs_empty_removed(client: TestClient):
+    r1 = client.put(
+        "/api/v1/auth/me",
+        json={"settings": {"workflow_execution_limits_prefs": {"max_loop_iterations": 10}}},
+    )
+    assert r1.status_code == 200
+    r2 = client.put("/api/v1/auth/me", json={"settings": {"workflow_execution_limits_prefs": {}}})
+    assert r2.status_code == 200
+    assert "workflow_execution_limits_prefs" not in r2.json()["settings"]
+
+
+def test_update_me_workflow_execution_limits_prefs_null_removed(client: TestClient):
+    r = client.put("/api/v1/auth/me", json={"settings": {"workflow_execution_limits_prefs": None}})
+    assert r.status_code == 200
+    assert "workflow_execution_limits_prefs" not in r.json()["settings"]
+
+
+def test_update_me_rejects_workflow_execution_limits_prefs_above_ceiling(client: TestClient):
+    ceiling = settings.WORKFLOW_EXECUTION_CEILING_MAX_LOOP_ITERATIONS + 1
+    r = client.put(
+        "/api/v1/auth/me",
+        json={"settings": {"workflow_execution_limits_prefs": {"max_loop_iterations": ceiling}}},
+    )
+    assert r.status_code == 422
+
+
+def test_update_me_rejects_workflow_execution_limits_prefs_not_object(client: TestClient):
+    r = client.put("/api/v1/auth/me", json={"settings": {"workflow_execution_limits_prefs": "nope"}})
+    assert r.status_code == 422
+
+
 def test_update_me_rejects_non_bool_workflow_editor_remember_panel_widths(client: TestClient):
     r = client.put(
         "/api/v1/auth/me",

@@ -53,13 +53,14 @@ describe('mergeLastRunNodeResult', () => {
         node_id: 'n1',
         status: 'ok',
         step_number: 3,
-        output: { kind: 'audio', audio_base64: 'YWI=', mime_type: 'audio/wav' },
+        output: { node_id: 'n_audio', kind: 'audio', audio_base64: 'YWI=', mime_type: 'audio/wav' },
     };
     const redactedReplay: NodeRunResult = {
         node_id: 'n1',
         status: 'ok',
         step_number: 3,
         output: {
+            node_id: 'n_audio',
             kind: 'audio',
             audio_base64: TTS_AUDIO_BASE64_REDACTED,
             mime_type: 'audio/wav',
@@ -78,7 +79,7 @@ describe('mergeLastRunNodeResult', () => {
         const next: NodeRunResult = {
             ...full,
             step_number: 4,
-            output: { kind: 'audio', audio_base64: 'eHg=', mime_type: 'audio/wav' },
+            output: { node_id: 'n_audio', kind: 'audio', audio_base64: 'eHg=', mime_type: 'audio/wav' },
         };
         expect(mergeLastRunNodeResult(full, next)).toEqual(next);
     });
@@ -91,7 +92,7 @@ describe('mergeLastRunNodeResult', () => {
     it('accepts newer full payload at same step over prior full', () => {
         const newer: NodeRunResult = {
             ...full,
-            output: { kind: 'audio', audio_base64: 'eHg=', mime_type: 'audio/wav' },
+            output: { node_id: 'n_audio', kind: 'audio', audio_base64: 'eHg=', mime_type: 'audio/wav' },
         };
         expect(mergeLastRunNodeResult(full, newer)).toEqual(newer);
     });
@@ -110,12 +111,13 @@ describe('mergeLastRunNodeResult', () => {
         const fullNoStep: NodeRunResult = {
             node_id: 'n1',
             status: 'ok',
-            output: { kind: 'audio', audio_base64: 'YWI=', mime_type: 'audio/wav' },
+            output: { node_id: 'n_audio', kind: 'audio', audio_base64: 'YWI=', mime_type: 'audio/wav' },
         };
         const redactedNoStep: NodeRunResult = {
             node_id: 'n1',
             status: 'ok',
             output: {
+                node_id: 'n_audio',
                 kind: 'audio',
                 audio_base64: TTS_AUDIO_BASE64_REDACTED,
                 mime_type: 'audio/wav',

@@ -37,6 +37,8 @@ import {
     VoiceSampleCreate,
     VoiceSampleDetail,
     VoiceSampleListItem,
+    WorkflowExecutionLimitsEnvelope,
+    WorkflowExecutionLimitsOverrides,
 } from './types';
 import { API_BASE } from './baseUrl';
 import { apiErrorFromResponse, fetchWithCredentials, readJsonBody } from './http';
@@ -381,12 +383,17 @@ export class ApiClient {
         await this.request<void>(`/workflow-definitions/${id}`, { method: 'DELETE' });
     }
 
+    static getWorkflowExecutionLimits(): Promise<WorkflowExecutionLimitsEnvelope> {
+        return this.request<WorkflowExecutionLimitsEnvelope>('/workflow-execution-limits/');
+    }
+
     static runWorkflow(
         id: string,
         options?: {
             input_overrides?: Record<string, unknown>;
             output_overrides?: Record<string, unknown>;
             execution_time_zone?: string;
+            execution_limits?: WorkflowExecutionLimitsOverrides;
         },
     ): Promise<WorkflowRunResult> {
         const body: Record<string, unknown> = {};
@@ -398,6 +405,9 @@ export class ApiClient {
         }
         if (options?.execution_time_zone) {
             body.execution_time_zone = options.execution_time_zone;
+        }
+        if (options?.execution_limits != null && Object.keys(options.execution_limits).length > 0) {
+            body.execution_limits = options.execution_limits;
         }
         return this.request<WorkflowRunResult>(`/workflow-definitions/${id}/run`, {
             method: 'POST',
@@ -412,6 +422,7 @@ export class ApiClient {
             input_overrides?: Record<string, any>;
             output_overrides?: Record<string, unknown>;
             execution_time_zone?: string;
+            execution_limits?: WorkflowExecutionLimitsOverrides;
             signal?: AbortSignal;
         },
     ): Promise<void> {
@@ -428,6 +439,9 @@ export class ApiClient {
         }
         if (options?.execution_time_zone) {
             body.execution_time_zone = options.execution_time_zone;
+        }
+        if (options?.execution_limits != null && Object.keys(options.execution_limits).length > 0) {
+            body.execution_limits = options.execution_limits;
         }
 
         const enqueueResp = await fetchWithCredentials(`${API_BASE}/workflow-definitions/${id}/runs`, {
