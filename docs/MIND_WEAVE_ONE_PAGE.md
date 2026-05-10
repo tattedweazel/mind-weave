@@ -109,7 +109,7 @@ The workflows **list** API does not return each definition’s **graph**; the ed
 
 ### Center: canvas
 
-The canvas is an interactive graph. **Nodes** expose **handles** for inputs and outputs. **Edges** connect handles. The active **workflow palette** determines colors for handles, edges, and node borders: specific keys per step type, with optional **family** colors (primitive, skill, utility, control) when a palette does not override every key.
+The canvas is an interactive graph. **Nodes** expose **handles** for inputs and outputs. **Edges** connect handles. **Workflow palettes** persist per-handle hex overrides (`colors` JSON); labels and taxonomy come from **`shared/workflow_graph_step_kinds.json`**, and **`GET`/create/update palette** responses expose derived **`effective_colors`** and **`warnings`** when keys are stale. **Which palette is active** is **`workflow.palette_id`** when set on the definition; otherwise the user’s **`preferred_editor_palette_id`** when that palette appears in **Configure → Palettes**; otherwise **Default** (slug **`default`** or equivalent). There is **no server “activate palette”** route—the editor resolves precedence locally. Rendering uses **`effective_colors`** from the loaded palette payload (explicit override → family fallback → shipped default **`any`**), so the SPA does not keep a handwritten mirror of every default hex map.
 
 **Scroll wheel** zooms; panning repositions the view. Selecting a workflow in the list or opening a replay **fits the view** to the entire graph once nodes are measured (same as the **fit** action in the canvas bottom-right corner zoom controls).
 

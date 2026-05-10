@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "codegen:palette-types": "cd .. && uv run --directory backend python scripts/dump_openapi_palette_subset.py && cd frontend && npx openapi-typescript openapi.palette.json --output src/generated/palette-types.ts",
+    "verify:palette-types": "npm run codegen:palette-types && git diff --exit-code openapi.palette.json src/generated/palette-types.ts"
   },
   "overrides": {
     "picomatch": "4.0.4"
@@ -39,14 +41,15 @@
     "@types/node": "^22.19.15",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vitest/coverage-v8": "^4.1.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.0",
     "autoprefixer": "^10.4.19",
     "eslint": "^9.39.4",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^15.15.0",
     "jsdom": "^29.0.0",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.4.5",

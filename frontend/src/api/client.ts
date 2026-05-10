@@ -9,7 +9,7 @@ import type { SandboxTickResponseJson } from './types';
 import {
     ModelsResponse,
     Persona, PersonaCreate, PersonaListItem, PersonaUpdate,
-    Palette, PaletteCreate, PaletteUpdate,
+    Palette, PaletteCreate, PaletteUpdate, PaletteValidateResult,
     SystemPalette, SystemPaletteCreate, SystemPaletteUpdate,
     Structure, StructureCreate, StructureUpdate,
     Document, DocumentCreate, DocumentListItem, DocumentMetadata, DocumentUpdate,
@@ -233,6 +233,13 @@ export class ApiClient {
 
     static updatePalette(id: string, data: PaletteUpdate): Promise<Palette> {
         return this.request<Palette>(`/palettes/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    }
+
+    static validateWorkflowPaletteImport(colors: Record<string, string>): Promise<PaletteValidateResult> {
+        return this.request<PaletteValidateResult>('/palettes/validate', {
+            method: 'POST',
+            body: JSON.stringify({ colors }),
+        });
     }
 
     static async deletePalette(id: string): Promise<void> {

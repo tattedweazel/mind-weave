@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { GraphNode as AppGraphNode } from '../../api/types';
 
 import { appNodeToFlow, flowNodeToApp, getSourceOutputType } from './graphConverters';
+import manifest from '../../../../shared/workflow_graph_step_kinds.json';
 import { manifestSteps, type ManifestStep } from './stepKindRegistry';
 import { nodeTypes } from './nodeTypes';
 
@@ -646,6 +647,25 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
 
 describe('workflow_graph_step_kinds manifest', () => {
     const keys = new Set(Object.keys(nodeTypes));
+
+    it('every step declares palette_handle and editor_label uniquely', () => {
+        expect(manifest.manifest_version).toBeGreaterThanOrEqual(2);
+        const paletteHandles = new Set<string>();
+        for (const s of manifest.steps) {
+            expect('palette_handle' in s && (s as { palette_handle?: string }).palette_handle).toBeTruthy();
+            expect('editor_label' in s && (s as { editor_label?: string }).editor_label?.trim()).toBeTruthy();
+            const ph = (s as { palette_handle: string }).palette_handle;
+            expect(paletteHandles.has(ph)).toBe(false);
+            paletteHandles.add(ph);
+        }
+        for (const e of manifest.palette_extras ?? []) {
+            const row = e as { palette_handle: string; editor_label: string };
+            expect(row.palette_handle).toBeTruthy();
+            expect(row.editor_label.trim()).toBeTruthy();
+            expect(paletteHandles.has(row.palette_handle)).toBe(false);
+            paletteHandles.add(row.palette_handle);
+        }
+    });
 
     it('every manifest react_flow_type is registered in nodeTypes', () => {
         for (const s of manifestSteps()) {

@@ -145,6 +145,8 @@ export const PaletteManager: React.FC<Props> = ({ isOpen, onClose }) => {
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    /** Server-side palette import normalization notes (stripped unknown keys, etc.). */
+    const [workflowImportHints, setWorkflowImportHints] = useState<string[]>([]);
     const [form, setForm] = useState<{ name: string; colors: Record<string, string> }>({ name: '', colors: {} });
 
     const [systemPalettes, setSystemPalettes] = useState<SystemPalette[]>([]);
@@ -197,6 +199,7 @@ export const PaletteManager: React.FC<Props> = ({ isOpen, onClose }) => {
             setSystemEditingId(null);
             setSystemIsCreating(false);
             setSystemDeletingId(null);
+            setWorkflowImportHints([]);
             setSystemForm({
                 name: '',
                 light: { ...DEFAULT_SYSTEM_COLORS_LIGHT },
@@ -217,6 +220,7 @@ export const PaletteManager: React.FC<Props> = ({ isOpen, onClose }) => {
     const handleEdit = (p: Palette) => {
         setIsCreating(false);
         setEditingId(p.id);
+        setWorkflowImportHints([]);
         setForm({
             name: p.name,
             colors: normalizeWorkflowPaletteColors(p.colors),
@@ -415,8 +419,13 @@ export const PaletteManager: React.FC<Props> = ({ isOpen, onClose }) => {
         }
     };
 
-    const applyImportedPalette = (name: string, colors: Record<string, string>) => {
+    const applyImportedPalette = (
+        name: string,
+        colors: Record<string, string>,
+        hints: readonly string[] = [],
+    ) => {
         setError(null);
+        setWorkflowImportHints([...hints]);
         setEditingId(null);
         setIsCreating(true);
         setForm({ name, colors: normalizeWorkflowPaletteColors(colors) });
@@ -428,12 +437,13 @@ export const PaletteManager: React.FC<Props> = ({ isOpen, onClose }) => {
         if (!file) return;
         try {
             const data = await readPaletteImportFile(file);
+            const validated = await ApiClient.validateWorkflowPaletteImport(data.colors);
             const needsConfirm =
                 (isCreating || editingId !== null) && hasDraftPaletteContent(form);
             if (needsConfirm && !window.confirm('Replace the current editor contents with the imported palette?')) {
                 return;
             }
-            applyImportedPalette(data.name, data.colors);
+            applyImportedPalette(data.name, validated.colors, validated.warnings);
         } catch (err) {
             const msg =
                 err instanceof PaletteImportError
@@ -486,6 +496,7 @@ export const PaletteManager: React.FC<Props> = ({ isOpen, onClose }) => {
                                         onClick={() => {
                                             setIsCreating(true);
                                             setEditingId(null);
+                                            setWorkflowImportHints([]);
                                             setForm({ name: '', colors: {} });
                                         }}
                                         className="w-full flex items-center justify-center gap-2 py-2 bg-mw-primary-muted text-mw-primary hover:opacity-90 rounded-lg text-sm font-medium transition-colors"
@@ -582,6 +593,11 @@ export const PaletteManager: React.FC<Props> = ({ isOpen, onClose }) => {
                                         <h3 className="text-lg font-bold text-mw-text-primary border-b border-mw-border pb-2">
                                             {isCreating ? 'Create Palette' : 'Edit Palette'}
                                         </h3>
+                                        {workflowImportHints.length > 0 && (
+                                            <div className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/25 px-3 py-2 rounded-lg whitespace-pre-wrap">
+                                                {workflowImportHints.join('\n')}
+                                            </div>
+                                        )}
                                         {error && (
                                             <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">
                                                 {error}

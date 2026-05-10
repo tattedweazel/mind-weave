@@ -121,6 +121,7 @@ import { unionLoopBodyNodeIds } from '../../domain/workflowLoopBodyNodeIds';
 import { mergeWorkflowDefinitionIntoList, workflowListEntryHasGraph } from '../../domain/workflowDefinitionListMerge';
 import {
     DEFAULT_PALETTE_COLORS,
+    EDITOR_NODE_PALETTE_EXTRA,
     isBuiltinDefaultSystemPalette,
     normalizeWorkflowPaletteColors,
     resolveFallbackWorkflowPalette,
@@ -863,7 +864,16 @@ export const WorkflowEditor: React.FC<Props> = ({
     }, [activeWf?.palette_id, palettes]);
 
     const paletteColors = React.useMemo(() => {
-        if (!activePalette?.colors) return DEFAULT_PALETTE_COLORS;
+        if (!activePalette) {
+            return DEFAULT_PALETTE_COLORS;
+        }
+        const ecs = activePalette.effective_colors;
+        if (ecs && Object.keys(ecs).length > 0) {
+            return { ...EDITOR_NODE_PALETTE_EXTRA, ...ecs };
+        }
+        if (!activePalette.colors) {
+            return DEFAULT_PALETTE_COLORS;
+        }
         return normalizeWorkflowPaletteColors(activePalette.colors);
     }, [activePalette]);
 

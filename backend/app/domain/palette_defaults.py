@@ -109,6 +109,9 @@ DEFAULT_PALETTE_COLORS: Dict[str, str] = {
     "for_loop_end_control": "#047857",
     "annotation_note": "#94a3b8",
     "annotation_region": "#64748b",
+    # Editor flow anchors (SPA `EDITOR_NODE_PALETTE_EXTRA`; persisted workflows omit these handles).
+    "start": "#6366f1",
+    "stop": "#f43f5e",
 }
 
 WORKFLOW_PALETTE_FAMILY_KEYS = frozenset({"primitive", "skill", "utility", "control"})

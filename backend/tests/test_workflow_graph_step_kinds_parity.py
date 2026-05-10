@@ -8,6 +8,7 @@ from typing import Any, Dict
 import pytest
 
 from app.domain.schemas.graph_nodes import SimpleLLMCallSkillNode
+from app.domain.palette_defaults import DEFAULT_PALETTE_COLORS, WORKFLOW_PALETTE_FAMILY_KEYS
 from app.domain.workflow_executor.parsing import _parse_node
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -434,6 +435,36 @@ def test_manifest_step_parses_and_matches_model(manifest_steps):
 
 def test_manifest_path_exists():
     assert MANIFEST_PATH.is_file()
+
+
+def test_manifest_palette_handles_cover_default_colors():
+    raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    assert raw.get("manifest_version") >= 2
+    handles = {s["palette_handle"] for s in raw["steps"]}
+    extras = raw.get("palette_extras") or []
+    handles |= {e["palette_handle"] for e in extras}
+    unset = sorted(set(DEFAULT_PALETTE_COLORS) - handles - WORKFLOW_PALETTE_FAMILY_KEYS)
+    assert not unset, f"palette_defaults keys missing from manifest handles: {unset}"
+
+
+def test_manifest_palette_handles_unique():
+    raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    step_handles = [s["palette_handle"] for s in raw["steps"]]
+    extras = raw.get("palette_extras") or []
+    extra_handles = [e["palette_handle"] for e in extras]
+    all_h = step_handles + extra_handles
+    assert len(all_h) == len(set(all_h)), f"duplicate palette_handle entries: {all_h}"
+
+    seen = set()
+    for row in raw["steps"]:
+        assert "palette_handle" in row and "editor_label" in row and row["editor_label"]
+        ph = row["palette_handle"]
+        assert ph not in seen
+        seen.add(ph)
+    for row in extras:
+        assert row["palette_handle"] not in seen
+        seen.add(row["palette_handle"])
+        assert row.get("editor_label")
 
 
 def test_legacy_utility_simple_llm_call_parses_as_skill_node():

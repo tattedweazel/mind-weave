@@ -188,6 +188,11 @@ def test_list_palettes(client: TestClient):
     assert "add_ints" in default["colors"]
     assert "add_days" in default["colors"]
     assert "between_control" in default["colors"]
+    assert isinstance(default["entries"], list)
+    assert len(default["entries"]) >= 85
+    assert isinstance(default["effective_colors"], dict)
+    assert "string" in default["effective_colors"]
+    assert isinstance(default["warnings"], list)
 
     slate = next((p for p in data if p.get("slug") == "slate"), None)
     assert slate is not None
@@ -234,6 +239,26 @@ def test_create_palette(client: TestClient):
     assert data["colors"]["string_to_list"] == "#67e8f9"
     assert data["colors"]["dictionary_value_by_key"] == "#9333ea"
     assert data["colors"]["prepend_text"] == "#f59e0b"
+    assert any(e["key"] == "simple_llm_call" for e in data["entries"])
+    assert data["effective_colors"]["simple_llm_call"]
+
+
+def test_post_palette_validate_strips_unknown_keys(client: TestClient):
+    payload = {"colors": {"string": "#aabbcc", "zzz_unknown": "#001122"}}
+    r = client.post("/api/v1/palettes/validate", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    assert "string" in body["colors"]
+    assert "zzz_unknown" not in body["colors"]
+    assert any("stripped_unknown_palette_color_key:zzz_unknown" in w for w in body["warnings"])
+
+
+def test_create_palette_rejects_unknown_colors_key(client: TestClient):
+    r = client.post(
+        "/api/v1/palettes/",
+        json={"name": "Bad Palette", "colors": {"string": "#ffffff", "not_known": "#000"}},
+    )
+    assert r.status_code == 422
 
 
 def test_update_palette(client: TestClient):

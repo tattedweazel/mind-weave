@@ -1,512 +1,704 @@
 {
-  "manifest_version": 1,
+  "manifest_version": 2,
   "steps": [
     {
       "kind": "primitive",
       "primitive_type": "string",
       "react_flow_type": "stringPrimitive",
-      "pydantic_model": "StringPrimitiveNode"
+      "pydantic_model": "StringPrimitiveNode",
+      "palette_handle": "string",
+      "editor_label": "String"
     },
     {
       "kind": "primitive",
       "primitive_type": "list",
       "react_flow_type": "listPrimitive",
-      "pydantic_model": "ListPrimitiveNode"
+      "pydantic_model": "ListPrimitiveNode",
+      "palette_handle": "list",
+      "editor_label": "List"
     },
     {
       "kind": "primitive",
       "primitive_type": "dictionary",
       "react_flow_type": "dictionaryPrimitive",
-      "pydantic_model": "DictionaryPrimitiveNode"
+      "pydantic_model": "DictionaryPrimitiveNode",
+      "palette_handle": "dictionary",
+      "editor_label": "Dictionary"
     },
     {
       "kind": "primitive",
       "primitive_type": "boolean",
       "react_flow_type": "booleanPrimitive",
-      "pydantic_model": "BooleanPrimitiveNode"
+      "pydantic_model": "BooleanPrimitiveNode",
+      "palette_handle": "boolean",
+      "editor_label": "Boolean"
     },
     {
       "kind": "primitive",
       "primitive_type": "int",
       "react_flow_type": "intPrimitive",
-      "pydantic_model": "IntPrimitiveNode"
+      "pydantic_model": "IntPrimitiveNode",
+      "palette_handle": "int",
+      "editor_label": "Int"
     },
     {
       "kind": "primitive",
       "primitive_type": "datetime",
       "react_flow_type": "dateTimePrimitive",
-      "pydantic_model": "DateTimePrimitiveNode"
+      "pydantic_model": "DateTimePrimitiveNode",
+      "palette_handle": "datetime",
+      "editor_label": "DateTime"
     },
     {
       "kind": "primitive",
       "primitive_type": "structure",
       "react_flow_type": "structurePrimitive",
-      "pydantic_model": "StructurePrimitiveNode"
+      "pydantic_model": "StructurePrimitiveNode",
+      "palette_handle": "structure",
+      "editor_label": "Structure"
     },
     {
       "kind": "primitive",
       "primitive_type": "document",
       "react_flow_type": "documentPrimitive",
-      "pydantic_model": "DocumentPrimitiveNode"
+      "pydantic_model": "DocumentPrimitiveNode",
+      "palette_handle": "document",
+      "editor_label": "Document"
     },
     {
       "kind": "primitive",
       "primitive_type": "image",
       "react_flow_type": "imagePrimitive",
-      "pydantic_model": "ImagePrimitiveNode"
+      "pydantic_model": "ImagePrimitiveNode",
+      "palette_handle": "image",
+      "editor_label": "Image"
     },
     {
       "kind": "primitive",
       "primitive_type": "gmail",
       "react_flow_type": "gmailPrimitive",
-      "pydantic_model": "GmailPrimitiveNode"
+      "pydantic_model": "GmailPrimitiveNode",
+      "palette_handle": "gmail",
+      "editor_label": "Gmail"
     },
     {
       "kind": "primitive",
       "primitive_type": "sandbox_behavior",
       "react_flow_type": "sandboxBehaviorPrimitive",
-      "pydantic_model": "SandboxBehaviorPrimitiveNode"
+      "pydantic_model": "SandboxBehaviorPrimitiveNode",
+      "palette_handle": "sandbox_behavior",
+      "editor_label": "Sandbox behavior"
     },
     {
       "kind": "primitive",
       "primitive_type": "decision_action",
       "react_flow_type": "decisionActionPrimitive",
-      "pydantic_model": "DecisionActionPrimitiveNode"
+      "pydantic_model": "DecisionActionPrimitiveNode",
+      "palette_handle": "decision_action",
+      "editor_label": "Decision action"
     },
     {
       "kind": "primitive",
       "primitive_type": "sandbox_tick",
       "react_flow_type": "sandboxTickPrimitive",
-      "pydantic_model": "SandboxTickPrimitiveNode"
+      "pydantic_model": "SandboxTickPrimitiveNode",
+      "palette_handle": "sandbox_tick",
+      "editor_label": "Sandbox tick"
     },
     {
       "kind": "skill",
       "skill_type": "simple_llm_call",
       "react_flow_type": "simpleLLMCall",
-      "pydantic_model": "SimpleLLMCallSkillNode"
+      "pydantic_model": "SimpleLLMCallSkillNode",
+      "palette_handle": "simple_llm_call",
+      "editor_label": "Simple LLM Call"
     },
     {
       "kind": "skill",
       "skill_type": "multimodal_llm",
       "react_flow_type": "multimodalLLMCall",
-      "pydantic_model": "MultimodalLLMCallSkillNode"
+      "pydantic_model": "MultimodalLLMCallSkillNode",
+      "palette_handle": "multimodal_llm",
+      "editor_label": "Multimodal LLM"
     },
     {
       "kind": "skill",
       "skill_type": "text_to_speech",
       "react_flow_type": "textToSpeech",
-      "pydantic_model": "TextToSpeechSkillNode"
+      "pydantic_model": "TextToSpeechSkillNode",
+      "palette_handle": "text_to_speech",
+      "editor_label": "Text-to-Speech"
     },
     {
       "kind": "skill",
       "skill_type": "transcribe_audio",
       "react_flow_type": "transcribeAudio",
-      "pydantic_model": "TranscribeAudioSkillNode"
+      "pydantic_model": "TranscribeAudioSkillNode",
+      "palette_handle": "transcribe_audio",
+      "editor_label": "Voice input"
     },
     {
       "kind": "skill",
       "skill_type": "audio_file_input",
       "react_flow_type": "audioFileInput",
-      "pydantic_model": "AudioFileInputSkillNode"
+      "pydantic_model": "AudioFileInputSkillNode",
+      "palette_handle": "audio_file_input",
+      "editor_label": "Audio File Input"
     },
     {
       "kind": "skill",
       "skill_type": "transcribe_file",
       "react_flow_type": "transcribeFile",
-      "pydantic_model": "TranscribeFileSkillNode"
+      "pydantic_model": "TranscribeFileSkillNode",
+      "palette_handle": "transcribe_file",
+      "editor_label": "Transcribe File"
     },
     {
       "kind": "skill",
       "skill_type": "gmail_list_messages",
       "react_flow_type": "gmailListMessages",
-      "pydantic_model": "GmailListMessagesSkillNode"
+      "pydantic_model": "GmailListMessagesSkillNode",
+      "palette_handle": "gmail_list_messages",
+      "editor_label": "Gmail List Messages"
     },
     {
       "kind": "skill",
       "skill_type": "calendar_list_events",
       "react_flow_type": "calendarListEvents",
-      "pydantic_model": "CalendarListEventsSkillNode"
+      "pydantic_model": "CalendarListEventsSkillNode",
+      "palette_handle": "calendar_list_events",
+      "editor_label": "Calendar List Events"
     },
     {
       "kind": "skill",
       "skill_type": "fetch_url",
       "react_flow_type": "fetchUrl",
-      "pydantic_model": "FetchUrlSkillNode"
+      "pydantic_model": "FetchUrlSkillNode",
+      "palette_handle": "fetch_url",
+      "editor_label": "Fetch URL"
     },
     {
       "kind": "skill",
       "skill_type": "capture_url_snapshot",
       "react_flow_type": "captureUrlSnapshot",
-      "pydantic_model": "CaptureUrlSnapshotSkillNode"
+      "pydantic_model": "CaptureUrlSnapshotSkillNode",
+      "palette_handle": "capture_url_snapshot",
+      "editor_label": "URL snapshot"
     },
     {
       "kind": "utility",
       "utility_type": "list_to_string",
       "react_flow_type": "listToString",
-      "pydantic_model": "ListToStringUtilityNode"
+      "pydantic_model": "ListToStringUtilityNode",
+      "palette_handle": "list_to_string",
+      "editor_label": "List to String"
     },
     {
       "kind": "utility",
       "utility_type": "string_to_list",
       "react_flow_type": "stringToList",
-      "pydantic_model": "StringToListUtilityNode"
+      "pydantic_model": "StringToListUtilityNode",
+      "palette_handle": "string_to_list",
+      "editor_label": "String to List"
     },
     {
       "kind": "utility",
       "utility_type": "prepend_text",
       "react_flow_type": "prependText",
-      "pydantic_model": "PrependTextUtilityNode"
+      "pydantic_model": "PrependTextUtilityNode",
+      "palette_handle": "prepend_text",
+      "editor_label": "Prepend Text"
     },
     {
       "kind": "utility",
       "utility_type": "string_trunc",
       "react_flow_type": "stringTrunc",
-      "pydantic_model": "StringTruncUtilityNode"
+      "pydantic_model": "StringTruncUtilityNode",
+      "palette_handle": "string_trunc",
+      "editor_label": "String Trunc"
     },
     {
       "kind": "utility",
       "utility_type": "message",
       "react_flow_type": "messageUtility",
-      "pydantic_model": "MessageUtilityNode"
+      "pydantic_model": "MessageUtilityNode",
+      "palette_handle": "message",
+      "editor_label": "Message"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_tick_items",
       "react_flow_type": "sandboxTickItems",
-      "pydantic_model": "SandboxTickItemsUtilityNode"
+      "pydantic_model": "SandboxTickItemsUtilityNode",
+      "palette_handle": "sandbox_tick_items",
+      "editor_label": "Sandbox get items"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_world_grid",
       "react_flow_type": "sandboxWorldGrid",
-      "pydantic_model": "SandboxWorldGridUtilityNode"
+      "pydantic_model": "SandboxWorldGridUtilityNode",
+      "palette_handle": "sandbox_world_grid",
+      "editor_label": "Sandbox world grid"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_available_cells",
       "react_flow_type": "sandboxAvailableCells",
-      "pydantic_model": "SandboxAvailableCellsUtilityNode"
+      "pydantic_model": "SandboxAvailableCellsUtilityNode",
+      "palette_handle": "sandbox_available_cells",
+      "editor_label": "Sandbox available cells"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_tick_pet",
       "react_flow_type": "sandboxTickPet",
-      "pydantic_model": "SandboxTickPetUtilityNode"
+      "pydantic_model": "SandboxTickPetUtilityNode",
+      "palette_handle": "sandbox_tick_pet",
+      "editor_label": "Sandbox tick pet"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_filter_items_by_type",
       "react_flow_type": "sandboxFilterItemsByType",
-      "pydantic_model": "SandboxFilterItemsByTypeUtilityNode"
+      "pydantic_model": "SandboxFilterItemsByTypeUtilityNode",
+      "palette_handle": "sandbox_filter_items_by_type",
+      "editor_label": "Sandbox filter items by type"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_nearest_item_by_type",
       "react_flow_type": "sandboxNearestItemByType",
-      "pydantic_model": "SandboxNearestItemByTypeUtilityNode"
+      "pydantic_model": "SandboxNearestItemByTypeUtilityNode",
+      "palette_handle": "sandbox_nearest_item_by_type",
+      "editor_label": "Sandbox nearest item by type"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_closest_item",
       "react_flow_type": "sandboxClosestItem",
-      "pydantic_model": "SandboxClosestItemUtilityNode"
+      "pydantic_model": "SandboxClosestItemUtilityNode",
+      "palette_handle": "sandbox_closest_item",
+      "editor_label": "Get Closest Item"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_decision_intent",
       "react_flow_type": "sandboxDecisionIntent",
-      "pydantic_model": "SandboxDecisionIntentUtilityNode"
+      "pydantic_model": "SandboxDecisionIntentUtilityNode",
+      "palette_handle": "sandbox_decision_intent",
+      "editor_label": "Sandbox decision intent"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_decision_move_to",
       "react_flow_type": "sandboxDecisionMoveTo",
-      "pydantic_model": "SandboxDecisionMoveToUtilityNode"
+      "pydantic_model": "SandboxDecisionMoveToUtilityNode",
+      "palette_handle": "sandbox_decision_move_to",
+      "editor_label": "Sandbox decision move_to"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_starter_decision",
       "react_flow_type": "sandboxStarterDecision",
-      "pydantic_model": "SandboxStarterDecisionUtilityNode"
+      "pydantic_model": "SandboxStarterDecisionUtilityNode",
+      "palette_handle": "sandbox_starter_decision",
+      "editor_label": "Starter sandbox decision"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_pet_hunger",
       "react_flow_type": "sandboxPetHunger",
-      "pydantic_model": "SandboxPetHungerUtilityNode"
+      "pydantic_model": "SandboxPetHungerUtilityNode",
+      "palette_handle": "sandbox_pet_hunger",
+      "editor_label": "Sandbox pet hunger"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_pet_energy",
       "react_flow_type": "sandboxPetEnergy",
-      "pydantic_model": "SandboxPetEnergyUtilityNode"
+      "pydantic_model": "SandboxPetEnergyUtilityNode",
+      "palette_handle": "sandbox_pet_energy",
+      "editor_label": "Sandbox pet energy"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_pet_cell",
       "react_flow_type": "sandboxPetCell",
-      "pydantic_model": "SandboxPetCellUtilityNode"
+      "pydantic_model": "SandboxPetCellUtilityNode",
+      "palette_handle": "sandbox_pet_cell",
+      "editor_label": "Sandbox pet cell"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_is_nearby8",
       "react_flow_type": "sandboxIsNearby8",
-      "pydantic_model": "SandboxIsNearby8UtilityNode"
+      "pydantic_model": "SandboxIsNearby8UtilityNode",
+      "palette_handle": "sandbox_is_nearby8",
+      "editor_label": "Sandbox is nearby8"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_first_nearby_food",
       "react_flow_type": "sandboxFirstNearbyFood",
-      "pydantic_model": "SandboxFirstNearbyFoodUtilityNode"
+      "pydantic_model": "SandboxFirstNearbyFoodUtilityNode",
+      "palette_handle": "sandbox_first_nearby_food",
+      "editor_label": "Sandbox first nearby food"
     },
     {
       "kind": "utility",
       "utility_type": "sandbox_first_food_world_order",
       "react_flow_type": "sandboxFirstFoodWorldOrder",
-      "pydantic_model": "SandboxFirstFoodWorldOrderUtilityNode"
+      "pydantic_model": "SandboxFirstFoodWorldOrderUtilityNode",
+      "palette_handle": "sandbox_first_food_world_order",
+      "editor_label": "Sandbox first food (world order)"
     },
     {
       "kind": "utility",
       "utility_type": "len_from_list",
       "react_flow_type": "lenFromList",
-      "pydantic_model": "LenFromListUtilityNode"
+      "pydantic_model": "LenFromListUtilityNode",
+      "palette_handle": "len_from_list",
+      "editor_label": "Len from List"
     },
     {
       "kind": "utility",
       "utility_type": "random_item_from_list",
       "react_flow_type": "randomItemFromList",
-      "pydantic_model": "RandomItemFromListUtilityNode"
+      "pydantic_model": "RandomItemFromListUtilityNode",
+      "palette_handle": "random_item_from_list",
+      "editor_label": "Random item from list"
     },
     {
       "kind": "utility",
       "utility_type": "int_to_string",
       "react_flow_type": "intToString",
-      "pydantic_model": "IntToStringUtilityNode"
+      "pydantic_model": "IntToStringUtilityNode",
+      "palette_handle": "int_to_string",
+      "editor_label": "Int to String"
     },
     {
       "kind": "utility",
       "utility_type": "list_item_by_index",
       "react_flow_type": "listItemByIndex",
-      "pydantic_model": "ListItemByIndexUtilityNode"
+      "pydantic_model": "ListItemByIndexUtilityNode",
+      "palette_handle": "list_item_by_index",
+      "editor_label": "List Item by Index"
     },
     {
       "kind": "utility",
       "utility_type": "dictionary_value_by_key",
       "react_flow_type": "dictionaryValueByKey",
-      "pydantic_model": "DictionaryValueByKeyUtilityNode"
+      "pydantic_model": "DictionaryValueByKeyUtilityNode",
+      "palette_handle": "dictionary_value_by_key",
+      "editor_label": "Dictionary Value by Key"
     },
     {
       "kind": "utility",
       "utility_type": "dictionary_set_value_by_key",
       "react_flow_type": "dictionarySetValueByKey",
-      "pydantic_model": "DictionarySetValueByKeyUtilityNode"
+      "pydantic_model": "DictionarySetValueByKeyUtilityNode",
+      "palette_handle": "dictionary_set_value_by_key",
+      "editor_label": "Dictionary Set Value by Key"
     },
     {
       "kind": "utility",
       "utility_type": "read_document_property",
       "react_flow_type": "readDocumentProperty",
-      "pydantic_model": "ReadDocumentPropertyUtilityNode"
+      "pydantic_model": "ReadDocumentPropertyUtilityNode",
+      "palette_handle": "read_document_property",
+      "editor_label": "Read Document Property"
     },
     {
       "kind": "utility",
       "utility_type": "load_document",
       "react_flow_type": "loadDocument",
-      "pydantic_model": "LoadDocumentUtilityNode"
+      "pydantic_model": "LoadDocumentUtilityNode",
+      "palette_handle": "load_document",
+      "editor_label": "Load Document"
     },
     {
       "kind": "utility",
       "utility_type": "upsert_document",
       "react_flow_type": "upsertDocument",
-      "pydantic_model": "UpsertDocumentUtilityNode"
+      "pydantic_model": "UpsertDocumentUtilityNode",
+      "palette_handle": "upsert_document",
+      "editor_label": "Upsert Document"
     },
     {
       "kind": "utility",
       "utility_type": "parse_document_body",
       "react_flow_type": "parseDocumentBody",
-      "pydantic_model": "ParseDocumentBodyUtilityNode"
+      "pydantic_model": "ParseDocumentBodyUtilityNode",
+      "palette_handle": "parse_document_body",
+      "editor_label": "Parse Document Body"
     },
     {
       "kind": "utility",
       "utility_type": "html_parse_basic",
       "react_flow_type": "htmlParseBasic",
-      "pydantic_model": "HtmlParseBasicUtilityNode"
+      "pydantic_model": "HtmlParseBasicUtilityNode",
+      "palette_handle": "html_parse_basic",
+      "editor_label": "HTML Parse (basic)"
     },
     {
       "kind": "utility",
       "utility_type": "write_object_to_document_body",
       "react_flow_type": "writeObjectToDocumentBody",
-      "pydantic_model": "WriteObjectToDocumentBodyUtilityNode"
+      "pydantic_model": "WriteObjectToDocumentBodyUtilityNode",
+      "palette_handle": "write_object_to_document_body",
+      "editor_label": "Write Object to Document Body"
     },
     {
       "kind": "utility",
       "utility_type": "append_value_to_document",
       "react_flow_type": "appendValueToDocument",
-      "pydantic_model": "AppendValueToDocumentUtilityNode"
+      "pydantic_model": "AppendValueToDocumentUtilityNode",
+      "palette_handle": "append_value_to_document",
+      "editor_label": "Append Value to Document"
     },
     {
       "kind": "utility",
       "utility_type": "validate_against_structure",
       "react_flow_type": "validateAgainstStructure",
-      "pydantic_model": "ValidateAgainstStructureUtilityNode"
+      "pydantic_model": "ValidateAgainstStructureUtilityNode",
+      "palette_handle": "validate_against_structure",
+      "editor_label": "Validate Against Structure"
     },
     {
       "kind": "utility",
       "utility_type": "add_to_list",
       "react_flow_type": "addToList",
-      "pydantic_model": "AddToListUtilityNode"
+      "pydantic_model": "AddToListUtilityNode",
+      "palette_handle": "add_to_list",
+      "editor_label": "Add to List"
     },
     {
       "kind": "utility",
       "utility_type": "add_ints",
       "react_flow_type": "addInts",
-      "pydantic_model": "AddIntsUtilityNode"
+      "pydantic_model": "AddIntsUtilityNode",
+      "palette_handle": "add_ints",
+      "editor_label": "Add"
     },
     {
       "kind": "utility",
       "utility_type": "add_days",
       "react_flow_type": "addDays",
-      "pydantic_model": "AddDaysUtilityNode"
+      "pydantic_model": "AddDaysUtilityNode",
+      "palette_handle": "add_days",
+      "editor_label": "Add days"
     },
     {
       "kind": "utility",
       "utility_type": "subtract_ints",
       "react_flow_type": "subtractInts",
-      "pydantic_model": "SubtractIntsUtilityNode"
+      "pydantic_model": "SubtractIntsUtilityNode",
+      "palette_handle": "subtract_ints",
+      "editor_label": "Subtract"
     },
     {
       "kind": "utility",
       "utility_type": "multiply_ints",
       "react_flow_type": "multiplyInts",
-      "pydantic_model": "MultiplyIntsUtilityNode"
+      "pydantic_model": "MultiplyIntsUtilityNode",
+      "palette_handle": "multiply_ints",
+      "editor_label": "Multiply"
     },
     {
       "kind": "utility",
       "utility_type": "divide_ints",
       "react_flow_type": "divideInts",
-      "pydantic_model": "DivideIntsUtilityNode"
+      "pydantic_model": "DivideIntsUtilityNode",
+      "palette_handle": "divide_ints",
+      "editor_label": "Divide"
     },
     {
       "kind": "utility",
       "utility_type": "modulo_ints",
       "react_flow_type": "moduloInts",
-      "pydantic_model": "ModuloIntsUtilityNode"
+      "pydantic_model": "ModuloIntsUtilityNode",
+      "palette_handle": "modulo_ints",
+      "editor_label": "Modulo"
     },
     {
       "kind": "utility",
       "utility_type": "min_ints",
       "react_flow_type": "minInts",
-      "pydantic_model": "MinIntsUtilityNode"
+      "pydantic_model": "MinIntsUtilityNode",
+      "palette_handle": "min_ints",
+      "editor_label": "Min"
     },
     {
       "kind": "utility",
       "utility_type": "max_ints",
       "react_flow_type": "maxInts",
-      "pydantic_model": "MaxIntsUtilityNode"
+      "pydantic_model": "MaxIntsUtilityNode",
+      "palette_handle": "max_ints",
+      "editor_label": "Max"
     },
     {
       "kind": "control",
       "control_type": "basic_conditional",
       "react_flow_type": "basicConditional",
-      "pydantic_model": "BasicConditionalControlNode"
+      "pydantic_model": "BasicConditionalControlNode",
+      "palette_handle": "basic_conditional",
+      "editor_label": "Basic Conditional"
     },
     {
       "kind": "control",
       "control_type": "is",
       "react_flow_type": "isControl",
-      "pydantic_model": "IsControlNode"
+      "pydantic_model": "IsControlNode",
+      "palette_handle": "is_control",
+      "editor_label": "Is?"
     },
     {
       "kind": "control",
       "control_type": "is_empty",
       "react_flow_type": "isEmptyControl",
-      "pydantic_model": "IsEmptyControlNode"
+      "pydantic_model": "IsEmptyControlNode",
+      "palette_handle": "is_empty",
+      "editor_label": "Is Empty?"
     },
     {
       "kind": "control",
       "control_type": "gt",
       "react_flow_type": "gtControl",
-      "pydantic_model": "GtControlNode"
+      "pydantic_model": "GtControlNode",
+      "palette_handle": "gt_control",
+      "editor_label": "Gt?"
     },
     {
       "kind": "control",
       "control_type": "lt",
       "react_flow_type": "ltControl",
-      "pydantic_model": "LtControlNode"
+      "pydantic_model": "LtControlNode",
+      "palette_handle": "lt_control",
+      "editor_label": "Lt?"
     },
     {
       "kind": "control",
       "control_type": "gte",
       "react_flow_type": "gteControl",
-      "pydantic_model": "GteControlNode"
+      "pydantic_model": "GteControlNode",
+      "palette_handle": "gte_control",
+      "editor_label": "Gte?"
     },
     {
       "kind": "control",
       "control_type": "lte",
       "react_flow_type": "lteControl",
-      "pydantic_model": "LteControlNode"
+      "pydantic_model": "LteControlNode",
+      "palette_handle": "lte_control",
+      "editor_label": "Lte?"
     },
     {
       "kind": "control",
       "control_type": "and",
       "react_flow_type": "andControl",
-      "pydantic_model": "AndControlNode"
+      "pydantic_model": "AndControlNode",
+      "palette_handle": "and_control",
+      "editor_label": "And"
     },
     {
       "kind": "control",
       "control_type": "or",
       "react_flow_type": "orControl",
-      "pydantic_model": "OrControlNode"
+      "pydantic_model": "OrControlNode",
+      "palette_handle": "or_control",
+      "editor_label": "Or"
     },
     {
       "kind": "control",
       "control_type": "xor",
       "react_flow_type": "xorControl",
-      "pydantic_model": "XorControlNode"
+      "pydantic_model": "XorControlNode",
+      "palette_handle": "xor_control",
+      "editor_label": "Xor"
     },
     {
       "kind": "control",
       "control_type": "not",
       "react_flow_type": "notControl",
-      "pydantic_model": "NotControlNode"
+      "pydantic_model": "NotControlNode",
+      "palette_handle": "not_control",
+      "editor_label": "Not"
     },
     {
       "kind": "control",
       "control_type": "between",
       "react_flow_type": "betweenControl",
-      "pydantic_model": "BetweenControlNode"
+      "pydantic_model": "BetweenControlNode",
+      "palette_handle": "between_control",
+      "editor_label": "Between"
     },
     {
       "kind": "control",
       "control_type": "try_catch",
       "react_flow_type": "tryCatchControl",
-      "pydantic_model": "TryCatchControlNode"
+      "pydantic_model": "TryCatchControlNode",
+      "palette_handle": "try_catch_control",
+      "editor_label": "Try / Catch"
     },
     {
       "kind": "control",
       "control_type": "for_loop",
       "react_flow_type": "forLoopControl",
-      "pydantic_model": "ForLoopControlNode"
+      "pydantic_model": "ForLoopControlNode",
+      "palette_handle": "for_loop_control",
+      "editor_label": "For Loop"
     },
     {
       "kind": "control",
       "control_type": "for_loop_end",
       "react_flow_type": "forLoopEndControl",
-      "pydantic_model": "ForLoopEndControlNode"
+      "pydantic_model": "ForLoopEndControlNode",
+      "palette_handle": "for_loop_end_control",
+      "editor_label": "For Loop End"
     },
     {
       "kind": "start",
       "react_flow_type": "start",
-      "pydantic_model": "StartGraphNode"
+      "pydantic_model": "StartGraphNode",
+      "palette_handle": "start",
+      "editor_label": "Start"
     },
     {
       "kind": "stop",
       "react_flow_type": "stop",
-      "pydantic_model": "StopGraphNode"
+      "pydantic_model": "StopGraphNode",
+      "palette_handle": "stop",
+      "editor_label": "Stop"
     },
     {
       "kind": "workflow",
       "react_flow_type": "workflowRef",
-      "pydantic_model": "WorkflowRefNode"
+      "pydantic_model": "WorkflowRefNode",
+      "palette_handle": "workflow",
+      "editor_label": "Workflow"
+    }
+  ],
+  "palette_extras": [
+    {
+      "palette_handle": "any",
+      "editor_label": "Any",
+      "kind": "pseudo"
+    },
+    {
+      "palette_handle": "audio",
+      "editor_label": "Audio",
+      "kind": "pseudo"
+    },
+    {
+      "palette_handle": "annotation_note",
+      "editor_label": "Note",
+      "kind": "pseudo"
+    },
+    {
+      "palette_handle": "annotation_region",
+      "editor_label": "Region",
+      "kind": "pseudo"
     }
   ]
 }

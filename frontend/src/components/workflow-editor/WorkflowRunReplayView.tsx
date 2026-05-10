@@ -33,6 +33,7 @@ import type {
 import { useAuth } from '../../contexts/AuthContext';
 import {
     DEFAULT_PALETTE_COLORS,
+    EDITOR_NODE_PALETTE_EXTRA,
     normalizeWorkflowPaletteColors,
     resolveFallbackWorkflowPalette,
 } from '../../domain/paletteDefaults';
@@ -87,7 +88,16 @@ export function WorkflowRunReplayView({
     }, [workflow.palette_id, palettes]);
 
     const paletteColors = useMemo(() => {
-        if (!activePalette?.colors) return DEFAULT_PALETTE_COLORS;
+        if (!activePalette) {
+            return DEFAULT_PALETTE_COLORS;
+        }
+        const ecs = activePalette.effective_colors;
+        if (ecs && Object.keys(ecs).length > 0) {
+            return { ...EDITOR_NODE_PALETTE_EXTRA, ...ecs };
+        }
+        if (!activePalette.colors) {
+            return DEFAULT_PALETTE_COLORS;
+        }
         return normalizeWorkflowPaletteColors(activePalette.colors);
     }, [activePalette]);
 

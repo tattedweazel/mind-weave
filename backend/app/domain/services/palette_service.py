@@ -17,6 +17,8 @@ from app.domain.palette_defaults import (
     DEFAULT_PALETTE_SLUG,
 )
 from app.domain.schemas import PaletteCreate, PaletteUpdate
+from app.domain.schemas.palettes import PalettePublic, build_palette_public
+from app.domain.workflow_palette_validate import normalize_strict_write
 from app.persistence.tables import Palette
 
 
@@ -26,6 +28,18 @@ class PaletteService:
     def __init__(self, session: Session, user_id: Optional[uuid.UUID] = None):
         self.session = session
         self.user_id = user_id
+
+    @staticmethod
+    def palette_public(row: Palette) -> PalettePublic:
+        return build_palette_public(
+            id=row.id,
+            user_id=row.user_id,
+            name=row.name,
+            slug=row.slug,
+            colors=dict(row.colors or {}),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
 
     # ------------------------------------------------------------------
     # Startup seeding
@@ -139,7 +153,13 @@ class PaletteService:
 
     def create_palette(self, data: PaletteCreate) -> Palette:
         """Create and persist a new Palette owned by this user."""
-        palette = Palette(**data.model_dump(), user_id=self.user_id, slug=None)
+        normed = normalize_strict_write(data.colors)
+        palette = Palette(
+            user_id=self.user_id,
+            name=data.name.strip(),
+            slug=None,
+            colors=normed,
+        )
         self.session.add(palette)
         self.session.commit()
         self.session.refresh(palette)
@@ -151,8 +171,13 @@ class PaletteService:
         if not palette or palette.user_id != self.user_id:
             return None
 
-        for key, value in data.model_dump(exclude_unset=True).items():
-            setattr(palette, key, value)
+        payload = data.model_dump(exclude_unset=True)
+        if "name" in payload and payload["name"] is not None:
+            palette.name = str(payload["name"]).strip()
+        if "colors" in payload and payload["colors"] is not None:
+            merged = dict(palette.colors or {})
+            merged.update(payload["colors"])
+            palette.colors = normalize_strict_write(merged)
         palette.updated_at = datetime.now(timezone.utc)
 
         self.session.add(palette)

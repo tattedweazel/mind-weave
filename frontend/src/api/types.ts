@@ -4,6 +4,8 @@
  * TypeScript mirrors of the backend Pydantic models.
  */
 
+import type { components } from '../generated/palette-types';
+
 // ---------------------------------------------------------------------------
 // Core entities
 // ---------------------------------------------------------------------------
@@ -131,26 +133,19 @@ export interface VoiceDesignPreviewResponse {
     mime_type: string;
     audio_base64: string;
 }
+/**
+ * Palette + request bodies come from codegen (`openapi.palette.json`). Run `npm run codegen:palette-types`.
+ */
 
-export interface Palette {
-    id: string;
-    user_id: string | null;
-    name: string;
-    slug?: string | null;
-    colors: Record<string, string>;
-    created_at: string;
-    updated_at: string;
-}
+export type Palette = components['schemas']['PalettePublic'];
 
-export interface PaletteCreate {
-    name: string;
-    colors?: Record<string, string>;
-}
+export type PaletteCreate = components['schemas']['PaletteCreate'];
 
-export interface PaletteUpdate {
-    name?: string;
-    colors?: Record<string, string>;
-}
+export type PaletteUpdate = components['schemas']['PaletteUpdate'];
+
+export type PaletteValidateResult = components['schemas']['PaletteValidateResult'];
+
+export type WorkflowPaletteEntryOut = components['schemas']['WorkflowPaletteEntryOut'];
 
 /** App-wide UI theme (`system_palettes`); `colors` is `{ light: { token: hex }, dark: { ... } }`. */
 export interface SystemPalette {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PaletteManager } from './PaletteManager';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -17,14 +17,43 @@ const mockSystemThemeRow = vi.hoisted(() => ({
     updated_at: '',
 }));
 
+const mockPaletteExtras = vi.hoisted(() => ({
+    entries: [],
+    effective_colors: {} as Record<string, string>,
+    warnings: [] as string[],
+}));
 vi.mock('../api/client', () => ({
     ApiClient: {
         getPalettes: vi.fn().mockResolvedValue([
-            { id: 'p1', user_id: null, name: 'Default', colors: { string: '#38bdf8' }, created_at: '', updated_at: '' },
+            {
+                id: 'p1',
+                user_id: null,
+                name: 'Default',
+                colors: { string: '#38bdf8' },
+                ...mockPaletteExtras,
+                created_at: '',
+                updated_at: '',
+            },
         ]),
         getSystemPalettes: vi.fn().mockResolvedValue([mockSystemThemeRow]),
         getSystemPalette: vi.fn(),
-        createPalette: vi.fn().mockResolvedValue({ id: 'new1', user_id: 'u1', name: '', colors: {}, created_at: '', updated_at: '' }),
+        validateWorkflowPaletteImport: vi.fn().mockImplementation(async (colors: Record<string, string>) => ({
+            colors,
+            warnings: [],
+            entries: [],
+            effective_colors: colors,
+        })),
+        createPalette: vi
+            .fn()
+            .mockResolvedValue({
+                id: 'new1',
+                user_id: 'u1',
+                name: '',
+                colors: {},
+                ...mockPaletteExtras,
+                created_at: '',
+                updated_at: '',
+            }),
         updatePalette: vi.fn(),
         deletePalette: vi.fn(),
         createSystemPalette: vi.fn().mockResolvedValue({ ...mockSystemThemeRow, id: 'new-sp', user_id: 'u1' }),
@@ -173,6 +202,9 @@ describe('PaletteManager', () => {
             colors: { primitive: '#112233' },
         });
         await user.upload(fileInput, new File([json], 'pal.json', { type: 'application/json' }));
+        await waitFor(() => {
+            expect(ApiClient.validateWorkflowPaletteImport).toHaveBeenCalled();
+        });
         expect(await screen.findByDisplayValue('From File')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: /save palette/i }));
         expect(ApiClient.createPalette).toHaveBeenCalledWith(

@@ -4,6 +4,12 @@ Operator-facing notes for upgrades. See [docs/OPERATIONS.md](docs/OPERATIONS.md)
 
 ## [Unreleased]
 
+### Workflow palettes (authority + consistency)
+
+- **Manifest-backed labels** — [`shared/workflow_graph_step_kinds.json`](shared/workflow_graph_step_kinds.json) carries **`palette_handle`** and **`editor_label`** per executable row; **`palette_extras`** documents pseudo-handles (annotations, **`any`**, **`workflow`**, families, **`start`** / **`stop`**, …). Backend parity tests require alignment with **`DEFAULT_PALETTE_COLORS`** in [`backend/app/domain/palette_defaults.py`](backend/app/domain/palette_defaults.py).
+- **Rich palette API payloads** — `GET` / create / update palettes return **`entries`**, **`effective_colors`**, and **`warnings`** (unknown or deprecated keys surfaced without blocking reads). Writes reject unknown palette keys and invalid CSS color strings (**`422`**). **`POST /api/v1/palettes/validate`** supports import preview **without persisting**.
+- **Frontend** — Editor and Palette Manager consume **`effective_colors`**; palette JSON import uses **`validate`**; OpenAPI-aligned types live under [`frontend/src/generated/palette-types.ts`](frontend/src/generated/palette-types.ts) (run **`npm run codegen:palette-types`** from **`frontend/`** after schema changes). Active palette precedence stays on the client: **`workflow.palette_id` → preferred editor palette → default**; there is **no** **`GET …/active`** endpoint.
+
 ### Workflow Build (async DAG + SSE)
 
 - **`POST …/runs` + SSE** — Workflow Editor Build enqueues **`POST /api/v1/workflow-definitions/{id}/runs`** (responds immediately with **`{ run_id, status: queued }`**) and subscribes to **`GET /api/v1/workflow-runs/{run_id}/events`** (**`text/event-stream`**) for **`workflow.started`** / **`node.*`** / **`workflow.completed`** (and **`input_required`**, **`transcription_job_status`**, keepalive comments). Long-lived **`POST …/run_stream`** NDJSON and **`POST …/reattach-stream`** are removed; transcription tail/replay uses the same **`…/events`** URL.

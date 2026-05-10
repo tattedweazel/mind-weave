@@ -13,7 +13,7 @@ The backend is structured using Domain-Driven Design principles:
   - `health.py` — Health check
   - `models.py` — Available LLM models from LM Studio
   - `personas.py` — Persona CRUD
-  - `palettes.py` — Workflow palette CRUD
+  - `palettes.py` — Workflow palette CRUD + **`POST /validate`**
   - `system_palettes.py` — App-wide system theme CRUD (semantic UI tokens)
   - `structures.py` — Structure CRUD
   - `documents.py` — Document CRUD plus `GET /{id}/metadata` (token / character / word / line counts via `tiktoken` `o200k_base`)
@@ -33,7 +33,7 @@ The backend is structured using Domain-Driven Design principles:
   - `workflow_definition_service.py` — WorkflowDefinition CRUD (list ordered by `updated_at` desc; `project_id` on create/update)
   - `workflow_project_service.py` — Workflow project folder CRUD; `ensure_shared_project`, `touch_project`
   - `workflow_executor/` — DAG validation and execution (`services/workflow_executor.py` re-exports `WorkflowExecutor`)
-  - `palette_defaults.py` — Default node colors (mirror in frontend `paletteDefaults.ts`)
+  - `palette_defaults.py` — **`DEFAULT_PALETTE_COLORS`** and built-in workflow preset definitions; SPA reads effective colors from **palette API** responses (manifest + parity tests—not a dual handwritten hex SSOT). See **`workflow_palette_resolve.py`** / **`workflow_palette_validate.py`**
   - `system_palette_defaults.py` — Built-in app-wide themes (`light`/`dark` token maps; mirror token keys in frontend `theme/defaults.ts`)
 - **`app/persistence/`** — Database engine (`db.py`), table definitions (`tables.py`)
 - **`app/providers/`** — LLM provider integrations (e.g. `lmstudio.py`). Chat completion **`usage`** from the OpenAI-compatible API is normalized to a **flat map of integers** (`openai_usage.normalize_openai_usage_for_provider`) so nested fields (e.g. `completion_tokens_details` from some local models) do not break `ProviderResponse` validation.
@@ -49,7 +49,7 @@ All persisted and server-generated instants are **UTC** and **timezone-aware**. 
 |---------|-------------|
 | **User** | Authenticated account. JWT-based auth (access tokens carry `typ: access`; refresh tokens carry `jti`). After a backend upgrade, stale browser sessions may need **sign-in again** if `/me` returns 401. First admin: run `uv run python -m app.cli create-admin --username admin --password '<strong password>'` after migrations, or set `BOOTSTRAP_DEFAULT_ADMIN=true` with `APP_ENV=local` only for a one-time `admin`/`admin` seed. |
 | **Persona** | Named interface to a model: system prompt + optional default model. Types: `custom` or `system`. Required by Simple LLM Call and Multimodal LLM nodes. |
-| **Palette** | Per-step hex colors for workflow handles, edges, and node borders. **Canonical keys:** [`DEFAULT_PALETTE_COLORS`](app/domain/palette_defaults.py) — `string`, `list`, `dictionary`, `structure`, `document`, `image`, `boolean`, `int`, `sandbox_behavior`, `decision_action`, `any`, `workflow`, `simple_llm_call`, `multimodal_llm`, `fetch_url`, `capture_url_snapshot`, `html_parse_basic`, `list_to_string`, `string_to_list`, `prepend_text`, `string_trunc`, `message`, `len_from_list`, `int_to_string`, `list_item_by_index`, `dictionary_value_by_key`, `read_document_property`, `add_ints`, `subtract_ints`, `multiply_ints`, `divide_ints`, `modulo_ints`, `min_ints`, `max_ints`, `basic_conditional`, `is_control`, `gt_control`, `lt_control`, `gte_control`, `lte_control`, `and_control`, `or_control`, `xor_control`, `not_control`, `between_control`; plus optional **family** keys `primitive`, `skill`, `utility`, `control` (SPA resolution). **Built-in presets** (`user_id` NULL) have stable **`slug`** (`default`, `slate`, …) and are **synced from code** on startup from [`BUILTIN_WORKFLOW_PALETTES`](app/domain/palette_defaults.py) (`BuiltinPalette`). **`GET /api/v1/palettes/by-slug/{slug}`** fetches a system preset. User-created palettes have `slug` null. Workflows use `palette_id` (UUID); unset `palette_id` resolves to **Default** in the SPA. Manage Palettes: **Editor** and **System** (see Design System). |
+| **Palette** | Per-step hex overrides for workflow handles, edges, and node borders (**`colors`** JSON column). **`palette_handle`** keys and **`editor_label`** text are defined on [`shared/workflow_graph_step_kinds.json`](../shared/workflow_graph_step_kinds.json) plus **`palette_extras`**. Responses include **`entries`**, **`effective_colors`** (**override → family → code default → `any`**), and **`warnings`**. Writes validate CSS-like color strings and **reject unknown keys** (`422`). **`POST /api/v1/palettes/validate`** returns the enriched shape without persisting. **Built-in presets** (`user_id` NULL): stable **`slug`**, seeded from [`BUILTIN_WORKFLOW_PALETTES`](app/domain/palette_defaults.py). **`GET /api/v1/palettes/by-slug/{slug}`** fetches one by slug. **`palette_id`** on the workflow is optional; precedence when unset is SPA-only (**preferred editor palette**, then fallback default)—**no `/active`** route. |
 | **SystemPalette** | App-wide semantic UI colors for light/dark mode. Table `system_palettes`; `colors` JSON has `light` and `dark` maps (tokens aligned with [`system_palette_defaults.py`](app/domain/system_palette_defaults.py) / frontend `theme/defaults.ts`). **Built-in** rows match workflow preset **names/slugs**; user themes are owned rows. Active theme: `User.settings.system_palette_id` (UUID). Optional `User.settings.system_colors` still merges as partial overrides in the SPA. |
 | **Structure** | JSON schema for structured LLM outputs. Used by Simple LLM Call and Multimodal LLM when deterministic JSON is required. Stored as `json_schema` (valid JSON). |
 | **Document** | Named persisted **body** text (globally unique **`name`**); Markdown, JSON, or other text. CRUD via `/api/v1/documents/`. Used by the **Document** primitive, **Read Document Property**, and runtime **load/upsert** utilities. |
@@ -71,7 +71,7 @@ When extending the codebase with a new utility node, follow these steps:
 
 1. **Domain schemas** (`app/domain/schemas/`): Define `XxxUtilityNode` with `kind: "utility"`, `utility_type: "xxx"`, add to `GraphNode` union in `graph_nodes.py` and export from `schemas/__init__.py`
 2. **Workflow executor** (`app/domain/workflow_executor/`): Parse in `parsing.py` `_parse_node()`, dispatch in `executor.py` `_execute_node()`, implement `_resolve_xxx_node()`. Use `inputs.py` `_resolve_inputs_by_target_handle()` for multi-input utilities (Upsert Document alone passes **`implicit_null_target_wire_string_keys`** so legacy **`target_handle`**-null wires still populate **`name`** / **`content`**)
-3. **Palette**: Add color to [`app/domain/palette_defaults.py`](app/domain/palette_defaults.py) (`DEFAULT_PALETTE_COLORS`), mirror in [`frontend/src/domain/paletteDefaults.ts`](../frontend/src/domain/paletteDefaults.ts), and create Alembic migration to add key to existing palettes
+3. **Palette**: Add **`palette_handle`** / **`editor_label`** to [`shared/workflow_graph_step_kinds.json`](../shared/workflow_graph_step_kinds.json) (or **`palette_extras`**), add default hex to [`app/domain/palette_defaults.py`](app/domain/palette_defaults.py) (`DEFAULT_PALETTE_COLORS`); SPA picks up **`effective_colors`** via the API — extend [`frontend/src/domain/paletteDefaults.ts`](../frontend/src/domain/paletteDefaults.ts) only for new **family** routing or offline stubs; regenerate palette OpenAPI subset types from **`frontend/`** with **`npm run codegen:palette-types`**. Optionally Alembic to backfill the new key into existing DB rows if presets must ship it non-sparse on disk.
 4. **Tests**: Add executor tests in `test_workflow_executor.py` (mock LLM/external calls); update `test_api.py` palette payloads
 5. **Documentation**: Update Utilities row, Graph nodes table, Palette types in this README
 
@@ -158,6 +158,7 @@ The `WorkflowExecutor` runs a WorkflowDefinition DAG:
 | DELETE | `/api/v1/personas/{id}` | Delete persona |
 | GET | `/api/v1/palettes/` | List palettes |
 | POST | `/api/v1/palettes/` | Create palette |
+| POST | `/api/v1/palettes/validate` | Validate **`name`** + **`colors`** (returns **`entries`** / **`warnings`** without persisting) |
 | GET | `/api/v1/palettes/by-slug/{slug}` | Get built-in workflow palette by slug |
 | GET | `/api/v1/palettes/{id}` | Get palette |
 | PUT | `/api/v1/palettes/{id}` | Update palette |
@@ -237,6 +238,8 @@ Full step-by-step order (find your IP, set backend and frontend env, start API a
 ### Tests
 
 For a **capability matrix** (core behavior → tests), see [docs/Audits/TEST_AUDIT.md](../docs/Audits/TEST_AUDIT.md).
+
+**Palette OpenAPI subset (CI / drift check)** — Palette response models feed [`backend/scripts/dump_openapi_palette_subset.py`](scripts/dump_openapi_palette_subset.py). From repo root → **`frontend/`**: run **`npm run codegen:palette-types`** (writes **`openapi.palette.json`** + **`src/generated/palette-types.ts`**). **`npm run verify:palette-types`** fails if regenerated files drift from HEAD.
 
 Install dev tools (includes `pytest-cov`) and run the suite:
 

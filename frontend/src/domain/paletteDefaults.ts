@@ -1,17 +1,11 @@
 /**
- * Canonical workflow palette colors — keep in sync with backend
- * `app/domain/palette_defaults.py` (CQ-001).
- *
- * `DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME` / `DEFAULT_BUILTIN_WORKFLOW_PALETTE_SLUG`
- * match backend `DEFAULT_PALETTE_NAME` / `DEFAULT_PALETTE_SLUG`.
- *
- * For new node types: update backend palette_defaults, then mirror here.
- *
- * Optional palette keys (same strings as manifest `kind`) apply a color to an
- * entire step family when no specific key is set: `primitive`, `skill`,
- * `utility`, `control`. Backend stores them in `Palette.colors` like any other
- * key; only the SPA resolves the hierarchy.
+ * Workflow palette resolution on the SPA: Prefer `Palette.effective_colors` from the API; fall back to
+ * `Palette.colors` + `WORKFLOW_PALETTE_COLORS` when offline. Canonical handle keys / labels ship in
+ * `shared/workflow_graph_step_kinds.json` (+ `palette_extras`).
  */
+import type { Palette } from '../api/types';
+
+
 
 /** Matches backend `DEFAULT_PALETTE_NAME` in `palette_defaults.py`. */
 export const DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME = 'Default';
@@ -19,17 +13,14 @@ export const DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME = 'Default';
 /** Matches backend `DEFAULT_PALETTE_SLUG` in `palette_defaults.py`. */
 export const DEFAULT_BUILTIN_WORKFLOW_PALETTE_SLUG = 'default';
 
-/** Minimal shape for palette list fallback (editor, tests). */
-export type WorkflowPaletteListEntry = {
-    name: string;
-    user_id: string | null;
-    slug?: string | null;
-};
+/** Mirrors `GET /api/v1/palettes/` rows (`PalettePublic`). */
+export type WorkflowPaletteListEntry = Palette;
 
 /** Built-in **Default** system preset (slug preferred; name fallback for older rows). */
 export function isBuiltinDefaultSystemPalette(p: WorkflowPaletteListEntry): boolean {
+    const owner = p.user_id ?? null;
     return (
-        p.user_id == null &&
+        owner === null &&
         (p.slug === DEFAULT_BUILTIN_WORKFLOW_PALETTE_SLUG ||
             (p.slug == null && p.name === DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME))
     );
@@ -45,7 +36,7 @@ export function resolveFallbackWorkflowPalette<T extends WorkflowPaletteListEntr
     const systemDefault = palettes.find(isBuiltinDefaultSystemPalette);
     if (systemDefault) return systemDefault;
     const system = palettes
-        .filter(p => p.user_id == null)
+        .filter(p => (p.user_id ?? null) === null)
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name));
     return system[0] ?? null;
@@ -53,8 +44,8 @@ export function resolveFallbackWorkflowPalette<T extends WorkflowPaletteListEntr
 
 /** System presets first (Default, then A–Z), then user palettes A–Z. */
 export function sortWorkflowPalettesForDisplay<T extends WorkflowPaletteListEntry>(palettes: readonly T[]): T[] {
-    const system = palettes.filter(p => p.user_id == null);
-    const userOwned = palettes.filter(p => p.user_id != null);
+    const system = palettes.filter(p => (p.user_id ?? null) === null);
+    const userOwned = palettes.filter(p => (p.user_id ?? null) !== null);
     const defaultNamed = system.filter(isBuiltinDefaultSystemPalette);
     const systemRest = system
         .filter(p => !isBuiltinDefaultSystemPalette(p))

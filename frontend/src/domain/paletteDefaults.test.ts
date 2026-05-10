@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { Palette } from '../api/types';
 import {
     DEFAULT_PALETTE_COLORS,
     DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME,
@@ -11,6 +12,21 @@ import {
     WORKFLOW_PALETTE_COLORS,
 } from './paletteDefaults';
 
+function paletteListStub(overrides: Partial<Palette> & Pick<Palette, 'name'>): Palette {
+    return {
+        id: overrides.id ?? '00000000-0000-4000-8000-000000000001',
+        user_id: overrides.user_id ?? null,
+        slug: overrides.slug ?? null,
+        name: overrides.name,
+        colors: overrides.colors ?? {},
+        entries: overrides.entries ?? [],
+        effective_colors: overrides.effective_colors ?? {},
+        warnings: overrides.warnings ?? [],
+        created_at: overrides.created_at ?? '',
+        updated_at: overrides.updated_at ?? '',
+    };
+}
+
 describe('resolveFallbackWorkflowPalette', () => {
     it('returns null for empty list', () => {
         expect(resolveFallbackWorkflowPalette([])).toBeNull();
@@ -18,33 +34,33 @@ describe('resolveFallbackWorkflowPalette', () => {
 
     it('prefers system Default by name over other system presets', () => {
         const palettes = [
-            { name: 'Arcade', user_id: null },
-            { name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: null },
-            { name: 'Slate', user_id: null },
+            paletteListStub({ id: '01', name: 'Arcade', user_id: null }),
+            paletteListStub({ id: '02', name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: null }),
+            paletteListStub({ id: '03', name: 'Slate', user_id: null }),
         ];
         expect(resolveFallbackWorkflowPalette(palettes)?.name).toBe(DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME);
     });
 
     it('prefers system Default by slug even if another system row has display name Default', () => {
         const palettes = [
-            { name: 'Wrong', user_id: null, slug: DEFAULT_BUILTIN_WORKFLOW_PALETTE_SLUG },
-            { name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: null, slug: null },
+            paletteListStub({ id: 'a', name: 'Wrong', user_id: null, slug: DEFAULT_BUILTIN_WORKFLOW_PALETTE_SLUG }),
+            paletteListStub({ id: 'b', name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: null, slug: null }),
         ];
         expect(resolveFallbackWorkflowPalette(palettes)?.slug).toBe(DEFAULT_BUILTIN_WORKFLOW_PALETTE_SLUG);
     });
 
     it('ignores user-owned palette named Default', () => {
         const palettes = [
-            { name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: 'user-1' },
-            { name: 'Slate', user_id: null },
+            paletteListStub({ id: 'udef', name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: 'user-1' }),
+            paletteListStub({ id: 'sl', name: 'Slate', user_id: null }),
         ];
         expect(resolveFallbackWorkflowPalette(palettes)?.name).toBe('Slate');
     });
 
     it('uses first system palette by name when Default is absent', () => {
         const palettes = [
-            { name: 'Meadow', user_id: null },
-            { name: 'Arcade', user_id: null },
+            paletteListStub({ id: 'm', name: 'Meadow', user_id: null }),
+            paletteListStub({ id: 'ar', name: 'Arcade', user_id: null }),
         ];
         expect(resolveFallbackWorkflowPalette(palettes)?.name).toBe('Arcade');
     });
@@ -53,11 +69,11 @@ describe('resolveFallbackWorkflowPalette', () => {
 describe('sortWorkflowPalettesForDisplay', () => {
     it('orders Default first, then other system A–Z, then user palettes A–Z', () => {
         const sorted = sortWorkflowPalettesForDisplay([
-            { name: 'Zebra', user_id: 'u1' },
-            { name: 'Arcade', user_id: null },
-            { name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: null },
-            { name: 'Slate', user_id: null },
-            { name: 'Apple', user_id: 'u1' },
+            paletteListStub({ id: 'z', name: 'Zebra', user_id: 'u1' }),
+            paletteListStub({ id: 'ar', name: 'Arcade', user_id: null }),
+            paletteListStub({ id: 'df', name: DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME, user_id: null }),
+            paletteListStub({ id: 'sl', name: 'Slate', user_id: null }),
+            paletteListStub({ id: 'ap', name: 'Apple', user_id: 'u1' }),
         ]);
         expect(sorted.map(p => p.name)).toEqual([
             DEFAULT_BUILTIN_WORKFLOW_PALETTE_NAME,
