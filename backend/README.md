@@ -197,7 +197,7 @@ The `WorkflowExecutor` runs a WorkflowDefinition DAG:
 
 ## One-command local dev (`make dev`)
 
-From the repository root **`make dev`** runs **`./startdev.sh`,** which launches **FastAPI** (`--host 0.0.0.0 --port 8000`) and **`npm run dev:lan`** together. It exports **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, **`FRONTEND_URL`**, and **`VITE_API_BASE`** for that session **without overwriting** **`backend/.env`**. Prerequisites: synced **`backend/.venv`** and **`frontend/node_modules`**. Troubleshooting matches root [README.md](../README.md#troubleshooting); Google OAuth nuances on LAN stay in **[docs/DEPLOYMENT_AND_NETWORK.md](../docs/DEPLOYMENT_AND_NETWORK.md)**.
+From the repository root **`make dev`** runs **`./startdev.sh`,** which launches **FastAPI** (`--host 0.0.0.0 --port 8000`) and **`npm run dev:lan`** together. It exports **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, **`FRONTEND_URL`**, and **`VITE_API_BASE`** for that session **without overwriting** **`backend/.env`**. Prerequisites: synced **`backend/.venv`** and **`frontend/node_modules`**. Troubleshooting matches **[docs/OPERATIONS.md — Local development troubleshooting](../docs/OPERATIONS.md#local-development-troubleshooting)**; Google OAuth nuances on LAN stay in **[docs/DEPLOYMENT_AND_NETWORK.md](../docs/DEPLOYMENT_AND_NETWORK.md)**.
 
 Use **Setup & Running** below when you **only** need this API process (custom ports, debuggers).
 

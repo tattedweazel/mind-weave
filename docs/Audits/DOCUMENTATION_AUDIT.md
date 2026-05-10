@@ -67,15 +67,16 @@ flowchart TB
 
 | Document | Primary audience | Role |
 |----------|------------------|------|
-| [README.md](../../README.md) | New contributors / users | Quickstart (**`make dev`** / `./startdev.sh`), troubleshooting snapshot, taxonomy pointers, architecture snapshot; License / SECURITY / CONTRIBUTING links |
+| [README.md](../../README.md) | New contributors / users | Progressive onboarding (purpose → hero workflow → runtime summary → quickstart **make dev**); core concepts; doc map; troubleshooting → [OPERATIONS.md](OPERATIONS.md) |
+| [docs/RUNTIME_ARCHITECTURE.md](../RUNTIME_ARCHITECTURE.md) | New contributors / users | Runtime topology, execution flow, Mermaid diagrams |
 | [LICENSE](../../LICENSE) | Users / distributors | Apache-2.0 full text |
 | [SECURITY.md](../../SECURITY.md) | Reporters / maintainers | Private vulnerability reporting via GitHub |
-| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Contributors | Dev setup (**`make dev`** first), checks, PR expectations |
+| [CONTRIBUTING.md](../../CONTRIBUTING.md) | Contributors | Dev setup (**`make dev`** first), manual/`uv` detail, checks, PR expectations |
 | [Makefile](../../Makefile) / [`startdev.sh`](../../startdev.sh) | Contributors | Single FastAPI+Vite launcher; **`shellcheck startdev.sh`** hygiene expected after edits |
 | [CHANGELOG.md](../../CHANGELOG.md) | Operators / upgraders | Release notes; points to OPERATIONS |
 | [docs/NODE_TAXONOMY.md](../NODE_TAXONOMY.md) | Contributors | Palette families (**verbs vs grammar**), placement checklist, persisted-document utilities exception |
-| [docs/ARCHITECTURE.md](../ARCHITECTURE.md) | Maintainers | SSOT for layering, SSOT pointers (includes taxonomy hub link), related audits |
-| [docs/OPERATIONS.md](../OPERATIONS.md) | Operators | Post-deploy auth, rate limits, doc pointers |
+| [docs/ARCHITECTURE.md](../ARCHITECTURE.md) | Maintainers | Engineering SSOT: layering, SSOT pointers (includes taxonomy hub link), executor detail; links [RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md) for runtime map |
+| [docs/OPERATIONS.md](../OPERATIONS.md) | Operators | Local dev troubleshooting, post-deploy auth, rate limits, doc pointers |
 | [docs/DEPLOYMENT_AND_NETWORK.md](../DEPLOYMENT_AND_NETWORK.md) | Operators / self-hosters | SSOT: localhost vs LAN vs domain vs tunnel; Google OAuth; example nginx/env snippets |
 | [docs/DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md) | Frontend / UX | Palettes vs system theme tokens |
 | [backend/README.md](../../backend/README.md) | Backend devs | Routers, concepts, env, how-tos |
@@ -93,7 +94,7 @@ flowchart TB
 
 **.env.example (sampled):** `OPEN_REGISTRATION`, `BOOTSTRAP_DEFAULT_ADMIN`, `SECRET_KEY` guidance matches the general posture described in backend README and security audit themes (not line-audited against every `Settings` field).
 
-**Graph / palette spot-check:** [`GraphNode`](../../backend/app/domain/schemas/graph_nodes.py) includes **BooleanPrimitiveNode**, **IntPrimitiveNode**, **LenFromListUtilityNode**, **ListItemByIndexUtilityNode**, full **Gt/Lt/Gte/Lte/And/Or/Xor** controls, etc. [`DEFAULT_PALETTE_COLORS`](../../backend/app/domain/palette_defaults.py) lists matching palette keys. **This pass:** README “Architecture at a Glance” / Core Concepts / frontend **Graph Node Types** were brought in line with those sources (2026-03-19).
+**Graph / palette spot-check:** [`GraphNode`](../../backend/app/domain/schemas/graph_nodes.py) includes **BooleanPrimitiveNode**, **IntPrimitiveNode**, **LenFromListUtilityNode**, **ListItemByIndexUtilityNode**, full **Gt/Lt/Gte/Lte/And/Or/Xor** controls, etc. [`DEFAULT_PALETTE_COLORS`](../../backend/app/domain/palette_defaults.py) lists matching palette keys. **This pass:** README **Core concepts (domain model)** / frontend **Graph Node Types** were brought in line with those sources (2026-03-19); README onboarding was later restructured (2026-05) — keep this checklist aligned with root [README.md](../../README.md).
 
 ## Open findings
 

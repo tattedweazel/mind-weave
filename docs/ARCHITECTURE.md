@@ -1,6 +1,8 @@
 # Mind Weave — architecture and conventions
 
-This document is the **single “one way” guide** for layering, shared contracts, and cross-cutting patterns. Detailed how-tos stay in [backend/README.md](../backend/README.md) and [frontend/README.md](../frontend/README.md).
+If you need a **runtime system map** (browser, API, SSE, executor, persistence) with diagrams, read **[RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md)** first.
+
+This document is the **single “one way” engineering guide** for layering, shared contracts, and cross-cutting patterns—**single sources of truth**, executor behavior, palette contracts, UI conventions, and contributor checklists—and is intentionally dense. Detailed how-tos stay in [backend/README.md](../backend/README.md) and [frontend/README.md](../frontend/README.md).
 
 ## Layers
 

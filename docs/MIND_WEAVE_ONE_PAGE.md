@@ -1,5 +1,7 @@
 # Mind Weave
 
+**Related entry points:** progressive onboarding and quickstart live in the root **[README.md](../README.md)**; **runtime topology and execution flow** (with diagrams) live in **[RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md)**; implementation detail and SSOT indexes live in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
 ## What it is
 
 Mind Weave is a full-stack web application for building and running **workflows** as **visual directed graphs** (DAGs). Each workflow is a named graph of **nodes** and **edges**: nodes are steps, and edges carry **data** and **execution ordering** between them. Workflows typically call a **local or self-hosted LLM** through an OpenAI-compatible API (for example LM Studio), so prompts and model calls stay under the operator’s control.

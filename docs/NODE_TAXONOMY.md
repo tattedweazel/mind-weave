@@ -1,6 +1,6 @@
 # Node taxonomy (contributor mental model)
 
-Audience: anyone adding or wiring workflow steps. Execution and schema details live in [ARCHITECTURE.md](ARCHITECTURE.md) and package READMEs.
+Audience: anyone adding or wiring workflow steps. High-level runtime and execution flow: [RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md). Implementation and schema details: [ARCHITECTURE.md](ARCHITECTURE.md) and package READMEs.
 
 This is a **guide, not a taxonomy police state**—break the rules deliberately when the product needs it, but explain why in code review.
 

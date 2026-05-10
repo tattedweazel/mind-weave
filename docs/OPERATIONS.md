@@ -2,6 +2,19 @@
 
 Short notes for people deploying or scripting against Mind Weave.
 
+## Local development troubleshooting
+
+Applies to **`make dev`**, **`./startdev.sh`**, and manual FastAPI + Vite setups.
+
+- **Ports already in use** — **`8000` (FastAPI)** or **`5173` (Vite)**: find listeners (`lsof -nP -iTCP:8000 -sTCP:LISTEN` on macOS; see [backend/README.md — Troubleshooting](../backend/README.md#troubleshooting)) and stop the stale process—two servers on one port yields confusing 404/CORS shells.
+- **Browser shows CORS or “failed to fetch”** — Ensure the browser origin matches an entry echoed under **CORS allowed origins** — use **`http://127.0.0.1:5173` vs `http://localhost:5173`** consistently after login; mismatched **`VITE_API_BASE`** vs **`CORS_ORIGINS`** is common when mixing origins by hand ([frontend/README.md](../frontend/README.md#api-base-url)).
+- **Phone / LAN cannot load the UI** — Trust the LAN, confirm **`make dev`** printed a LAN IP for the host machine, firewall allows **8000/5173**, and you used the **`http://<LAN>:…`** URLs on the remote device—not `localhost`.
+- **`make dev` + Google OAuth** — Google rejects redirect hosts that are bare **private IPs**; use password login over LAN or a path with a public hostname (**[DEPLOYMENT_AND_NETWORK.md](DEPLOYMENT_AND_NETWORK.md)** — Path B).
+- **`uv` fails / “No `pyproject.toml`” from repo root** — Use **`uv --project backend …`** or **`cd backend`** ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+- **Frontend deps missing / `vite` unknown** — Run **`npm install`** in **`frontend/`** once ([frontend/README.md](../frontend/README.md#setup--running)).
+
+Maintainability: **`shellcheck startdev.sh`** should stay clean — run after editing the launcher.
+
 ## After a backend deploy — auth (JWT)
 
 The API validates JWT shape on every request:
