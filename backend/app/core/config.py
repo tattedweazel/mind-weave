@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     WORKFLOW_MAX_CONCURRENT_LLM_CALLS: int = 3
     WORKFLOW_MAX_CONCURRENT_BROWSER_TASKS: int = 2
     WORKFLOW_MAX_CONCURRENT_EXTERNAL_SKILL_TASKS: int = 4
+    # Dedicated cap for text-to-speech skill nodes (in addition to global node semaphore).
+    WORKFLOW_MAX_CONCURRENT_TTS_TASKS: int = 4
 
     # Workflow execution safety (defaults + hard ceilings; graph/run may request lower values only within ceilings).
     WORKFLOW_EXECUTION_DEFAULT_TTL_SECONDS: int = 300

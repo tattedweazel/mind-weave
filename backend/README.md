@@ -13,7 +13,7 @@ The backend is structured using Domain-Driven Design principles:
   - `health.py` — Health check
   - `models.py` — Available LLM models from LM Studio
   - `personas.py` — Persona CRUD
-  - `palettes.py` — Workflow palette CRUD + **`POST /validate`**
+  - `palettes.py` — Workflow palette CRUD + **`POST /validate`** + **`GET /resolve`**
   - `system_palettes.py` — App-wide system theme CRUD (semantic UI tokens)
   - `structures.py` — Structure CRUD
   - `documents.py` — Document CRUD plus `GET /{id}/metadata` (token / character / word / line counts via `tiktoken` `o200k_base`)
@@ -49,7 +49,7 @@ All persisted and server-generated instants are **UTC** and **timezone-aware**. 
 |---------|-------------|
 | **User** | Authenticated account. JWT-based auth (access tokens carry `typ: access`; refresh tokens carry `jti`). After a backend upgrade, stale browser sessions may need **sign-in again** if `/me` returns 401. First admin: run `uv run python -m app.cli create-admin --username admin --password '<strong password>'` after migrations, or set `BOOTSTRAP_DEFAULT_ADMIN=true` with `APP_ENV=local` only for a one-time `admin`/`admin` seed. |
 | **Persona** | Named interface to a model: system prompt + optional default model. Types: `custom` or `system`. Required by Simple LLM Call and Multimodal LLM nodes. |
-| **Palette** | Per-step hex overrides for workflow handles, edges, and node borders (**`colors`** JSON column). **`palette_handle`** keys and **`editor_label`** text are defined on [`shared/workflow_graph_step_kinds.json`](../shared/workflow_graph_step_kinds.json) plus **`palette_extras`**. Responses include **`entries`**, **`effective_colors`** (**override → family → code default → `any`**), and **`warnings`**. Writes validate CSS-like color strings and **reject unknown keys** (`422`). **`POST /api/v1/palettes/validate`** returns the enriched shape without persisting. **Built-in presets** (`user_id` NULL): stable **`slug`**, seeded from [`BUILTIN_WORKFLOW_PALETTES`](app/domain/palette_defaults.py). **`GET /api/v1/palettes/by-slug/{slug}`** fetches one by slug. **`palette_id`** on the workflow is optional; precedence when unset is SPA-only (**preferred editor palette**, then fallback default)—**no `/active`** route. |
+| **Palette** | Per-step hex overrides for workflow handles, edges, and node borders (**`colors`** JSON column). **`palette_handle`** keys and **`editor_label`** text are defined on [`shared/workflow_graph_step_kinds.json`](../shared/workflow_graph_step_kinds.json) plus **`palette_extras`**. Responses include **`entries`**, **`effective_colors`** (**override → family → code default → `any`**), and **`warnings`**. Writes validate CSS-like color strings and **reject unknown keys** (`422`). **`POST /api/v1/palettes/validate`** returns the enriched shape without persisting. **Built-in presets** (`user_id` NULL): stable **`slug`**, seeded from [`BUILTIN_WORKFLOW_PALETTES`](app/domain/palette_defaults.py). **`GET /api/v1/palettes/by-slug/{slug}`** fetches one by slug. **`GET /api/v1/palettes/resolve`** (optional **`workflow_id`**) returns the **effective** editor palette: **`palette_id`** on the workflow when set and visible → **`User.settings.preferred_editor_palette_id`** → **default**. |
 | **SystemPalette** | App-wide semantic UI colors for light/dark mode. Table `system_palettes`; `colors` JSON has `light` and `dark` maps (tokens aligned with [`system_palette_defaults.py`](app/domain/system_palette_defaults.py) / frontend `theme/defaults.ts`). **Built-in** rows match workflow preset **names/slugs**; user themes are owned rows. Active theme: `User.settings.system_palette_id` (UUID). Optional `User.settings.system_colors` still merges as partial overrides in the SPA. |
 | **Structure** | JSON schema for structured LLM outputs. Used by Simple LLM Call and Multimodal LLM when deterministic JSON is required. Stored as `json_schema` (valid JSON). |
 | **Document** | Named persisted **body** text (globally unique **`name`**); Markdown, JSON, or other text. CRUD via `/api/v1/documents/`. Used by the **Document** primitive, **Read Document Property**, and runtime **load/upsert** utilities. |
@@ -157,6 +157,7 @@ The `WorkflowExecutor` runs a WorkflowDefinition DAG:
 | PUT | `/api/v1/personas/{id}` | Update persona |
 | DELETE | `/api/v1/personas/{id}` | Delete persona |
 | GET | `/api/v1/palettes/` | List palettes |
+| GET | `/api/v1/palettes/resolve` | Effective editor palette (**`workflow_id`** optional query) |
 | POST | `/api/v1/palettes/` | Create palette |
 | POST | `/api/v1/palettes/validate` | Validate **`name`** + **`colors`** (returns **`entries`** / **`warnings`** without persisting) |
 | GET | `/api/v1/palettes/by-slug/{slug}` | Get built-in workflow palette by slug |
@@ -184,10 +185,11 @@ The `WorkflowExecutor` runs a WorkflowDefinition DAG:
 | GET | `/api/v1/workflow-definitions/{id}` | Get workflow |
 | PUT | `/api/v1/workflow-definitions/{id}` | Update workflow |
 | DELETE | `/api/v1/workflow-definitions/{id}` | Delete workflow |
-| POST | `/api/v1/workflow-definitions/{id}/run` | Execute workflow (returns result). Optional body keys: **`input_overrides`** (required inputs that are null); **`output_overrides`** (force per-node outputs); **`execution_time_zone`** (IANA); **`execution_limits`** (**`workflow_ttl_seconds`**, **`max_node_executions`**, **`max_loop_iterations`**, **`max_nested_depth`**) constrained to deployment ceilings — **422** when above ceiling). |
-| POST | `/api/v1/workflow-definitions/{id}/runs` | Enqueue persisted Build run (**`queued`** immediately). Same optional **`WorkflowRunRequest`** fields as **`/run`**. Consume lifecycle on **`GET /api/v1/workflow-runs/{run_id}/events`**. |
+| POST | `/api/v1/workflow-definitions/{id}/run` | Execute workflow (returns result). Optional body keys: **`input_overrides`** (required inputs that are null); **`output_overrides`** (force per-node outputs); **`execution_time_zone`** (IANA); **`execution_limits`** (**`workflow_ttl_seconds`**, **`max_node_executions`**, **`max_loop_iterations`**, **`max_nested_depth`**) constrained to deployment ceilings — **422** when above ceiling). **`acknowledge_preflight_warnings`** (**bool**) opts into runs that passed advisory static budget checks (see preflight below). |
+| POST | `/api/v1/workflow-definitions/{id}/runs` | Enqueue persisted Build run (**`queued`** immediately). Same optional **`WorkflowRunRequest`** fields as **`/run`**. Consume lifecycle on **`GET /api/v1/workflow-runs/{run_id}/events`**. **Preflight** — Before enqueue/execute, the server estimates a conservative upper bound on node-step count (For Loops, list primitives, **`max_loop_iterations`**). **422** with **`error: preflight_blocked`** when the bound **clearly** exceeds **`max_node_executions`** with no ambiguous inputs. **422** with **`error: preflight_warnings`** when the bound may exceed limits but list sizes or nested workflows were uncertain; retry with **`acknowledge_preflight_warnings: true`** after user confirmation. |
 | GET | `/api/v1/workflow-runs/{run_id}` | Poll snapshot (**`status`**, timestamps, **`last_event_seq`**). |
 | GET | `/api/v1/workflow-runs/{run_id}/events` | Server-Sent Events (SSE): replay + tail for `workflow.*`, `node.*`, `input_required`, **`transcription_job_status`**, keepalive comments. |
+| POST | `/api/v1/workflow-runs/{run_id}/cancel` | Request cancellation of an in-flight run (**204**). Emits **`workflow.canceled`** on SSE and persists **`canceled`**. |
 | GET | `/api/v1/me/workflow-runs` | List workflow runs **you started** on **your** workflows (Explore UI) |
 | GET | `/api/v1/workflow-definitions/{id}/runs` | List runs for a workflow (only runs **you started**) |
 | GET | `/api/v1/workflow-definitions/{id}/runs/{run_id}/logs` | Get node run logs for a run (prompt-like fields in JSON redacted; only if **you started** the run) |

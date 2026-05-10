@@ -52,6 +52,14 @@ export function ssePayloadToLegacyWorkflowEvent(
                 error: withSeq.error ?? 'Workflow failed',
                 ...(seq !== undefined ? { seq } : {}),
             };
+        case 'workflow.canceled':
+            return {
+                event: 'canceled',
+                reason: typeof withSeq.reason === 'string' ? withSeq.reason : 'user_request',
+                workflow_id: withSeq.workflow_id,
+                run_id: withSeq.run_id,
+                ...(seq !== undefined ? { seq } : {}),
+            };
         case 'workflow.events_timeout':
             return {
                 event: 'error',

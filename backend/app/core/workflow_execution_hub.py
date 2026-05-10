@@ -87,6 +87,8 @@ class WorkflowExecutionHub:
     def __init__(self) -> None:
         self._runs: dict[uuid.UUID, WorkflowRunFanout] = {}
         self._runs_lock = asyncio.Lock()
+        self._run_tasks: dict[uuid.UUID, asyncio.Task[object]] = {}
+        self._run_tasks_lock = asyncio.Lock()
 
     async def get_or_create_fanout(self, run_id: uuid.UUID) -> WorkflowRunFanout:
         async with self._runs_lock:
@@ -104,3 +106,20 @@ class WorkflowExecutionHub:
             return
         for sub in list(dead.subscribers):
             await sub.queue.put(None)
+
+    async def register_run_task(self, run_id: uuid.UUID, task: asyncio.Task[object]) -> None:
+        async with self._run_tasks_lock:
+            self._run_tasks[run_id] = task
+
+    async def unregister_run_task(self, run_id: uuid.UUID) -> None:
+        async with self._run_tasks_lock:
+            self._run_tasks.pop(run_id, None)
+
+    async def cancel_run_task(self, run_id: uuid.UUID) -> bool:
+        """Return True if a non-done background task was canceled."""
+        async with self._run_tasks_lock:
+            t = self._run_tasks.get(run_id)
+        if t is None or t.done():
+            return False
+        t.cancel()
+        return True

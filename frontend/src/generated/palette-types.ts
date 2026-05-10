@@ -49,6 +49,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/palettes/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve Workflow Palette
+         * @description Return the **effective** workflow editor palette for this user in the given context.
+         *
+         *     Precedence: ``workflow.palette_id`` (when present and visible) →
+         *     ``User.settings.preferred_editor_palette_id`` → built-in **default** preset.
+         */
+        get: operations["resolve_workflow_palette_api_v1_palettes_resolve_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/palettes/by-slug/{slug}": {
         parameters: {
             query?: never;
@@ -321,6 +344,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaletteValidateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_workflow_palette_api_v1_palettes_resolve_get: {
+        parameters: {
+            query?: {
+                /** @description Optional workflow definition id; when set, its palette_id takes precedence. */
+                workflow_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                mw_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PalettePublic"];
                 };
             };
             /** @description Validation Error */

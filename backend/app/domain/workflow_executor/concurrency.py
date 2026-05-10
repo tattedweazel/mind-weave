@@ -18,7 +18,7 @@ from app.domain.schemas import (
     WorkflowRefNode,
 )
 
-ExtraKind = Literal["none", "llm", "browser", "external"]
+ExtraKind = Literal["none", "llm", "browser", "external", "tts"]
 
 
 def workflow_node_extra_concurrency_bucket(node: Any) -> ExtraKind:
@@ -27,11 +27,12 @@ def workflow_node_extra_concurrency_bucket(node: Any) -> ExtraKind:
         return "llm"
     if isinstance(node, CaptureUrlSnapshotSkillNode):
         return "browser"
+    if isinstance(node, TextToSpeechSkillNode):
+        return "tts"
     if isinstance(
         node,
         (
             FetchUrlSkillNode,
-            TextToSpeechSkillNode,
             TranscribeAudioSkillNode,
             AudioFileInputSkillNode,
             TranscribeFileSkillNode,

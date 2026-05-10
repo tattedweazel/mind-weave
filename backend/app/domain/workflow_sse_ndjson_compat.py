@@ -28,6 +28,14 @@ def sse_tuple_to_ndjson_like_event(event_name: str, payload: dict[str, Any]) -> 
         return {"event": "end", "result": payload.get("result"), **base_extra}
     if event_name == "workflow.failed":
         return {"event": "error", "error": payload.get("error") or "Workflow failed", **base_extra}
+    if event_name == "workflow.canceled":
+        return {
+            "event": "canceled",
+            "reason": payload.get("reason") or "user_request",
+            "workflow_id": payload.get("workflow_id"),
+            "run_id": payload.get("run_id"),
+            **base_extra,
+        }
     if event_name == "workflow.events_timeout":
         return {"event": "error", "error": payload.get("error") or "timeout", **base_extra}
     if event_name == "input_required":

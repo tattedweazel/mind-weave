@@ -1544,7 +1544,7 @@ export interface WorkflowRunResult {
     workflow_id: string;
     run_id?: string;
     /** Client may set `running` while a stream is in flight before the final result arrives. */
-    status: 'ok' | 'partial' | 'error' | 'running';
+    status: 'ok' | 'partial' | 'error' | 'running' | 'canceled';
     node_results: NodeRunResult[];
     /** Client-side or stream-level failure when no node result was produced. */
     error?: string;

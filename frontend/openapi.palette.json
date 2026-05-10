@@ -193,6 +193,80 @@
         }
       }
     },
+    "/api/v1/palettes/resolve": {
+      "get": {
+        "tags": [
+          "palettes"
+        ],
+        "summary": "Resolve Workflow Palette",
+        "description": "Return the **effective** workflow editor palette for this user in the given context.\n\nPrecedence: ``workflow.palette_id`` (when present and visible) \u2192\n``User.settings.preferred_editor_palette_id`` \u2192 built-in **default** preset.",
+        "operationId": "resolve_workflow_palette_api_v1_palettes_resolve_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional workflow definition id; when set, its palette_id takes precedence.",
+              "title": "Workflow Id"
+            },
+            "description": "Optional workflow definition id; when set, its palette_id takes precedence."
+          },
+          {
+            "name": "mw_access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mw Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PalettePublic"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/palettes/by-slug/{slug}": {
       "get": {
         "tags": [

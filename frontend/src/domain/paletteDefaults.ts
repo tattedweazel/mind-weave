@@ -1,7 +1,7 @@
 /**
- * Workflow palette resolution on the SPA: Prefer `Palette.effective_colors` from the API; fall back to
- * `Palette.colors` + `WORKFLOW_PALETTE_COLORS` when offline. Canonical handle keys / labels ship in
- * `shared/workflow_graph_step_kinds.json` (+ `palette_extras`).
+ * Workflow palette for the **canvas**: canonical colors come from
+ * `GET /api/v1/palettes/resolve` (workflow → preferred → default); the SPA falls back
+ * to `Palette.effective_colors` from list payloads or `Palette.colors` + `WORKFLOW_PALETTE_COLORS` when offline.
  */
 import type { Palette } from '../api/types';
 

@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, MagicMock, patch
+import uuid
 
 from fastapi.testclient import TestClient
 
@@ -207,6 +208,88 @@ def test_get_palette_by_slug(client: TestClient):
     assert body["name"] == "Default"
 
     assert client.get("/api/v1/palettes/by-slug/definitely-missing").status_code == 404
+
+
+def test_resolve_workflow_palette_no_workflow_id_returns_default(client: TestClient):
+    r = client.get("/api/v1/palettes/resolve")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("slug") == "default" or body.get("name") == "Default"
+
+
+def test_resolve_workflow_palette_unknown_workflow_404(client: TestClient):
+    r = client.get(f"/api/v1/palettes/resolve?workflow_id={uuid.uuid4()}")
+    assert r.status_code == 404
+
+
+def test_resolve_workflow_palette_workflow_palette_id_wins(client: TestClient):
+    cp = client.post(
+        "/api/v1/palettes/",
+        json={
+            "name": "Resolve Test Pal",
+            "colors": {
+                "string": "#38bdf8",
+                "list": "#f472b6",
+                "dictionary": "#e879f9",
+                "any": "#ffffff",
+                "workflow": "#14b8a6",
+                "simple_llm_call": "#8b5cf6",
+                "list_to_string": "#22d3ee",
+                "string_to_list": "#67e8f9",
+                "dictionary_value_by_key": "#9333ea",
+                "prepend_text": "#f59e0b",
+            },
+        },
+    )
+    assert cp.status_code == 201
+    pid = cp.json()["id"]
+    wf = client.post(
+        "/api/v1/workflow-definitions/",
+        json={"name": "Resolve WF", "palette_id": pid, "graph": {"nodes": [], "edges": []}},
+    )
+    assert wf.status_code == 201
+    rid = wf.json()["id"]
+    r = client.get(f"/api/v1/palettes/resolve?workflow_id={rid}")
+    assert r.status_code == 200
+    assert r.json()["id"] == pid
+
+
+def test_resolve_workflow_palette_preferred_when_workflow_has_no_palette(client: TestClient):
+    cp = client.post(
+        "/api/v1/palettes/",
+        json={
+            "name": "Preferred Pal",
+            "colors": {
+                "string": "#38bdf8",
+                "list": "#f472b6",
+                "dictionary": "#e879f9",
+                "any": "#ffffff",
+                "workflow": "#14b8a6",
+                "simple_llm_call": "#8b5cf6",
+                "list_to_string": "#22d3ee",
+                "string_to_list": "#67e8f9",
+                "dictionary_value_by_key": "#9333ea",
+                "prepend_text": "#f59e0b",
+            },
+        },
+    )
+    assert cp.status_code == 201
+    pref_id = cp.json()["id"]
+    assert (
+        client.put(
+            "/api/v1/auth/me",
+            json={"settings": {"preferred_editor_palette_id": pref_id}},
+        ).status_code
+        == 200
+    )
+    wf = client.post(
+        "/api/v1/workflow-definitions/",
+        json={"name": "No palette WF", "graph": {"nodes": [], "edges": []}},
+    )
+    assert wf.status_code == 201
+    r = client.get(f"/api/v1/palettes/resolve?workflow_id={wf.json()['id']}")
+    assert r.status_code == 200
+    assert r.json()["id"] == pref_id
 
 
 def test_create_palette(client: TestClient):

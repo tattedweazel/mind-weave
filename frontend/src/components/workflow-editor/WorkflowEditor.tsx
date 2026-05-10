@@ -27,6 +27,7 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import { ApiClient } from '../../api/client';
+import { getApiErrorDetailObject } from '../../api/http';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCopyWithFeedback, useStatusToast } from '../../contexts/ClipboardFeedbackContext';
 import {
@@ -74,6 +75,7 @@ import {
     PanelRight,
     Maximize2,
     Minimize2,
+    Ban,
 } from 'lucide-react';
 
 import { UserAvatar } from '../UserAvatar';
@@ -323,6 +325,8 @@ export const WorkflowEditor: React.FC<Props> = ({
     );
     const [personas, setPersonas] = useState<PersonaListItem[]>([]);
     const [palettes, setPalettes] = useState<Palette[]>([]);
+    /** Server `GET /palettes/resolve` for workflow + user; defensive fallback when null/unavailable. */
+    const [serverResolvedWorkflowPalette, setServerResolvedWorkflowPalette] = useState<Palette | null>(null);
     const [structures, setStructures] = useState<Structure[]>([]);
     const [documents, setDocuments] = useState<DocumentListItem[]>([]);
     const [googleWorkflowConnections, setGoogleWorkflowConnections] = useState<GoogleWorkflowConnection[]>([]);
@@ -836,6 +840,25 @@ export const WorkflowEditor: React.FC<Props> = ({
         void ApiClient.getPalettes().then(setPalettes);
     }, [palettesRefreshKey]);
 
+    useEffect(() => {
+        if (!user) {
+            setServerResolvedWorkflowPalette(null);
+            return;
+        }
+        let cancelled = false;
+        const wid = activeWf?.id ?? null;
+        void ApiClient.resolveWorkflowPalette(wid)
+            .then(p => {
+                if (!cancelled) setServerResolvedWorkflowPalette(p);
+            })
+            .catch(() => {
+                if (!cancelled) setServerResolvedWorkflowPalette(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [user, activeWf?.id, user?.settings?.preferred_editor_palette_id, palettesRefreshKey]);
+
     const sortedPalettes = React.useMemo(() => sortWorkflowPalettesForDisplay(palettes), [palettes]);
 
     /** System "Default" preset id (same as unset palette_id). Shown only as the empty option, not twice. */
@@ -857,11 +880,13 @@ export const WorkflowEditor: React.FC<Props> = ({
     }, [activeWf?.palette_id, builtinDefaultPaletteId]);
 
     const activePalette = React.useMemo(() => {
-        if (!activeWf?.palette_id) {
-            return resolveFallbackWorkflowPalette(palettes);
+        if (activeWf?.palette_id) {
+            const localPick = palettes.find(p => p.id === activeWf.palette_id);
+            if (localPick) return localPick;
+            return serverResolvedWorkflowPalette ?? resolveFallbackWorkflowPalette(palettes);
         }
-        return palettes.find(p => p.id === activeWf.palette_id) ?? null;
-    }, [activeWf?.palette_id, palettes]);
+        return serverResolvedWorkflowPalette ?? resolveFallbackWorkflowPalette(palettes);
+    }, [activeWf?.palette_id, palettes, serverResolvedWorkflowPalette]);
 
     const paletteColors = React.useMemo(() => {
         if (!activePalette) {
@@ -2518,6 +2543,17 @@ export const WorkflowEditor: React.FC<Props> = ({
         }
     }, [activeWf?.id, transcribeFileCapture]);
 
+    const handleCancelRun = useCallback(async () => {
+        const rid = lastRunId;
+        if (!rid) return;
+        try {
+            await ApiClient.cancelWorkflowRun(rid);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            showStatusToast(msg, true);
+        }
+    }, [lastRunId, showStatusToast]);
+
     const doRun = async (inputOverrides?: Record<string, any>) => {
         if (!activeWf) return;
         workflowRunAbortRef.current?.abort();
@@ -2531,7 +2567,10 @@ export const WorkflowEditor: React.FC<Props> = ({
         setRunningNodeIds(new Set());
 
         try {
-            await ApiClient.runWorkflowStream(activeWf.id, (rawEvent: any) => {
+            let acknowledgePreflight = false;
+            for (;;) {
+                try {
+                    await ApiClient.runWorkflowStream(activeWf.id, (rawEvent: any) => {
                     const incomingSeq = typeof rawEvent.seq === 'number' ? rawEvent.seq : undefined;
                     if (
                         incomingSeq !== undefined &&
@@ -2709,6 +2748,16 @@ export const WorkflowEditor: React.FC<Props> = ({
                         } else {
                             ttsAfterWorkflowQueueRef.current = [];
                         }
+                    } else if (event.event === "canceled") {
+                        ttsAfterWorkflowQueueRef.current = [];
+                        ttsAutoplayChainRef.current = Promise.resolve();
+                        setRunningNodeIds(new Set());
+                        setRunResult(prev => ({
+                            workflow_id: activeWf.id,
+                            status: 'canceled',
+                            node_results: prev?.node_results ?? [],
+                            error: 'Workflow run canceled',
+                        }));
                     } else if (event.event === "error") {
                         ttsAfterWorkflowQueueRef.current = [];
                         ttsAutoplayChainRef.current = Promise.resolve();
@@ -2723,8 +2772,29 @@ export const WorkflowEditor: React.FC<Props> = ({
                     ...(runLim ? { execution_limits: runLim } : {}),
                     execution_time_zone: resolveWorkflowTimeZone(user?.settings as Record<string, unknown> | undefined),
                     signal: runAbort.signal,
+                    ...(acknowledgePreflight ? { acknowledge_preflight_warnings: true } : {}),
                 },
             );
+                    break;
+                } catch (preErr: unknown) {
+                    const detail = getApiErrorDetailObject((preErr as Error & { apiBody?: unknown }).apiBody);
+                    if (
+                        !acknowledgePreflight &&
+                        detail &&
+                        detail.error === 'preflight_warnings' &&
+                        typeof window !== 'undefined' &&
+                        window.confirm(
+                            typeof detail.message === 'string'
+                                ? `${detail.message}\n\nProceed with this run?`
+                                : 'This run may exceed safe execution limits or uses uncertain estimates. Proceed?',
+                        )
+                    ) {
+                        acknowledgePreflight = true;
+                        continue;
+                    }
+                    throw preErr;
+                }
+            }
         } catch (err: any) {
             ttsAfterWorkflowQueueRef.current = [];
             ttsAutoplayChainRef.current = Promise.resolve();
@@ -3425,6 +3495,15 @@ export const WorkflowEditor: React.FC<Props> = ({
                             <button id="run-workflow-btn" onClick={handleRun} disabled={isRunning} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-mw-success hover:opacity-90 disabled:opacity-50 rounded-lg transition-colors shadow-sm">
                                 {isRunning ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} {isRunning ? 'Running…' : 'Run'}
                             </button>
+                            {isRunning && lastRunId ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void handleCancelRun()}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-mw-text-primary border border-mw-border bg-mw-card-alt hover:bg-mw-page rounded-lg transition-colors"
+                                >
+                                    <Ban size={13} /> Cancel run
+                                </button>
+                            ) : null}
                         </>
                     ) : (
                         <>

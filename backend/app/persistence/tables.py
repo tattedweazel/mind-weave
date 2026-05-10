@@ -425,7 +425,7 @@ class WorkflowRun(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     workflow_id: uuid.UUID = Field(foreign_key="workflow_definitions.id", index=True)
     started_by_user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
-    # queued | running | completed | failed — legacy ok/partial/error migrated to completed/failed
+    # queued | running | completed | failed | canceled — legacy ok/partial/error migrated to completed/failed
     status: str = Field(index=True)
     created_at: datetime = Field(default_factory=utc_now, index=True)
     updated_at: datetime = Field(default_factory=utc_now)

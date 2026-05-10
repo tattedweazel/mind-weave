@@ -29,6 +29,7 @@ from app.domain.execution_limits import (
     resolve_execution_limits,
     resolved_execution_limits_to_json,
 )
+from app.domain.execution_preflight import evaluate_execution_preflight, preflight_http_detail
 from app.domain.schemas import (
     WorkflowDefinitionCreate,
     WorkflowDefinitionListItem,
@@ -194,6 +195,20 @@ async def run_workflow(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        pre = evaluate_execution_preflight(
+            wf.graph,
+            eff_limits,
+            acknowledge_preflight_warnings=bool(body and body.acknowledge_preflight_warnings),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if pre.hard_block_message:
+        raise HTTPException(status_code=422, detail=preflight_http_detail(pre))
+    if not pre.ok_without_ack:
+        raise HTTPException(status_code=422, detail=preflight_http_detail(pre))
+
     executor = WorkflowExecutor(session, current_user.id)
     try:
         return await executor.run(
@@ -257,6 +272,19 @@ async def enqueue_workflow_run(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    try:
+        pre = evaluate_execution_preflight(
+            wf.graph,
+            eff_limits,
+            acknowledge_preflight_warnings=bool(body and body.acknowledge_preflight_warnings),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if pre.hard_block_message:
+        raise HTTPException(status_code=422, detail=preflight_http_detail(pre))
+    if not pre.ok_without_ack:
+        raise HTTPException(status_code=422, detail=preflight_http_detail(pre))
+
     run_row = WorkflowRun(
         workflow_id=wf.id,
         started_by_user_id=current_user.id,
@@ -283,7 +311,13 @@ async def enqueue_workflow_run(
     loop = asyncio.get_running_loop()
     bg_task = loop.create_task(coro)
     task_set.add(bg_task)
-    bg_task.add_done_callback(lambda t: task_set.discard(t))
+    await hub_ready.register_run_task(run_row.id, bg_task)
+
+    def _on_done(t: asyncio.Task[object]) -> None:
+        task_set.discard(t)
+        asyncio.create_task(hub_ready.unregister_run_task(run_row.id))
+
+    bg_task.add_done_callback(_on_done)
 
     return WorkflowRunEnqueueResponse(run_id=run_row.id, workflow_id=wf.id, status="queued")
 

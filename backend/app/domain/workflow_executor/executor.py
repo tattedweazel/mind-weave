@@ -712,6 +712,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         self._sem_llm: asyncio.Semaphore | None = None
         self._sem_browser: asyncio.Semaphore | None = None
         self._sem_external: asyncio.Semaphore | None = None
+        self._sem_tts: asyncio.Semaphore | None = None
         self._resolved_execution_limits: Optional[ResolvedExecutionLimits] = None
         self._node_execution_count_for_budget: int = 0
 
@@ -734,16 +735,19 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         gn = max(1, settings.WORKFLOW_MAX_CONCURRENT_NODES)
         br = max(1, settings.WORKFLOW_MAX_CONCURRENT_BROWSER_TASKS)
         ex = max(1, settings.WORKFLOW_MAX_CONCURRENT_EXTERNAL_SKILL_TASKS)
+        tts = max(1, settings.WORKFLOW_MAX_CONCURRENT_TTS_TASKS)
         self._sem_node = asyncio.Semaphore(gn)
         self._sem_llm = asyncio.Semaphore(llm_eff)
         self._sem_browser = asyncio.Semaphore(br)
         self._sem_external = asyncio.Semaphore(ex)
+        self._sem_tts = asyncio.Semaphore(tts)
 
     def _clear_run_execution_semaphores(self) -> None:
         self._sem_node = None
         self._sem_llm = None
         self._sem_browser = None
         self._sem_external = None
+        self._sem_tts = None
 
     @contextlib.asynccontextmanager
     async def _node_execution_scope(self, node: Any):
@@ -758,6 +762,8 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                 await stack.enter_async_context(_workflow_acquire_sem(self._sem_llm))
             elif extra == "browser" and self._sem_browser is not None:
                 await stack.enter_async_context(_workflow_acquire_sem(self._sem_browser))
+            elif extra == "tts" and self._sem_tts is not None:
+                await stack.enter_async_context(_workflow_acquire_sem(self._sem_tts))
             elif extra == "external" and self._sem_external is not None:
                 await stack.enter_async_context(_workflow_acquire_sem(self._sem_external))
             yield
@@ -1560,7 +1566,29 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
             logger.info("execute_scheduled_run cancelled workflow %s run_id=%s", workflow.id, run_id)
             await _cancel_run_tasks()
             self._cancel_active_transcribe_waits()
-            _persist_failed("cancelled")
+            try:
+                st = (persist_run_record.status or "").strip()
+                if st not in {"completed", "failed", "canceled"}:
+                    persist_run_record.status = "canceled"
+                    persist_run_record.completed_at = utc_now()
+                    self.session.add(persist_run_record)
+                    self.session.commit()
+                    try:
+                        seq = await sse_publish(
+                            "workflow.canceled",
+                            {
+                                "workflow_id": str(workflow.id),
+                                "run_id": str(run_id),
+                                "reason": "task_cancelled",
+                            },
+                        )
+                        persist_run_record.last_event_seq = seq
+                        self.session.add(persist_run_record)
+                        self.session.commit()
+                    except Exception:
+                        logger.exception("failed to emit workflow.canceled for run_id=%s", run_id)
+            except Exception:
+                logger.exception("failed to persist canceled terminal for run_id=%s", run_id)
             raise
         except Exception as exc:
             logger.exception("execute_scheduled_run failed workflow %s run_id=%s", workflow.id, run_id)

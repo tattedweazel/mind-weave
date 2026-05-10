@@ -20,6 +20,7 @@ from sqlmodel import Session, col, select
 from app.api.deps import get_current_user
 from app.core.workflow_execution_hub import (
     SSE_KEEPALIVE_INTERVAL_SEC,
+    WorkflowExecutionHub,
     WorkflowRunFanout,
     sse_comment_keepalive,
 )
@@ -183,6 +184,13 @@ def _blocking_terminal_event_tuples(
                 logs=logs_for_body,
             ).model_dump(mode="json", serialize_as_any=True)
         payloads.append(("workflow.failed", tpl))
+    elif st == "canceled":
+        payloads.append(
+            (
+                "workflow.canceled",
+                {"workflow_id": wf_str, "run_id": rid_str, "reason": "user_request"},
+            )
+        )
     return payloads
 
 
@@ -281,6 +289,35 @@ def get_workflow_run_snapshot(
         started_at=run_row.started_at,
         completed_at=run_row.completed_at,
     )
+
+
+@router.post("/workflow-runs/{run_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_workflow_run(
+    run_id: uuid.UUID,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Request cancellation of a **queued** or **running** build run owned by the current user."""
+    run_row = session.get(WorkflowRun, run_id)
+    if run_row is None or run_row.started_by_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow run not found")
+    st = (run_row.status or "").strip()
+    if st in {"completed", "failed", "canceled"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run has already finished")
+    hub: WorkflowExecutionHub | None = getattr(request.app.state, "workflow_execution_hub", None)
+    if hub is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Workflow execution is not initialized",
+        )
+    canceled_live = await hub.cancel_run_task(run_id)
+    if not canceled_live:
+        session.refresh(run_row)
+        st2 = (run_row.status or "").strip()
+        if st2 in {"completed", "failed", "canceled"}:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run has already finished")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No active run task to cancel")
 
 
 def _sse_response_headers() -> dict[str, str]:

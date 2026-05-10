@@ -374,7 +374,7 @@ async def test_audio_file_input_run_stream_abort_marks_run_error_and_clears_wait
     db_session.expire_all()
     run = db_session.get(WorkflowRun, captured_id)
     assert run is not None
-    assert run.status == "failed"
+    assert run.status == "canceled"
     assert not complete_transcribe_wait(
         TranscribeWaitKey(run_id=captured_id, node_id="af", for_loop_id=None, iteration=0),
         b"RIFF....WAVE",

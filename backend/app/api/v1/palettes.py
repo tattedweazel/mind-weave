@@ -4,6 +4,7 @@ Palettes API
 CRUD endpoints for Palettes.
 
   GET    /api/v1/palettes/       — list all Palettes visible to the current user
+  GET    /api/v1/palettes/resolve — effective canvas palette (workflow → preferred → default)
   POST   /api/v1/palettes/       — create a Palette
   POST   /api/v1/palettes/validate — normalize/import preview (+ strip unknown keys)
   GET    /api/v1/palettes/by-slug/{slug} — get system preset by slug
@@ -13,9 +14,9 @@ CRUD endpoints for Palettes.
 """
 
 import uuid
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.api.deps import get_current_user
@@ -72,6 +73,31 @@ def validate_palette_import(
         effective_colors=result.effective_colors,
         warnings=merged_warns,
     )
+
+
+@router.get("/resolve", response_model=PalettePublic)
+def resolve_workflow_palette(
+    workflow_id: Optional[uuid.UUID] = Query(
+        None,
+        description="Optional workflow definition id; when set, its palette_id takes precedence.",
+    ),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return the **effective** workflow editor palette for this user in the given context.
+
+    Precedence: ``workflow.palette_id`` (when present and visible) →
+    ``User.settings.preferred_editor_palette_id`` → built-in **default** preset.
+    """
+    try:
+        row = PaletteService(session, current_user.id).resolve_editor_palette(workflow_id=workflow_id)
+    except ValueError as exc:
+        msg = str(exc)
+        if msg == "Workflow not found":
+            raise HTTPException(status_code=404, detail=msg) from exc
+        raise HTTPException(status_code=500, detail=msg) from exc
+    return PaletteService.palette_public(row)
 
 
 @router.post("/", response_model=PalettePublic, status_code=status.HTTP_201_CREATED)

@@ -9254,8 +9254,8 @@ def test_for_loop_end_validation_requires_trigger_and_exports(client: TestClient
     assert run_res.status_code == 422
 
 
-def test_for_loop_end_validation_errors_run_stream_emits_error_after_start(client: TestClient):
-    """SSE run must emit workflow.failed (not hang) when For Loop End validation fails after workflow.started."""
+def test_for_loop_end_validation_errors_rejected_at_enqueue_preflight(client: TestClient):
+    """Invalid For Loop End wiring is caught during preflight (same validators as executor) — no queued run."""
     fl_id = "n_fl"
     end_id = "n_end"
     workflow_res = client.post(
@@ -9295,22 +9295,10 @@ def test_for_loop_end_validation_errors_run_stream_emits_error_after_start(clien
     assert workflow_res.status_code == 201
     wf_id = workflow_res.json()["id"]
     enq = client.post(f"/api/v1/workflow-definitions/{wf_id}/runs", json={})
-    assert enq.status_code == 200
-    run_uid = enq.json()["run_id"]
-
-    time.sleep(0.05)
-    with client.stream("GET", f"/api/v1/workflow-runs/{run_uid}/events") as response:
-        assert response.status_code == 200
-        raw = b"".join(response.iter_bytes())
-
-    events = sse_response_body_to_legacy_workflow_events(raw)
-    assert events and events[0].get("event") == "start"
-    assert any(e.get("event") == "error" for e in events)
-    assert not any(e.get("event") == "end" for e in events)
-
-    runs = client.get(f"/api/v1/workflow-definitions/{wf_id}/runs")
-    assert runs.status_code == 200
-    assert runs.json()[0]["status"] == "failed"
+    assert enq.status_code == 422
+    detail = enq.json()["detail"]
+    assert isinstance(detail, str)
+    assert "for loop end" in detail.lower()
 
 _MINI_PNG_1X1 = (
     b"\x89PNG\r\n\x1a\n"

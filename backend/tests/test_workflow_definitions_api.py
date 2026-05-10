@@ -1,5 +1,6 @@
 """WorkflowDefinition REST lifecycle, list runs, and async ``POST …/runs`` + SSE (no LLM)."""
 
+import asyncio
 import json
 import time
 import uuid
@@ -7,6 +8,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.domain.services.workflow_executor import WorkflowExecutor
 from tests.sse_helpers import parse_sse
 _MINIMAL_GRAPH = {
     "nodes": [
@@ -133,6 +135,44 @@ def test_workflow_enqueue_run_streams_sse_lifecycle(client: TestClient):
     assert "workflow.completed" in kinds
 
 
+def test_workflow_run_cancel_while_running(client: TestClient):
+    """POST …/workflow-runs/{id}/cancel stops the job and persists ``canceled``."""
+
+    _orig = WorkflowExecutor.execute_scheduled_run
+
+    async def _slow(self, *a, **kw):
+        await asyncio.sleep(1.25)
+        return await _orig(self, *a, **kw)
+
+    create = client.post(
+        "/api/v1/workflow-definitions/",
+        json={"name": "Cancel API", "graph": _MINIMAL_GRAPH},
+    )
+    assert create.status_code == 201
+    wf_id = create.json()["id"]
+    with patch.object(WorkflowExecutor, "execute_scheduled_run", _slow):
+        enq = client.post(f"/api/v1/workflow-definitions/{wf_id}/runs", json={})
+        assert enq.status_code == 200
+        run_id = enq.json()["run_id"]
+        time.sleep(0.15)
+        c = client.post(f"/api/v1/workflow-runs/{run_id}/cancel")
+        assert c.status_code == 204
+    time.sleep(0.05)
+    for _ in range(40):
+        snap = client.get(f"/api/v1/workflow-runs/{run_id}")
+        if snap.json().get("status") == "canceled":
+            break
+        time.sleep(0.05)
+    assert snap.json()["status"] == "canceled"
+
+    with client.stream("GET", f"/api/v1/workflow-runs/{run_id}/events") as response:
+        assert response.status_code == 200
+        raw = b"".join(response.iter_bytes())
+    events = parse_sse(raw)
+    kinds = [ev for ev, _ in events]
+    assert any(ev == "workflow.canceled" for ev in kinds)
+
+
 def test_workflow_enqueue_run_setup_failure_streams_workflow_failed_event(client: TestClient):
     """Unhandled failures during DAG setup emit ``workflow.failed`` on SSE and persist ``failed``."""
     create = client.post(
@@ -220,3 +260,186 @@ def test_workflow_run_applies_string_primitive_output_override(client: TestClien
     assert by_id["n_str"]["details"].get("forced_output") is True
     assert by_id["n_str"]["output"]["kind"] == "string"
     assert by_id["n_str"]["output"]["text"] == "forced-text"
+
+
+def _graph_preflight_certain_over_budget():
+    start_id = "n_start"
+    list_id = "n_list"
+    fl_id = "n_fl"
+    s1 = "n_s1"
+    s2 = "n_s2"
+    stop_id = "n_stop"
+    return {
+        "name": "Preflight certain boom",
+        "graph": {
+            "nodes": [
+                {
+                    "id": start_id,
+                    "kind": "start",
+                    "label": "Start",
+                    "data": {"required_inputs": []},
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": list_id,
+                    "kind": "primitive",
+                    "primitive_type": "list",
+                    "label": "List",
+                    "data": [1] * 30,
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": fl_id,
+                    "kind": "control",
+                    "control_type": "for_loop",
+                    "label": "Loop",
+                    "data": {"required_inputs": [{"key": "input", "type": "list", "value": None}]},
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": s1,
+                    "kind": "primitive",
+                    "primitive_type": "string",
+                    "label": "a",
+                    "data": {"text": ""},
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": s2,
+                    "kind": "primitive",
+                    "primitive_type": "string",
+                    "label": "b",
+                    "data": {"text": ""},
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": stop_id,
+                    "kind": "stop",
+                    "label": "Stop",
+                    "data": {"required_outputs": [{"key": "output", "type": "string"}]},
+                    "position": {"x": 0, "y": 0},
+                },
+            ],
+            "edges": [
+                {"source": start_id, "target": list_id, "source_handle": "signal_out", "target_handle": "trigger"},
+                {"source": list_id, "target": fl_id, "source_handle": "output", "target_handle": "input"},
+                {"source": list_id, "target": fl_id, "source_handle": "signal_out", "target_handle": "trigger"},
+                {"source": fl_id, "target": s1, "source_handle": "signal_out", "target_handle": "trigger"},
+                {"source": fl_id, "target": s1, "source_handle": "item", "target_handle": "input"},
+                {"source": s1, "target": s2, "source_handle": "output", "target_handle": "input"},
+                {"source": s1, "target": s2, "source_handle": "signal_out", "target_handle": "trigger"},
+                {"source": s2, "target": stop_id, "source_handle": "output"},
+                {"source": s2, "target": stop_id, "source_handle": "signal_out", "target_handle": "trigger"},
+            ],
+        },
+    }
+
+
+def _graph_preflight_uncertain_over_budget():
+    start_id = "n_start"
+    list_id = "n_list"
+    fl_id = "n_fl"
+    s1 = "n_s1"
+    stop_id = "n_stop"
+    return {
+        "name": "Preflight uncertain",
+        "graph": {
+            "nodes": [
+                {
+                    "id": start_id,
+                    "kind": "start",
+                    "label": "Start",
+                    "data": {"required_inputs": []},
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": list_id,
+                    "kind": "primitive",
+                    "primitive_type": "list",
+                    "label": "List",
+                    "data": [1],
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": fl_id,
+                    "kind": "control",
+                    "control_type": "for_loop",
+                    "label": "Loop",
+                    "data": {"required_inputs": [{"key": "input", "type": "list", "value": None}]},
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": s1,
+                    "kind": "primitive",
+                    "primitive_type": "string",
+                    "label": "a",
+                    "data": {"text": ""},
+                    "position": {"x": 0, "y": 0},
+                },
+                {
+                    "id": stop_id,
+                    "kind": "stop",
+                    "label": "Stop",
+                    "data": {"required_outputs": [{"key": "output", "type": "string"}]},
+                    "position": {"x": 0, "y": 0},
+                },
+            ],
+            "edges": [
+                {"source": start_id, "target": list_id, "source_handle": "signal_out", "target_handle": "trigger"},
+                {"source": list_id, "target": fl_id, "source_handle": "output", "target_handle": "input"},
+                {"source": list_id, "target": fl_id, "source_handle": "output", "target_handle": "input"},
+                {"source": list_id, "target": fl_id, "source_handle": "signal_out", "target_handle": "trigger"},
+                {"source": fl_id, "target": s1, "source_handle": "signal_out", "target_handle": "trigger"},
+                {"source": fl_id, "target": s1, "source_handle": "item", "target_handle": "input"},
+                {"source": s1, "target": stop_id, "source_handle": "output"},
+                {"source": s1, "target": stop_id, "source_handle": "signal_out", "target_handle": "trigger"},
+            ],
+        },
+    }
+
+
+def test_workflow_enqueue_preflight_hard_blocks_when_certain(client: TestClient):
+    create = client.post("/api/v1/workflow-definitions/", json=_graph_preflight_certain_over_budget())
+    assert create.status_code == 201
+    wf_id = create.json()["id"]
+    enq = client.post(
+        f"/api/v1/workflow-definitions/{wf_id}/runs",
+        json={"execution_limits": {"max_node_executions": 40}},
+    )
+    assert enq.status_code == 422
+    detail = enq.json()["detail"]
+    assert detail["error"] == "preflight_blocked"
+
+
+def test_workflow_enqueue_preflight_warnings_then_ack_enqueues(client: TestClient):
+    create = client.post("/api/v1/workflow-definitions/", json=_graph_preflight_uncertain_over_budget())
+    assert create.status_code == 201
+    wf_id = create.json()["id"]
+    first = client.post(
+        f"/api/v1/workflow-definitions/{wf_id}/runs",
+        json={"execution_limits": {"max_node_executions": 40}},
+    )
+    assert first.status_code == 422
+    assert first.json()["detail"]["error"] == "preflight_warnings"
+
+    second = client.post(
+        f"/api/v1/workflow-definitions/{wf_id}/runs",
+        json={
+            "execution_limits": {"max_node_executions": 40},
+            "acknowledge_preflight_warnings": True,
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["status"] == "queued"
+
+
+def test_workflow_sync_run_preflight_hard_blocks(client: TestClient):
+    create = client.post("/api/v1/workflow-definitions/", json=_graph_preflight_certain_over_budget())
+    assert create.status_code == 201
+    wf_id = create.json()["id"]
+    run = client.post(
+        f"/api/v1/workflow-definitions/{wf_id}/run",
+        json={"execution_limits": {"max_node_executions": 40}},
+    )
+    assert run.status_code == 422
+    assert run.json()["detail"]["error"] == "preflight_blocked"

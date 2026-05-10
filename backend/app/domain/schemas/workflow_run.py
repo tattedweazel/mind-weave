@@ -53,6 +53,13 @@ class WorkflowRunRequest(BaseModel):
             "then validated against server ceilings."
         ),
     )
+    acknowledge_preflight_warnings: bool = Field(
+        default=False,
+        description=(
+            "When true, allows enqueue/sync run despite advisory preflight warnings "
+            "(uncertain loop lists or skipped nested-workflow estimates)."
+        ),
+    )
 
     @model_validator(mode="after")
     def _validate_run_request(self):

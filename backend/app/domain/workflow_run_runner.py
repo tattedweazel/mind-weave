@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import uuid
 from typing import Any
@@ -73,11 +74,34 @@ async def execute_workflow_run_job(
             sse_publish=sse_publish,
             sse_raw=sse_raw,
         )
+    except asyncio.CancelledError:
+        try:
+            run_record2 = session.get(WorkflowRun, run_id)
+            st = (run_record2.status or "").strip() if run_record2 else ""
+            if run_record2 and st not in {"completed", "failed", "canceled"}:
+                run_record2.status = "canceled"
+                run_record2.completed_at = utc_now()
+                session.add(run_record2)
+                session.commit()
+                seq = await fanout.publish(
+                    "workflow.canceled",
+                    {
+                        "workflow_id": str(workflow_id),
+                        "run_id": str(run_id),
+                        "reason": "user_request",
+                    },
+                )
+                run_record2.last_event_seq = seq
+                session.add(run_record2)
+                session.commit()
+        except Exception:
+            logger.exception("failed to persist canceled status for run_id=%s", run_id)
+        raise
     except Exception:
         logger.exception("workflow scheduled run crashed workflow_id=%s run_id=%s", workflow_id, run_id)
         try:
             run_record = session.get(WorkflowRun, run_id)
-            if run_record and (run_record.status or "") not in {"completed", "failed"}:
+            if run_record and (run_record.status or "") not in {"completed", "failed", "canceled"}:
                 run_record.status = "failed"
                 run_record.completed_at = utc_now()
                 session.add(run_record)

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, History, Loader2, Play, Trash2 } from 'lucide-react';
 import { ApiClient } from '../api/client';
+import { getApiErrorDetailObject } from '../api/http';
 import type { DocumentListItem, MyWorkflowRunSummary, NodeRunResult, Palette, Structure, WorkflowDefinition, WorkflowDefinitionListItem } from '../api/types';
 import { useAuth } from '../contexts/AuthContext';
 import { resolveWorkflowTimeZone } from '../domain/gmailRfc3339Date';
@@ -226,27 +227,53 @@ const RunExploreModalImpl: React.FC<Props> = ({ isOpen, onClose }) => {
         setDetailError(null);
         setLastRunMap({});
         try {
-            await ApiClient.runWorkflowStream(
-                selectedWorkflow.id,
-                event => {
-                    if (event.event === 'node_end') {
-                        const nodeResult = event.result as NodeRunResult;
-                        setLastRunMap(prev => {
-                            const cur = prev[nodeResult.node_id];
-                            const sn = nodeResult.step_number ?? 0;
-                            const prevSn = cur?.step_number ?? 0;
-                            if (!cur || sn >= prevSn) {
-                                return { ...prev, [nodeResult.node_id]: nodeResult };
+            let acknowledgePreflight = false;
+            for (;;) {
+                try {
+                    await ApiClient.runWorkflowStream(
+                        selectedWorkflow.id,
+                        event => {
+                            if (event.event === 'node_end') {
+                                const nodeResult = event.result as NodeRunResult;
+                                setLastRunMap(prev => {
+                                    const cur = prev[nodeResult.node_id];
+                                    const sn = nodeResult.step_number ?? 0;
+                                    const prevSn = cur?.step_number ?? 0;
+                                    if (!cur || sn >= prevSn) {
+                                        return { ...prev, [nodeResult.node_id]: nodeResult };
+                                    }
+                                    return prev;
+                                });
                             }
-                            return prev;
-                        });
+                        },
+                        {
+                            ...(Object.keys(outputOverrides).length > 0 ? { output_overrides: outputOverrides } : {}),
+                            execution_time_zone: resolveWorkflowTimeZone(
+                                user?.settings as Record<string, unknown> | undefined,
+                            ),
+                            ...(acknowledgePreflight ? { acknowledge_preflight_warnings: true } : {}),
+                        },
+                    );
+                    break;
+                } catch (preErr: unknown) {
+                    const detail = getApiErrorDetailObject((preErr as Error & { apiBody?: unknown }).apiBody);
+                    if (
+                        !acknowledgePreflight &&
+                        detail &&
+                        detail.error === 'preflight_warnings' &&
+                        typeof window !== 'undefined' &&
+                        window.confirm(
+                            typeof detail.message === 'string'
+                                ? `${detail.message}\n\nProceed with this run?`
+                                : 'This run may exceed safe execution limits or uses uncertain estimates. Proceed?',
+                        )
+                    ) {
+                        acknowledgePreflight = true;
+                        continue;
                     }
-                },
-                {
-                    ...(Object.keys(outputOverrides).length > 0 ? { output_overrides: outputOverrides } : {}),
-                    execution_time_zone: resolveWorkflowTimeZone(user?.settings as Record<string, unknown> | undefined),
-                },
-            );
+                    throw preErr;
+                }
+            }
         } catch {
             setDetailError('Re-run failed.');
         } finally {

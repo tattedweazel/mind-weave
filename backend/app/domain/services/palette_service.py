@@ -19,7 +19,8 @@ from app.domain.palette_defaults import (
 from app.domain.schemas import PaletteCreate, PaletteUpdate
 from app.domain.schemas.palettes import PalettePublic, build_palette_public
 from app.domain.workflow_palette_validate import normalize_strict_write
-from app.persistence.tables import Palette
+from app.domain.services.workflow_definition_service import WorkflowDefinitionService
+from app.persistence.tables import Palette, User
 
 
 class PaletteService:
@@ -136,6 +137,48 @@ class PaletteService:
                 Palette.user_id == None,  # noqa: E711
             )
         ).first()
+
+    def resolve_editor_palette(self, workflow_id: Optional[uuid.UUID] = None) -> Palette:
+        """
+        Resolve which workflow **canvas** palette applies: ``workflow.palette_id``
+        (when the user can access the definition and the palette exists) →
+        ``User.settings.preferred_editor_palette_id`` → built-in **default** preset.
+
+        ``workflow_id`` may be omitted (e.g. editor shell with no workflow loaded):
+        then precedence starts at preferred → default.
+        """
+        if self.user_id is None:
+            raise ValueError("resolve_editor_palette requires a user context")
+
+        if workflow_id is not None:
+            wf = WorkflowDefinitionService(self.session, self.user_id).get_workflow(workflow_id)
+            if wf is None:
+                raise ValueError("Workflow not found")
+            pid = getattr(wf, "palette_id", None)
+            if pid is not None:
+                row = self.get_palette(pid)
+                if row is not None:
+                    return row
+
+        user = self.session.get(User, self.user_id)
+        if user is None:
+            raise ValueError("User not found")
+        settings = user.settings if isinstance(user.settings, dict) else {}
+        pref_raw = settings.get("preferred_editor_palette_id")
+        if pref_raw:
+            try:
+                pref_uuid = uuid.UUID(str(pref_raw))
+            except (ValueError, TypeError):
+                pref_uuid = None
+            if pref_uuid is not None:
+                row = self.get_palette(pref_uuid)
+                if row is not None:
+                    return row
+
+        row = self.get_default_palette()
+        if row is None:
+            raise ValueError("Default workflow palette is not available")
+        return row
 
     def list_palettes(self) -> List[Palette]:
         """Return all Palettes visible to this user (user-owned + system-level)."""

@@ -227,6 +227,15 @@ export class ApiClient {
         return this.request<Palette>(`/palettes/by-slug/${encodeURIComponent(slug)}`);
     }
 
+    /** Effective canvas palette: workflow.palette_id → preferred_editor_palette_id → default (server precedence). */
+    static resolveWorkflowPalette(workflowId?: string | null): Promise<Palette> {
+        const q =
+            workflowId != null && workflowId !== ''
+                ? `?workflow_id=${encodeURIComponent(workflowId)}`
+                : '';
+        return this.request<Palette>(`/palettes/resolve${q}`);
+    }
+
     static createPalette(data: PaletteCreate): Promise<Palette> {
         return this.request<Palette>('/palettes/', { method: 'POST', body: JSON.stringify(data) });
     }
@@ -401,6 +410,7 @@ export class ApiClient {
             output_overrides?: Record<string, unknown>;
             execution_time_zone?: string;
             execution_limits?: WorkflowExecutionLimitsOverrides;
+            acknowledge_preflight_warnings?: boolean;
         },
     ): Promise<WorkflowRunResult> {
         const body: Record<string, unknown> = {};
@@ -416,6 +426,9 @@ export class ApiClient {
         if (options?.execution_limits != null && Object.keys(options.execution_limits).length > 0) {
             body.execution_limits = options.execution_limits;
         }
+        if (options?.acknowledge_preflight_warnings) {
+            body.acknowledge_preflight_warnings = true;
+        }
         return this.request<WorkflowRunResult>(`/workflow-definitions/${id}/run`, {
             method: 'POST',
             body: JSON.stringify(body),
@@ -430,6 +443,7 @@ export class ApiClient {
             output_overrides?: Record<string, unknown>;
             execution_time_zone?: string;
             execution_limits?: WorkflowExecutionLimitsOverrides;
+            acknowledge_preflight_warnings?: boolean;
             signal?: AbortSignal;
         },
     ): Promise<void> {
@@ -449,6 +463,9 @@ export class ApiClient {
         }
         if (options?.execution_limits != null && Object.keys(options.execution_limits).length > 0) {
             body.execution_limits = options.execution_limits;
+        }
+        if (options?.acknowledge_preflight_warnings) {
+            body.acknowledge_preflight_warnings = true;
         }
 
         const enqueueResp = await fetchWithCredentials(`${API_BASE}/workflow-definitions/${id}/runs`, {
@@ -476,13 +493,13 @@ export class ApiClient {
             throw apiErrorFromResponse(streamResp, errBody);
         }
 
-        let sawEnd = false;
-        let sawError = false;
+        let sawTerminal = false;
 
         try {
             await consumeWorkflowRunSseResponse(streamResp, event => {
-                if (event.event === 'end') sawEnd = true;
-                if (event.event === 'error') sawError = true;
+                if (event.event === 'end') sawTerminal = true;
+                if (event.event === 'error') sawTerminal = true;
+                if (event.event === 'canceled') sawTerminal = true;
                 onEvent(event);
             });
         } catch (err) {
@@ -492,12 +509,16 @@ export class ApiClient {
             throw err;
         }
 
-        if (!sawEnd && !sawError) {
+        if (!sawTerminal) {
             onEvent({
                 event: 'error',
                 error: 'SSE stream ended before completion (no end event).',
             });
         }
+    }
+
+    static cancelWorkflowRun(runId: string): Promise<void> {
+        return this.request<void>(`/workflow-runs/${runId}/cancel`, { method: 'POST' });
     }
 
     /**
