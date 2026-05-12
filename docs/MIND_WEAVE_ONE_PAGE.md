@@ -1,6 +1,6 @@
 # Mind Weave
 
-**Related entry points:** progressive onboarding and quickstart live in the root **[README.md](../README.md)**; **runtime topology and execution flow** (with diagrams) live in **[RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md)**; implementation detail and SSOT indexes live in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+**Related entry points:** staged onboarding and quick launch live in the root **[README.md](../README.md)**; reader-oriented terminology in **[DOMAIN_MODEL.md](DOMAIN_MODEL.md)**; hands-on development in **[DEVELOPMENT.md](DEVELOPMENT.md)**; **runtime topology and execution flow** (with diagrams) in **[RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md)**; implementation detail and SSOT indexes in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## What it is
 

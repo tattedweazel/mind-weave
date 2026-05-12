@@ -1,8 +1,8 @@
 ---
 
-## last_reviewed: 2026-05-10 (Spec 04: developer onboarding, NODE_TAXONOMY doc, Makefile)
+## last_reviewed: 2026-05-11 (README layering, DOMAIN_MODEL + DEVELOPMENT docs)
 audience: Maintainers and operators validating that prose matches code and that docs are discoverable
-scope: Root and package READMEs, `docs/*.md` (non-audit narrative), **`docs/DEPLOYMENT_AND_NETWORK.md`** (SSOT for network paths, Google OAuth, HTTPS/tunnel), **`docs/NODE_TAXONOMY.md`** (contributor taxonomy + placement), `backend/.env.example` comments, [`backend/app/domain/schemas/README.md`](../../backend/app/domain/schemas/README.md). **Not** re-auditing security behavior ([SECURITY_AUDIT.md](SECURITY_AUDIT.md)), dependencies ([LIBRARY_USAGE_AUDIT.md](LIBRARY_USAGE_AUDIT.md)), composition ([MODULAR_DIRECTION_AUDIT.md](MODULAR_DIRECTION_AUDIT.md)), code style ([CODE_QUALITY_AND_STYLE_AUDIT.md](CODE_QUALITY_AND_STYLE_AUDIT.md)), or test mapping ([TEST_AUDIT.md](TEST_AUDIT.md))—this file **points** to those.
+scope: Root and package READMEs, `docs/*.md` (non-audit narrative), **`docs/DEVELOPMENT.md`**, **`docs/DOMAIN_MODEL.md`**, **`docs/DEPLOYMENT_AND_NETWORK.md`** (SSOT for network paths, Google OAuth, HTTPS/tunnel), **`docs/NODE_TAXONOMY.md`** (contributor taxonomy + placement), `backend/.env.example` comments, [`backend/app/domain/schemas/README.md`](../../backend/app/domain/schemas/README.md). **Not** re-auditing security behavior ([SECURITY_AUDIT.md](SECURITY_AUDIT.md)), dependencies ([LIBRARY_USAGE_AUDIT.md](LIBRARY_USAGE_AUDIT.md)), composition ([MODULAR_DIRECTION_AUDIT.md](MODULAR_DIRECTION_AUDIT.md)), code style ([CODE_QUALITY_AND_STYLE_AUDIT.md](CODE_QUALITY_AND_STYLE_AUDIT.md)), or test mapping ([TEST_AUDIT.md](TEST_AUDIT.md))—this file **points** to those.
 methodology: Static inventory, relative-link sanity checks from `docs/` and repo root, SSOT/dup review, and sampled factual spot-checks against [`backend/app/domain/schemas/graph_nodes.py`](../../backend/app/domain/schemas/graph_nodes.py), [`backend/app/domain/palette_defaults.py`](../../backend/app/domain/palette_defaults.py), and [`frontend/src/components/workflow-editor/WorkflowEditor.tsx`](../../frontend/src/components/workflow-editor/WorkflowEditor.tsx). New passes add **DO-xxx** rows, update `last_reviewed`, and **remove** rows when remediated (keep ids stable until closed). **Documents:** treat [ARCHITECTURE.md](../ARCHITECTURE.md) “Resource-backed primitives” as the narrative SSOT—**`documents.body`** is flexible text (Markdown is common, not exclusive); keep [WORKFLOW_TOOL_INVENTORY.md](../../WORKFLOW_TOOL_INVENTORY.md) and package READMEs consistent.
 
 **Severity legend**
@@ -26,7 +26,7 @@ methodology: Static inventory, relative-link sanity checks from `docs/` and repo
 
 ## Executive summary
 
-Prose documentation is **coherent at the architecture level** ([ARCHITECTURE.md](../ARCHITECTURE.md) remains the right SSOT for layering and “adding a node type”). **`make dev`** (repo-root **`Makefile` → `./startdev.sh`**) documents the canonical local bootstrap with LAN-aware **`CORS_ORIGINS`**, **`FRONTEND_URL`**, **`TRUSTED_HOSTS`**, **`VITE_API_BASE`**. **[NODE_TAXONOMY.md](../NODE_TAXONOMY.md)** anchors contributor placement guidance (verbs vs grammar + documented persistence exceptions). **[WORKFLOW_SKILLS.md](../WORKFLOW_SKILLS.md)** documents **`output.data` vs `details.skill_diagnostics`** for integration skills (calendar, Gmail). **[DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md)** includes **Context help (info pop-outs)** for inspector affordances (e.g. Gmail search primer). **[DEPLOYMENT_AND_NETWORK.md](../DEPLOYMENT_AND_NETWORK.md)** is the SSOT for localhost vs LAN vs domain vs tunnel and Google OAuth (aligned with package READMEs). **High-level READMEs** ([root](../../README.md), [backend](../../backend/README.md), [frontend](../../frontend/README.md)) enumerate primitives (including **Boolean** / **Int**), palette keys (aligned with [`DEFAULT_PALETTE_COLORS`](../../backend/app/domain/palette_defaults.py)), utilities, controls (comparisons and And/Or/Xor), **Graph node** model names, and **Start** input types (`boolean` / `int`) consistent with [`graph_nodes.py`](../../backend/app/domain/schemas/graph_nodes.py) and the workflow editor. Security findings use the **`SE-xxx`** prefix (same scheme as **CQ** / **MD** / **LU** / **DO**); see [SECURITY_AUDIT.md](SECURITY_AUDIT.md). This audit is linked from [ARCHITECTURE.md](../ARCHITECTURE.md) **Related audits**, the [root README](../../README.md) (Testing section), and [OPERATIONS.md](../OPERATIONS.md) **Where to look**.
+Prose documentation is **coherent at the architecture level** ([ARCHITECTURE.md](../ARCHITECTURE.md) remains the right SSOT for layering and “adding a node type”). **`make dev`** (repo-root **`Makefile` → `./startdev.sh`**) documents the canonical local bootstrap with LAN-aware **`CORS_ORIGINS`**, **`FRONTEND_URL`**, **`TRUSTED_HOSTS`**, **`VITE_API_BASE`**. The root **[README.md](../../README.md)** stages onboarding (capabilities before setup); **[DEVELOPMENT.md](../DEVELOPMENT.md)** carries first-time install and contributor dev depth; **[DOMAIN_MODEL.md](../DOMAIN_MODEL.md)** carries reader-oriented vocabulary. **[NODE_TAXONOMY.md](../NODE_TAXONOMY.md)** anchors contributor placement guidance (verbs vs grammar + documented persistence exceptions). **[WORKFLOW_SKILLS.md](../WORKFLOW_SKILLS.md)** documents **`output.data` vs `details.skill_diagnostics`** for integration skills (calendar, Gmail). **[DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md)** includes **Context help (info pop-outs)** for inspector affordances (e.g. Gmail search primer). **[DEPLOYMENT_AND_NETWORK.md](../DEPLOYMENT_AND_NETWORK.md)** is the SSOT for localhost vs LAN vs domain vs tunnel and Google OAuth (aligned with package READMEs). **High-level READMEs** ([root](../../README.md), [backend](../../backend/README.md), [frontend](../../frontend/README.md)) enumerate primitives (including **Boolean** / **Int**), palette keys (aligned with [`DEFAULT_PALETTE_COLORS`](../../backend/app/domain/palette_defaults.py)), utilities, controls (comparisons and And/Or/Xor), **Graph node** model names, and **Start** input types (`boolean` / `int`) consistent with [`graph_nodes.py`](../../backend/app/domain/schemas/graph_nodes.py) and the workflow editor. Security findings use the **`SE-xxx`** prefix (same scheme as **CQ** / **MD** / **LU** / **DO**); see [SECURITY_AUDIT.md](SECURITY_AUDIT.md). This audit is linked from [ARCHITECTURE.md](../ARCHITECTURE.md) **Related audits**, the [root README](../../README.md) (Testing section), and [OPERATIONS.md](../OPERATIONS.md) **Where to look**.
 
 ## Documentation map
 
@@ -41,6 +41,8 @@ flowchart TB
     SR[schemas/README.md]
   end
   subgraph docsnarrative [docs narrative]
+    DM[DOMAIN_MODEL.md]
+    DV[DEVELOPMENT.md]
     AR[ARCHITECTURE.md]
     OP[OPERATIONS.md]
     DS[DESIGN_SYSTEM.md]
@@ -52,6 +54,8 @@ flowchart TB
     A3[CQ_MD_LU]
     A4[DOCUMENTATION]
   end
+  R --> DM
+  R --> DV
   R --> BR
   R --> FR
   R --> AR
@@ -67,7 +71,9 @@ flowchart TB
 
 | Document | Primary audience | Role |
 |----------|------------------|------|
-| [README.md](../../README.md) | New contributors / users | Progressive onboarding (purpose → hero workflow → runtime summary → quickstart **make dev**); core concepts; doc map; troubleshooting → [OPERATIONS.md](OPERATIONS.md) |
+| [README.md](../../README.md) | New contributors / users | Staged onboarding (capabilities → composition → mental model → quick start **make dev** → first workflow); doc map; troubleshooting → [OPERATIONS.md](OPERATIONS.md) |
+| [docs/DOMAIN_MODEL.md](../DOMAIN_MODEL.md) | Users / readers | Reader-oriented terminology; pointers to execution docs and [NODE_TAXONOMY.md](NODE_TAXONOMY.md) |
+| [docs/DEVELOPMENT.md](../DEVELOPMENT.md) | Contributors | First-time install, LAN/env alignment, checks, adding workflow nodes |
 | [docs/RUNTIME_ARCHITECTURE.md](../RUNTIME_ARCHITECTURE.md) | New contributors / users | Runtime topology, execution flow, Mermaid diagrams |
 | [LICENSE](../../LICENSE) | Users / distributors | Apache-2.0 full text |
 | [SECURITY.md](../../SECURITY.md) | Reporters / maintainers | Private vulnerability reporting via GitHub |
@@ -94,7 +100,7 @@ flowchart TB
 
 **.env.example (sampled):** `OPEN_REGISTRATION`, `BOOTSTRAP_DEFAULT_ADMIN`, `SECRET_KEY` guidance matches the general posture described in backend README and security audit themes (not line-audited against every `Settings` field).
 
-**Graph / palette spot-check:** [`GraphNode`](../../backend/app/domain/schemas/graph_nodes.py) includes **BooleanPrimitiveNode**, **IntPrimitiveNode**, **LenFromListUtilityNode**, **ListItemByIndexUtilityNode**, full **Gt/Lt/Gte/Lte/And/Or/Xor** controls, etc. [`DEFAULT_PALETTE_COLORS`](../../backend/app/domain/palette_defaults.py) lists matching palette keys. **This pass:** README **Core concepts (domain model)** / frontend **Graph Node Types** were brought in line with those sources (2026-03-19); README onboarding was later restructured (2026-05) — keep this checklist aligned with root [README.md](../../README.md).
+**Graph / palette spot-check:** [`GraphNode`](../../backend/app/domain/schemas/graph_nodes.py) includes **BooleanPrimitiveNode**, **IntPrimitiveNode**, **LenFromListUtilityNode**, **ListItemByIndexUtilityNode**, full **Gt/Lt/Gte/Lte/And/Or/Xor** controls, etc. [`DEFAULT_PALETTE_COLORS`](../../backend/app/domain/palette_defaults.py) lists matching palette keys. **This pass:** root [README.md](../../README.md) stages onboarding and detailed domain concepts live under [DOMAIN_MODEL.md](../DOMAIN_MODEL.md); keep the inventory rows aligned with those sources.
 
 ## Open findings
 

@@ -1,5 +1,7 @@
 # Mind Weave — runtime and system architecture
 
+**Onboarding path:** New readers should start with the root **[README.md](../README.md)** (capabilities, mental model, quick launch), then **[DOMAIN_MODEL.md](DOMAIN_MODEL.md)** for terminology before this runtime map.
+
 This document is the **high-level runtime map**: how the browser, API, workflow executor, streams, and persistence fit together. For **layering, single sources of truth, and implementation detail**, see [ARCHITECTURE.md](ARCHITECTURE.md). For **what each node family means** (skills vs utilities vs controls), see [NODE_TAXONOMY.md](NODE_TAXONOMY.md).
 
 ## High-level runtime overview

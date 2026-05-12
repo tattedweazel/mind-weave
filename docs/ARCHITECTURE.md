@@ -1,5 +1,7 @@
 # Mind Weave — architecture and conventions
 
+**Onboarding path:** Start with the root **[README.md](../README.md)** and **[DOMAIN_MODEL.md](DOMAIN_MODEL.md)** for staged orientation; use this document for engineering single sources of truth and implementation conventions.
+
 If you need a **runtime system map** (browser, API, SSE, executor, persistence) with diagrams, read **[RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md)** first.
 
 This document is the **single “one way” engineering guide** for layering, shared contracts, and cross-cutting patterns—**single sources of truth**, executor behavior, palette contracts, UI conventions, and contributor checklists—and is intentionally dense. Detailed how-tos stay in [backend/README.md](../backend/README.md) and [frontend/README.md](../frontend/README.md).

@@ -1,120 +1,98 @@
 # Mind Weave
 
-Mind Weave is a full-stack application for **building and running visual workflows** (directed graphs) against **local or self-hosted LLMs**—for example via an OpenAI-compatible server such as **LM Studio**. You wire **data and control flow** on a canvas, execute runs with **live streaming** updates, and **persist** results: named documents, run logs, and **replays** you can inspect step by step. The default posture keeps model traffic on infrastructure **you** control.
+Mind Weave is a **visual workflow system** for composing **graph-based automations** that can include **local or self-hosted language models** together with ordinary data flow. You build on a canvas, run executions, and reuse subgraphs when you want the same behavior in more than one place. The default posture keeps model traffic on **infrastructure you control**—for example an OpenAI-compatible server such as **LM Studio** on your network.
 
-For a full product tour of the shell (Build, Workspace, Sandbox, Configure), see **[docs/MIND_WEAVE_ONE_PAGE.md](docs/MIND_WEAVE_ONE_PAGE.md)**.
+Mind Weave is also **multimodal**: the same graph can combine text, structured data, images, audio, and other step outputs when your chosen palette nodes support them.
 
-## Hero workflow
+For a full tour of the product shell (Build, Workspace, Sandbox, Configure), see **[docs/MIND_WEAVE_ONE_PAGE.md](docs/MIND_WEAVE_ONE_PAGE.md)**.
 
-One concrete pattern the system supports end to end:
+## What can I build?
 
-1. **Fetch URL** — Pull HTML (or JSON) from the web through the API’s **`fetch_url`** skill.
-2. **Structured parse** — Use **`html_parse_basic`** or dictionary helpers to turn the response into **chunks** or fields you care about (titles, blocks, links).
-3. **Local LLM** — Send that text through **Simple LLM Call** (with a **Persona** or inline prompt) attached to LM Studio or another OpenAI-compatible endpoint.
-4. **Structured extraction** — Optionally attach a **Structure** (JSON Schema) so the model returns **entities, action items, or tables** as typed JSON instead of freeform prose.
-5. **Persist** — Write results with **Upsert Document** (or related utilities) so **Manage Documents** holds the output for later runs or export.
-6. **Inspect** — Use **Build → Replays** (or the stream while the run is live) to see **per-node inputs and outputs** and debug wiring.
+- **Multimodal analysis pipelines** — Combine text, images, and tool outputs in one graph; route them through a local model or structured extraction.
+- **Audio transcription plus reasoning** — Capture speech (or files), normalize text, and chain into downstream steps.
+- **Browser-assisted extraction and parsing** — Pull page content or snapshots, then reshape and interpret it in the graph (see **[docs/OPERATIONS.md](docs/OPERATIONS.md)** for operational notes when optional capture dependencies apply).
+- **Local LLM orchestration** — Run steps against **LM Studio** or another OpenAI-compatible endpoint without treating the cloud as the default execution path.
+- **Structured information extraction** — Attach **Structures** (JSON Schema expectations) so model output lands as typed data, not only free text.
+- **Nested reusable workflows** — Embed saved definitions as **Workflow** nodes or expose them as **Custom Skills** for composability.
+- **AI-powered automation chains** — Branch on conditions, loop over lists, and handle failures with control-flow nodes.
+- **Visual graph orchestration** — Express dependencies as wiring instead of ad hoc scripts.
+- **Agent-like workflow systems** — Compose skills that call models, fetches, and tools in explicit order with inspectable steps.
+- **Private / local processing** — Keep runs and artifacts on hosts and networks you operate.
 
-A related **fetch → parse** sample ships in the backend scripts—see **[docs/OPERATIONS.md](docs/OPERATIONS.md#debugging-workflows-graphs-and-runs)** (`run_books_toscrape_fetch_parse_sample.py`; no LLM in that script, but you can extend the graph in the editor).
+Concrete outcomes include: *extract structured data from websites using capture and local reasoning*, *turn a transcript into a summarized document*, *chain fetch → parse → LLM → validated JSON* for downstream tools.
 
-## System architecture (runtime)
+## Example composition
 
-At a high level:
+A common pattern is **fetch → reshape → model → persist**:
 
-- **React + Vite SPA** — Workflow editor, SSE client, replay UI, workspace/sandbox surfaces; talks to the API over HTTP.
-- **FastAPI backend** — REST API, auth, validation, persistence.
-- **Workflow execution runtime** — Async **DAG** scheduler (**waves**, loops, branching, try/catch), **concurrency limits**, integration with LLM and optional **TTS/STT bridges**.
-- **Server-Sent Events** — Build runs stream **node lifecycle** to the browser on **`GET /api/v1/workflow-runs/{run_id}/events`**.
-- **Persistence** — Workflow definitions, runs, node logs, documents, palettes, settings (default **SQLite**).
+**Fetch URL** (Skill) → **HTML Parse Basic** (Utility) → **Simple LLM Call** (Skill) → optional **Structure** for JSON-shaped output → **Upsert Document** (Utility) for durable storage.
 
-**Diagrams and deeper breakdown:** **[docs/RUNTIME_ARCHITECTURE.md](docs/RUNTIME_ARCHITECTURE.md)**.
-
-## Execution flow (summary)
-
-When you click **Run** on a workflow (streamed Build run):
-
-1. The client **submits** an execution request; the API **validates** the graph and limits.
-2. The executor **resolves dependency waves** and schedules ready nodes.
-3. **Async steps** run with safe parallelism and **per-category concurrency** caps.
-4. **SSE** carries **state updates** to the SPA.
-5. The **canvas and explorer** update from the stream.
-6. **Logs and status** are **persisted** for **Replays** and support.
-
-Full sequence and component context: **[docs/RUNTIME_ARCHITECTURE.md](docs/RUNTIME_ARCHITECTURE.md#execution-flow-from-run-to-replay)**.
-
-## Quickstart
-
-From the **repository root**:
-
-```bash
-git clone https://github.com/tattedweazel/mind-weave.git
-cd mind-weave
+```mermaid
+flowchart LR
+  fetchUrl[Fetch_URL] --> parse[HTML_Parse_Basic]
+  parse --> llm[Simple_LLM_Call]
+  llm --> out[Structured_output]
 ```
 
-**First-time setup** — install backends for each package:
+A scripted **fetch → parse** sample (no LLM) ships under **[docs/OPERATIONS.md — Debugging workflows](docs/OPERATIONS.md#debugging-workflows-graphs-and-runs)** (`run_books_toscrape_fetch_parse_sample.py`).
 
-- **Python / API:** `cd backend && uv sync --extra dev` (`--extra url-snapshot` optional for **URL snapshot** Playwright installs — see [backend/README.md](backend/README.md#workflow-execution-model)).
-- **Node / SPA:** `cd frontend && npm install`.
+## Core mental model
 
-**Daily dev** — one command prints backend + SPA URLs with **LAN-aligned** **`CORS_ORIGINS`**, **`TRUSTED_HOSTS`**, **`FRONTEND_URL`**, and **`VITE_API_BASE`** (process-local only — your **`backend/.env`** / **`frontend/.env`** files are never overwritten):
+- **Workflows** — Graphs of connected **nodes** with explicit data and control flow **edges**. Execution walks that graph according to your wiring and step kinds.
+- **Skills** — Steps that **reach outward**: model calls, HTTP fetches, file or browser-backed capture, speech bridges, integrations. *They act on the world.*
+- **Utilities** — Steps that **reshape, validate, or structure data** already inside the run: parsing, formatting, filtering, extraction, document helpers. *They reshape information.*
+- **Personas** — Saved prompt and default-model presets that **shape how a model behaves** when a node references them.
+- **Structures** — Optional **JSON Schema** contracts for **typed outputs** (for example when a skill should return entities or tables, not prose).
+
+**Framing:** skills act on the world; utilities reshape information; workflows compose behavior. For contributor-oriented placement rules (including documented exceptions), see **[docs/NODE_TAXONOMY.md](docs/NODE_TAXONOMY.md)**. For full terminology depth, see **[docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md)**.
+
+## Quick Start
+
+**Prerequisites:** **`uv`** for Python, **Node.js** for the SPA, and a one-time install in each package. Full first-time setup (exact commands, optional extras, and troubleshooting) lives in **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
+
+From the **repository root** after clone:
 
 ```bash
 make dev
 ```
 
-Equivalent: **`./startdev.sh`** (the Makefile delegates here so orchestration stays in one place).
+Equivalent: **`./startdev.sh`** (the Makefile delegates here).
 
-Open the **frontend URL** echoed by the script (often `http://<LAN-ip>:5173` when your host has a non-loopback LAN address, alongside localhost). **`Ctrl+C` stops both** API and Vite.
+The script prints the **frontend** and **API** base URLs. Open the **frontend URL** in your browser (often port **5173** in development). When both processes are up and the UI loads, you are ready. **`Ctrl+C`** stops the API and Vite together.
 
-**Platforms:** Bash-first (**macOS** / **Linux**). **GNU make** ships on macOS; **Git Bash** or **WSL** against **`./startdev.sh`** often works but is **best-effort** — report gaps if Windows-native shells need first-class support.
+**Platforms:** Bash-first (**macOS** / **Linux**). **GNU make** ships on macOS; **Git Bash** or **WSL** against **`./startdev.sh`** is **best-effort** on Windows—report gaps if native shells need first-class support.
 
-**Problems starting the stack?** See **[docs/OPERATIONS.md](docs/OPERATIONS.md#local-development-troubleshooting)**. **Advanced setup** (two terminals, `uv --project backend`, LAN env by hand): **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+**Problems starting the stack?** **[docs/OPERATIONS.md — Local development troubleshooting](docs/OPERATIONS.md#local-development-troubleshooting)**.
 
-## Core concepts (domain model)
+## Your first workflow
 
-These are the **building blocks** of workflows on the canvas—read this **after** the sections above so names have context.
+Goal: a **short path** to a visible run on the canvas—no runtime deep dive required.
 
-- **Users** — Authenticated accounts (short-lived access JWT in HttpOnly cookies plus refresh rotation; the bundled SPA uses cookies only; optional `Authorization: Bearer` for non-browser API clients). Bootstrap admin via CLI or opt-in local flag — see [backend/README.md](backend/README.md#important-notes-on-authentication).
-- **Personas** — System prompts + optional default model (custom or system). Used as a prompt library; users can copy prompts into Simple LLM Call nodes.
-- **Palettes** — Configurable color mappings for workflow step types. Canonical keys are [`DEFAULT_PALETTE_COLORS`](backend/app/domain/palette_defaults.py) in `palette_defaults.py` (primitives including `boolean`/`int`, utilities, skills, branching controls, comparison keys such as `gt_control`, logic keys `and_control`/`or_control`/`xor_control`, `workflow`, `any`, etc.). **Effective canvas colors** come from **`GET /api/v1/palettes/resolve`** (server precedence: `workflow.palette_id` → preferred editor palette → default). Workflows select a stored `palette_id` from **Configure → Palettes**. The Palette Manager Editor tab can **export** and **import** workflow palette JSON (`schema_version`, `name`, `colors`) for sharing; see [frontend/README.md](frontend/README.md).
-- **WorkflowDefinitions** — Named DAGs of graph nodes (Start, Stop, Primitives, Skills, Utilities, Controls).
-- **Primitives** — Static inputs: String, List, Dictionary, Structure, Document, Boolean, Int, DateTime, Image, Gmail-shaped payloads, Sandbox-oriented shapes, … (see palettes + [shared/workflow_graph_step_kinds.json](shared/workflow_graph_step_kinds.json)).
-- **Skills** — **Simple LLM Call** (`simple_llm_call`), **Multimodal LLM** (`multimodal_llm`; Persona + image artifacts from **`url_snapshot_artifacts`**, OpenAI-style vision messages to LM Studio), **Text-to-Speech** via a local TTS bridge (`text_to_speech`), **Voice input** / speech-to-text via a local STT bridge (`transcribe_audio`; **streamed Run** from the editor), **Fetch URL** (`fetch_url`; HTTP GET/… on the API server, dictionary output, optional per-user response cache), **URL snapshot** (`capture_url_snapshot`; headless Chromium screenshot + stored PNG artifact, optional cache), Gmail and Calendar list skills, transcription providers—see [docs/WORKFLOW_TOOL_INVENTORY.md](docs/WORKFLOW_TOOL_INVENTORY.md) and [docs/WORKFLOW_SKILLS.md](docs/WORKFLOW_SKILLS.md).
-- **Utilities** — List ↔ string conversions, truncation, indexing, dictionary access, HTML parse (**`html_parse_basic`**), document field helpers (including persisted **Load / Upsert Document** — still **`kind: "utility"`**; see taxonomy doc), validation against Structures, integer math, **Add to List**, …
-- **Controls** — Basic Conditional (**Is**, numeric comparisons **Gt/Lt/Gte/Lte**, **Between**, **Is Empty?**), **Try / Catch**, **For Loop** / **For Loop End**, boolean combinators **And/Or/Xor/** **Not**.
+1. **Sign in** (or complete local bootstrap per **[backend/README.md](backend/README.md#important-notes-on-authentication)** if this is a fresh install).
+2. Open **Workflows** and **create** a workflow (or open the starter) in the editor.
+3. From the palette, add a **Utility** node like **HTML Parse Basic** and a **Skill** node like **Simple LLM Call**. Wire **Start** into the utility (or feed it sample text), then wire the utility’s output into the skill’s text input as your graph requires.
+4. Configure the **Simple LLM Call** node with a prompt and ensure your **LM Studio** (or other OpenAI-compatible) endpoint is available to the API host.
+5. Click **Run** and watch step outputs in the explorer / replay surfaces.
 
-**Workspace** (Companion chat, staged workflow capabilities) is a related surface using the same executor for confirmed runs—see **[docs/WORKSPACE.md](docs/WORKSPACE.md)**.
+Use palette labels consistently while you learn—that trains the domain vocabulary without memorizing a separate glossary first.
 
-### Node mental model
+## How it works under the hood
 
-Mind Weave groups steps into palette families ([docs/NODE_TAXONOMY.md](docs/NODE_TAXONOMY.md)): **utilities** reshape data (*grammar*) and **skills** reach outward (*verbs* — LLMs, HTTP, integrations, bridges). Use the **decision guide** there before editing code when you add a node.
+Mind Weave is a full-stack system: a **SPA** talks to an **API** that **persists** definitions and runs, **executes** graphs in the background, and **streams** build progress to the browser. DAG scheduling, concurrency, persistence formats, and streaming mechanics are **documented for contributors and operators**, not assumed at first contact.
 
-## What can I build?
+**Read next:** **[docs/RUNTIME_ARCHITECTURE.md](docs/RUNTIME_ARCHITECTURE.md)** (runtime topology, execution flow, diagrams) and **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** (engineering single sources of truth and conventions).
 
-- **AI automation** — Multi-step prompts, chaining LLM outputs into tools and conditions ([docs/WORKFLOW_SKILLS.md](docs/WORKFLOW_SKILLS.md)).
-- **Multimodal analysis** — Images + text via **Multimodal LLM** and optional **URL snapshot** artifacts ([docs/WORKFLOW_TOOL_INVENTORY.md](docs/WORKFLOW_TOOL_INVENTORY.md)).
-- **Local orchestration** — DAGs that run entirely against **LM Studio** and skills that stay on your network ([docs/RUNTIME_ARCHITECTURE.md](docs/RUNTIME_ARCHITECTURE.md)).
-- **Structured extraction** — **Structures** and JSON-shaped LLM outputs ([docs/WORKFLOW_EXPORT_FROM_PROMPT.md](docs/WORKFLOW_EXPORT_FROM_PROMPT.md)).
-- **Audio pipelines** — **TTS** / **STT** via optional bridges ([services/tts-bridge/README.md](services/tts-bridge/README.md), [services/stt-bridge/README.md](services/stt-bridge/README.md)).
-- **Browser-style capture** — **URL snapshot** (Playwright in the API process when installed) ([docs/OPERATIONS.md](docs/OPERATIONS.md#capture_url_snapshot--playwright)).
-- **Chained and nested graphs** — **Workflow** nodes and **Custom Skills** ([docs/MIND_WEAVE_ONE_PAGE.md](docs/MIND_WEAVE_ONE_PAGE.md)).
+## For contributors
 
-## Adding a new skill, utility, or control
-
-1. **[docs/NODE_TAXONOMY.md](docs/NODE_TAXONOMY.md)** — Confirm **kind** / category (utilities vs skills vs controls vs primitives).
-2. **Backend**: Add domain type, workflow executor handler, palette color (if a new handle semantic), and migration for stored graphs if the persisted shape changes.
-3. **Frontend**: Add types, node component, palette item, conversions, inspector.
-4. **Palette**: Add the node's color key to `palette_defaults.py`, `paletteDefaults.ts`, PaletteManager, and migrations as needed.
-5. **Tests**: Add workflow executor tests (mock external calls) and update API palette tests.
-6. **Documentation**: Update package READMEs, this file’s core-concept bullets if capability-facing, [`docs/NODE_TAXONOMY.md`](docs/NODE_TAXONOMY.md) if taxonomy guidance changes.
-
-See [backend/README.md](backend/README.md#adding-a-new-utility) and [frontend/README.md](frontend/README.md#adding-a-new-utility) for detailed steps. Skills use `kind: "skill"` and `skill_type`. Controls use `kind: "control"` and `control_type` (e.g. `basic_conditional`).
+Pull-request expectations and contributor orientation: **[CONTRIBUTING.md](CONTRIBUTING.md)**. Extending the palette (new skills, utilities, or controls) starts with **[docs/NODE_TAXONOMY.md](docs/NODE_TAXONOMY.md)** and **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#adding-a-workflow-node)**.
 
 ## Documentation map
 
 | Doc | Purpose |
 |-----|---------|
 | [docs/MIND_WEAVE_ONE_PAGE.md](docs/MIND_WEAVE_ONE_PAGE.md) | Product narrative and UI walkthrough |
+| [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md) | Terminology, node families, pointers to execution semantics |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local development, environment alignment, testing, adding nodes |
 | [docs/RUNTIME_ARCHITECTURE.md](docs/RUNTIME_ARCHITECTURE.md) | Runtime topology, execution flow, diagrams |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Engineering SSOT: layers, executor, palette contracts |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Runbook, debugging, local dev troubleshooting |

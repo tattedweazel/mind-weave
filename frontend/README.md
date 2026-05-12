@@ -158,7 +158,7 @@ The application requires authentication. The **primary** session is **HttpOnly c
 
 ## One-command startup with the backend (`make dev`)
 
-Prefer repo-root **`make dev`** when you want the SPA **and** API together (**`npm run dev:lan`** exports **`VITE_API_BASE`** for the spawned session). Prerequisites: root [README.md](../README.md#quickstart); common failures: **[docs/OPERATIONS.md — Local development troubleshooting](../docs/OPERATIONS.md#local-development-troubleshooting)**.
+Prefer repo-root **`make dev`** when you want the SPA **and** API together (**`npm run dev:lan`** exports **`VITE_API_BASE`** for the spawned session). Prerequisites: root [README.md](../README.md#quick-start); common failures: **[docs/OPERATIONS.md — Local development troubleshooting](../docs/OPERATIONS.md#local-development-troubleshooting)**.
 
 ## Setup & Running
 
