@@ -38,7 +38,7 @@ from app.domain.workspace.workspace_redaction import (
     sanitize_workspace_execution_for_console,
 )
 from app.persistence.db import get_session
-from app.persistence.tables import GoogleWorkflowConnection, User, WorkspaceTurn
+from app.persistence.tables import User, WorkspaceTurn
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -46,19 +46,6 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 def _ensure_workspace_enabled() -> None:
     if not getattr(settings, "WORKSPACE_ENABLED", True):
         raise HTTPException(status_code=404, detail="Workspace is disabled")
-
-
-def _ensure_google_workflow_connection_owned(
-    session: Session,
-    user_id: uuid.UUID,
-    connection_id: uuid.UUID,
-) -> None:
-    row = session.get(GoogleWorkflowConnection, connection_id)
-    if row is None or row.user_id != user_id:
-        raise HTTPException(
-            status_code=422,
-            detail="Google workflow connection not found or not owned by this user.",
-        )
 
 
 @router.post("/bootstrap", response_model=WorkspaceBootstrapResponse)
@@ -105,12 +92,6 @@ def create_workspace(
         validate_runtime_configuration_has_valid_pipeline(data.runtime_configuration)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if data.default_google_workflow_connection_id is not None:
-        _ensure_google_workflow_connection_owned(
-            session,
-            current_user.id,
-            data.default_google_workflow_connection_id,
-        )
     ws = WorkspaceService(session, current_user.id).create_workspace(
         name=data.name,
         runtime_configuration=data.runtime_configuration,
@@ -118,7 +99,6 @@ def create_workspace(
         interaction_configuration=data.interaction_configuration,
         enabled_workflow_ids=data.enabled_workflow_ids,
         interpretation_model=data.interpretation_model,
-        default_google_workflow_connection_id=data.default_google_workflow_connection_id,
     )
     return WorkspaceRead.model_validate(ws)
 
@@ -165,12 +145,6 @@ def update_workspace(
     patch = data.model_dump(exclude_unset=True)
     if "enabled_workflow_ids" in patch:
         validate_enabled_workflow_ids(session, current_user.id, patch["enabled_workflow_ids"])
-    if "default_google_workflow_connection_id" in patch and patch["default_google_workflow_connection_id"] is not None:
-        _ensure_google_workflow_connection_owned(
-            session,
-            current_user.id,
-            patch["default_google_workflow_connection_id"],
-        )
     if "runtime_configuration" in patch:
         try:
             validate_runtime_configuration_has_valid_pipeline(patch.get("runtime_configuration"))

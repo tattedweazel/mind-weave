@@ -885,52 +885,6 @@ def test_workspace_put_interpretation_model_round_trip(client, patch_workspace_l
     assert g.json()["interpretation_model"] == "custom-planning-id"
 
 
-def test_workspace_put_default_google_owned_round_trip(client, db_session: Session, patch_workspace_llm):
-    user = db_session.exec(select(User).where(User.username == "testuser")).first()
-    assert user is not None
-    cid = uuid.uuid4()
-    db_session.add(
-        GoogleWorkflowConnection(
-            id=cid,
-            user_id=user.id,
-            google_sub="google_sub_test_ws",
-            refresh_token_encrypted="x" * 32,
-            scopes="https://www.googleapis.com/auth/gmail.readonly",
-            label="Primary",
-        )
-    )
-    db_session.commit()
-
-    data = client.post("/api/v1/workspaces/bootstrap").json()
-    wid = data["workspace"]["id"]
-    r = client.put(f"/api/v1/workspaces/{wid}", json={"default_google_workflow_connection_id": str(cid)})
-    assert r.status_code == 200, r.text
-    assert r.json()["default_google_workflow_connection_id"] == str(cid)
-
-
-def test_workspace_put_rejects_foreign_google_connection(client, db_session: Session, patch_workspace_llm):
-    user = db_session.exec(select(User).where(User.username == "testuser")).first()
-    assert user is not None
-    other_id = uuid.uuid4()
-    db_session.add(User(id=other_id, username="other_ws_user", password_hash="h", is_admin=False))
-    cid = uuid.uuid4()
-    db_session.add(
-        GoogleWorkflowConnection(
-            id=cid,
-            user_id=other_id,
-            google_sub="google_sub_other",
-            refresh_token_encrypted="y" * 32,
-            scopes="https://www.googleapis.com/auth/gmail.readonly",
-        )
-    )
-    db_session.commit()
-
-    data = client.post("/api/v1/workspaces/bootstrap").json()
-    wid = data["workspace"]["id"]
-    r = client.put(f"/api/v1/workspaces/{wid}", json={"default_google_workflow_connection_id": str(cid)})
-    assert r.status_code == 422
-
-
 def test_confirm_stream_400_when_missing_required_start_inputs(client, monkeypatch):
     wf = client.post(
         "/api/v1/workflow-definitions/",

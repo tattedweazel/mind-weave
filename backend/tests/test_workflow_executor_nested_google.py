@@ -1,4 +1,4 @@
-"""Workspace default Google id is injected for nested workflow refs."""
+"""Nested workflow refs resolve the user's Google workflow connection."""
 
 from __future__ import annotations
 
@@ -25,8 +25,9 @@ def _inner_graph() -> dict:
             {
                 "id": "ng",
                 "kind": "skill",
+                "skill_type": "gmail_list_messages",
                 "label": "Gmail",
-                "data": {"skill_type": "gmail_list_messages"},
+                "data": {},
                 "position": {"x": 0, "y": 0},
             },
             {
@@ -77,7 +78,7 @@ def _outer_graph(inner_id: uuid.UUID) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_nested_subworkflow_receives_workspace_google_injection(
+async def test_nested_subworkflow_uses_user_google_connection_without_node_id(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ):
     uid = uuid.uuid4()
@@ -110,30 +111,20 @@ async def test_nested_subworkflow_receives_workspace_google_injection(
     db_session.add(outer)
     db_session.commit()
 
-    injection_calls: list[int] = []
-
-    import app.domain.workflow_executor.executor as executor_mod
-
-    real_inj = executor_mod.workflow_graph_with_default_google_connection
-
-    def spy_inject(session, *, user_id, graph, default_connection_id):
-        injection_calls.append(len((graph or {}).get("nodes") or []))
-        return real_inj(session, user_id=user_id, graph=graph, default_connection_id=default_connection_id)
-
-    monkeypatch.setattr(executor_mod, "workflow_graph_with_default_google_connection", spy_inject)
-
+    token_mock = AsyncMock(return_value="access-token")
+    gmail_mock = AsyncMock(return_value={"messages": []})
     monkeypatch.setattr(
         "app.integrations.google_workspace.ensure_workflow_google_access_token",
-        AsyncMock(return_value="access-token"),
+        token_mock,
     )
     monkeypatch.setattr(
         "app.integrations.google_workspace.gmail_list_messages",
-        AsyncMock(return_value={"messages": []}),
+        gmail_mock,
     )
 
-    ex = WorkflowExecutor(db_session, uid, default_google_workflow_connection_id=cid)
+    ex = WorkflowExecutor(db_session, uid)
     result = await ex.run(outer)
 
-    assert len(injection_calls) >= 2
-    assert any(n == 3 for n in injection_calls)
+    token_mock.assert_awaited()
+    assert token_mock.await_args.args[1] == cid
     assert result.status in ("ok", "partial", "error")

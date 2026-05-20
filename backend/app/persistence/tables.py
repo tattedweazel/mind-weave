@@ -89,11 +89,6 @@ class Workspace(SQLModel, table=True):
     interaction_configuration: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     enabled_workflow_ids: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     interpretation_model: Optional[str] = Field(default=None)
-    default_google_workflow_connection_id: Optional[uuid.UUID] = Field(
-        default=None,
-        foreign_key="google_workflow_connections.id",
-        index=True,
-    )
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

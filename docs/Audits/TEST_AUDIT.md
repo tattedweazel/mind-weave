@@ -81,7 +81,7 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | **Sandbox** pure query helpers (`query.py`: adjacency, first-food ordering, pet stats, nearest-by-type, world grid dimensions) | `test_sandbox_query.py` |
 | **`sandbox_*` workflow utilities** (executor HTTP runs; no LLM) | `test_sandbox_workflow_utilities.py` |
 | **Companion / Workspace** bootstrap, stream turn (LLM mocked via `WorkspaceRuntimeService` patches), disabled flag, `PUT /companion/` partial + clear persona, `PUT /workspaces/{id}` `enabled_workflow_ids` + 422 on unknown workflow | `test_workspace_api.py` |
-| **Workspace default Google connection** injected into **`gmail_list_messages`** / **`calendar_list_events`** graphs (deep copy; no DB mutation) | `test_workspace_google_graph.py` |
+| **User-level Google workflow connection** resolved at run time for Gmail / Calendar / Docs skills (legacy node `google_connection_id` ignored) | `test_google_workflow_connection.py`, `test_workflow_executor_nested_google.py` |
 | **Workspace Google injection** wired through **`WorkflowExecutor`** nested-schedule path | `test_workflow_executor_nested_google.py` |
 
 **Product note:** `WorkflowRun` rows (and thus `GET .../runs`) are created when enqueueing **`POST .../runs`**, not during synchronous **`POST .../run`**. Lifecycle tests encode that distinction.

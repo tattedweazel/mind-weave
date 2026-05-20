@@ -1075,50 +1075,59 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
                                 <h4 className="text-sm font-semibold text-mw-text-primary">Google for workflows</h4>
                                 <p className="text-xs text-mw-text-secondary">
                                     Separate from sign-in: grant read-only Gmail, Calendar, and Google Docs so workflow
-                                    skills can list messages and events and fetch documents. You can connect multiple
-                                    Google accounts (e.g. work and personal). Re-connect to add new permissions after
-                                    updates.
+                                    skills can list messages and events and fetch documents. One Google account is used
+                                    for all Gmail, Calendar, and Google Docs steps. Re-connect to add new permissions
+                                    after updates—existing workflows pick up the refreshed connection automatically.
                                 </p>
                                 {workflowGoogleLoading ? (
-                                    <p className="text-xs text-mw-text-secondary">Loading connections…</p>
-                                ) : (
-                                    <ul className="space-y-2">
-                                        {workflowGoogleConnections.map(c => (
-                                            <li
-                                                key={c.id}
-                                                className="flex flex-wrap items-center justify-between gap-2 text-sm border border-mw-border rounded-lg px-3 py-2"
+                                    <p className="text-xs text-mw-text-secondary">Loading…</p>
+                                ) : workflowGoogleConnections.length > 0 ? (
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm border border-mw-border rounded-lg px-3 py-2">
+                                        <div>
+                                            <span className="text-mw-text-primary font-medium">
+                                                {workflowGoogleConnections[0].label?.trim() ||
+                                                    workflowGoogleConnections[0].google_email ||
+                                                    'Google account'}
+                                            </span>
+                                            {workflowGoogleConnections[0].google_email ? (
+                                                <span className="block text-xs text-mw-text-secondary">
+                                                    {workflowGoogleConnections[0].google_email}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleConnectWorkflowGoogle()}
+                                                disabled={workflowGoogleConnecting}
+                                                className="flex items-center gap-1 px-2 py-1 text-xs text-mw-primary hover:bg-mw-card-alt rounded"
                                             >
-                                                <div>
-                                                    <span className="text-mw-text-primary font-medium">
-                                                        {c.label?.trim() || c.google_email || 'Google account'}
-                                                    </span>
-                                                    {c.google_email ? (
-                                                        <span className="block text-xs text-mw-text-secondary">
-                                                            {c.google_email}
-                                                        </span>
-                                                    ) : null}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleDisconnectWorkflowGoogle(c.id)}
-                                                    className="flex items-center gap-1 px-2 py-1 text-xs text-mw-text-secondary hover:bg-mw-card-alt rounded"
-                                                >
-                                                    <Unlink size={14} />
-                                                    Disconnect
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
+                                                <RefreshCw size={14} />
+                                                Re-connect
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    void handleDisconnectWorkflowGoogle(workflowGoogleConnections[0].id)
+                                                }
+                                                className="flex items-center gap-1 px-2 py-1 text-xs text-mw-text-secondary hover:bg-mw-card-alt rounded"
+                                            >
+                                                <Unlink size={14} />
+                                                Disconnect
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleConnectWorkflowGoogle()}
+                                        disabled={workflowGoogleConnecting}
+                                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-mw-primary-muted text-mw-primary hover:opacity-90 rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                        <Link2 size={16} />
+                                        Connect Google for workflows
+                                    </button>
                                 )}
-                                <button
-                                    type="button"
-                                    onClick={() => void handleConnectWorkflowGoogle()}
-                                    disabled={workflowGoogleConnecting}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-mw-primary-muted text-mw-primary hover:opacity-90 rounded-lg transition-colors disabled:opacity-50"
-                                >
-                                    <Link2 size={16} />
-                                    Connect Google for workflows
-                                </button>
                             </div>
 
                             <div className="border-t border-mw-border pt-4 mt-6 space-y-3">

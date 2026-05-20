@@ -1741,7 +1741,6 @@ class WorkspaceRuntimeService:
         executor = WorkflowExecutor(
             self.session,
             self.user_id,
-            default_google_workflow_connection_id=workspace.default_google_workflow_connection_id,
         )
         etz = self._execution_time_zone_str()
         for sel in routing.selected_capabilities:

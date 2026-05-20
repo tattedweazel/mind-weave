@@ -394,10 +394,12 @@ def test_calendar_list_events_diagnostics_truncates_large_items(client: TestClie
     assert len(diag["response"]["items"]) == cap
 
 
-def test_list_google_workflow_connections_empty(client: TestClient):
+def test_list_google_workflow_connections_returns_user_connection(client: TestClient):
     r = client.get("/api/v1/google-workflow/connections")
     assert r.status_code == 200
-    assert r.json() == []
+    rows = r.json()
+    assert len(rows) == 1
+    assert "id" in rows[0]
 
 
 def test_gmail_list_messages_applies_account_category_exclusions(client: TestClient):

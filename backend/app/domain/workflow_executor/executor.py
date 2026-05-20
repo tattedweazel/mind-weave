@@ -90,7 +90,6 @@ from app.domain.workflow_executor.transcribe_pending import (
     cancel_transcribe_wait,
 )
 from app.domain.workflow_run_status import terminal_status_for_aggregate
-from app.domain.workspace.workspace_google_graph import workflow_graph_with_default_google_connection
 from app.persistence.tables import (
     NodeRunLog,
     User,
@@ -697,11 +696,9 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         self,
         session: Session,
         user_id: uuid.UUID,
-        default_google_workflow_connection_id: Optional[uuid.UUID] = None,
     ):
         self.session = session
         self.user_id = user_id
-        self.default_google_workflow_connection_id = default_google_workflow_connection_id
         # Serialize ORM access: parallel waves run multiple nodes concurrently (asyncio.gather);
         # SQLAlchemy Session is not safe for concurrent use from overlapping asyncio tasks.
         # Simple LLM loads User/api_keys under this lock; httpx to LM Studio runs outside it.
@@ -829,20 +826,6 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
             cancel_transcribe_wait(key)
         self._active_transcribe_wait_keys.clear()
 
-    def _inject_google_into_workflow(self, workflow: WorkflowDefinition) -> WorkflowDefinition:
-        """Return a shallow copy whose graph has workspace default Google ids injected (no-op if unset)."""
-        if self.default_google_workflow_connection_id is None:
-            return workflow
-        adj = workflow_graph_with_default_google_connection(
-            self.session,
-            user_id=self.user_id,
-            graph=workflow.graph,
-            default_connection_id=self.default_google_workflow_connection_id,
-        )
-        wf = copy.copy(workflow)
-        wf.graph = adj
-        return wf
-
     def _wave_cap_for_run(self) -> int:
         if self._max_concurrent_wave_cap is not None:
             return self._max_concurrent_wave_cap
@@ -870,7 +853,6 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         """
         stack = execution_stack or frozenset()
         etz = (execution_time_zone or "").strip() or None
-        workflow = self._inject_google_into_workflow(workflow)
         graph = workflow.graph
         raw_nodes: list[Dict[str, Any]] = graph.get("nodes", [])
         raw_edges: list[Dict[str, Any]] = graph.get("edges", [])
@@ -1155,7 +1137,6 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
     ) -> WorkflowRunResult:
         """Execute a persisted workflow run row and stream lifecycle events via ``sse_publish``."""
         stack = execution_stack or frozenset()
-        workflow = self._inject_google_into_workflow(workflow)
         graph = workflow.graph
         raw_nodes: list[Dict[str, Any]] = graph.get("nodes", [])
         raw_edges: list[Dict[str, Any]] = graph.get("edges", [])

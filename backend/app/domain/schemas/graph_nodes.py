@@ -94,7 +94,7 @@ class GmailListMessagesSkillNode(BaseModel):
     label: str
     data: Dict[str, Any] = Field(
         default_factory=dict,
-    )  # google_connection_id, max_results, after, before, query, gmail_inbox_focus, gmail_exclude_categories, gmail_skip_account_category_filters, required_inputs, ...
+    )  # google_connection_id (legacy, ignored at runtime), max_results, after, before, query, ...
     position: Dict[str, float] = Field(default_factory=dict)
 
 
@@ -107,7 +107,7 @@ class CalendarListEventsSkillNode(BaseModel):
     label: str
     data: Dict[str, Any] = Field(
         default_factory=dict,
-    )  # google_connection_id, calendar_id, required_inputs (time_min, time_max)
+    )  # google_connection_id (legacy, ignored at runtime), calendar_id, required_inputs (time_min, time_max)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
@@ -120,7 +120,7 @@ class GoogleDocsGetDocumentSkillNode(BaseModel):
     label: str
     data: Dict[str, Any] = Field(
         default_factory=dict,
-    )  # google_connection_id, document_url_or_id, include_tabs_content, required_inputs
+    )  # google_connection_id (legacy, ignored at runtime), document_url_or_id, include_tabs_content, required_inputs
     position: Dict[str, float] = Field(default_factory=dict)
 
 

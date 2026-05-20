@@ -422,7 +422,7 @@ To enable Google account association (linking a Google account to an existing us
 - Add **Authorized redirect URI**: your `GOOGLE_WORKFLOW_REDIRECT_URI` (default above).
 - Enable **Google Docs API** and **Google Drive API** on the same Google Cloud project.
 - Ensure the OAuth client allows scopes: `openid`, `email`, `profile`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/calendar.readonly`, `https://www.googleapis.com/auth/documents.readonly`, `https://www.googleapis.com/auth/drive.readonly` (see `app/core/google_workflow_oauth.py`).
-- Users connect from **My Settings → Google Account → Google for workflows**. Tokens are stored per Google account in `google_workflow_connections` (encrypted refresh token). Re-connect after scope updates.
+- Users connect from **My Settings → Google Account → Google for workflows**. One Google account per user is stored in `google_workflow_connections` (encrypted refresh token). All Gmail, Calendar, and Google Docs workflow skills use that account; re-connect after scope updates without editing workflows.
 
 ## Database Migrations
 

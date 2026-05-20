@@ -46,7 +46,6 @@ import {
     GraphEdge as AppGraphEdge,
     RequiredInput,
     RequiredOutput,
-    GoogleWorkflowConnection,
     TtsModelRead,
     AudioFileArtifactRead,
     TranscriptionProviderItem,
@@ -329,7 +328,6 @@ export const WorkflowEditor: React.FC<Props> = ({
     const [serverResolvedWorkflowPalette, setServerResolvedWorkflowPalette] = useState<Palette | null>(null);
     const [structures, setStructures] = useState<Structure[]>([]);
     const [documents, setDocuments] = useState<DocumentListItem[]>([]);
-    const [googleWorkflowConnections, setGoogleWorkflowConnections] = useState<GoogleWorkflowConnection[]>([]);
     const [ttsModelsReady, setTtsModelsReady] = useState<TtsModelRead[]>([]);
     const [voiceSamplesList, setVoiceSamplesList] = useState<VoiceSampleListItem[]>([]);
     const [audioFileArtifacts, setAudioFileArtifacts] = useState<AudioFileArtifactRead[]>([]);
@@ -784,14 +782,13 @@ export const WorkflowEditor: React.FC<Props> = ({
 
     // ------------------------------------------------------------------
     const loadAll = async () => {
-        const [wfs, projs, ps, pals, structs, docs, gwc, tts, vs, audioFiles, transcriptionProvs] = await Promise.all([
+        const [wfs, projs, ps, pals, structs, docs, tts, vs, audioFiles, transcriptionProvs] = await Promise.all([
             ApiClient.getWorkflows(),
             ApiClient.getWorkflowProjects().catch(() => [] as WorkflowProject[]),
             ApiClient.getPersonas(),
             ApiClient.getPalettes(),
             ApiClient.getStructures().catch(() => []),
             ApiClient.getDocuments().catch(() => []),
-            ApiClient.getGoogleWorkflowConnections().catch(() => []),
             ApiClient.getTtsModelsReady().catch(() => [] as TtsModelRead[]),
             ApiClient.getVoiceSamples().catch(() => [] as VoiceSampleListItem[]),
             ApiClient.getAudioFileArtifacts().catch(() => [] as AudioFileArtifactRead[]),
@@ -803,7 +800,6 @@ export const WorkflowEditor: React.FC<Props> = ({
         setPalettes(pals);
         setStructures(structs);
         setDocuments(docs);
-        setGoogleWorkflowConnections(gwc);
         setTtsModelsReady(tts);
         setVoiceSamplesList(vs);
         setAudioFileArtifacts(audioFiles);
@@ -5112,7 +5108,6 @@ export const WorkflowEditor: React.FC<Props> = ({
                                     }
                                 }
                             }
-                            const connId = d?.google_connection_id ?? '';
                             const maxInline = requiredInputs.find((i: RequiredInput) => i.key === 'max_results')?.value;
                             const afterVal = requiredInputs.find((i: RequiredInput) => i.key === 'after')?.value;
                             const beforeVal = requiredInputs.find((i: RequiredInput) => i.key === 'before')?.value;
@@ -5133,25 +5128,6 @@ export const WorkflowEditor: React.FC<Props> = ({
                                             </>
                                         }
                                     />
-                                    <InspectorSection title="Connection">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Google connection</label>
-                                            <select
-                                                value={connId}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({ google_connection_id: e.target.value || null })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
-                                            >
-                                                <option value="">Select connection</option>
-                                                {googleWorkflowConnections.map(c => (
-                                                    <option key={c.id} value={c.id}>
-                                                        {c.label?.trim() || c.google_email || c.id}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </InspectorSection>
                                     <InspectorSection title="Time & limits">
                                         <GmailBoundaryDateFields
                                             afterValue={afterVal as string | null | undefined}
@@ -5270,7 +5246,6 @@ export const WorkflowEditor: React.FC<Props> = ({
                             if (!requiredInputs.some((i: RequiredInput) => i.key === 'document_url_or_id')) {
                                 requiredInputs.push({ key: 'document_url_or_id', type: 'string', value: null });
                             }
-                            const connId = d?.google_connection_id ?? '';
                             const urlVal =
                                 requiredInputs.find((i: RequiredInput) => i.key === 'document_url_or_id')?.value ??
                                 d?.document_url_or_id ??
@@ -5281,29 +5256,6 @@ export const WorkflowEditor: React.FC<Props> = ({
                                         title="About"
                                         description="Fetches a Google Doc (read-only) using your workflow Google connection. Output includes a curated document_payload for the Parse utility. Connect Google under My Settings → Google for workflows."
                                     />
-                                    <InspectorSection title="Connection">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
-                                                Google connection
-                                            </label>
-                                            <select
-                                                value={connId}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({
-                                                        google_connection_id: e.target.value || null,
-                                                    })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
-                                            >
-                                                <option value="">Select connection</option>
-                                                {googleWorkflowConnections.map(c => (
-                                                    <option key={c.id} value={c.id}>
-                                                        {c.label?.trim() || c.google_email || c.id}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </InspectorSection>
                                     <InspectorSection title="Document">
                                         <div>
                                             <label className="text-xs font-medium text-mw-text-secondary block mb-1">
@@ -5419,7 +5371,6 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 next[idx] = { ...next[idx], ...patch };
                                 updateSelectedNodeData({ required_inputs: next });
                             };
-                            const connId = d?.google_connection_id ?? '';
                             const tminIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'time_min');
                             const tmaxIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'time_max');
                             return (
@@ -5428,24 +5379,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                                         title="About"
                                         description="Lists calendar events in a time window (read-only). Use date and time below—stored as RFC3339 for the Calendar API—using your My Profile workflow time zone, or wire time_min / time_max from upstream."
                                     />
-                                    <InspectorSection title="Connection">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Google connection</label>
-                                            <select
-                                                value={connId}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({ google_connection_id: e.target.value || null })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            >
-                                                <option value="">Select connection</option>
-                                                {googleWorkflowConnections.map(c => (
-                                                    <option key={c.id} value={c.id}>
-                                                        {c.label?.trim() || c.google_email || c.id}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                    <InspectorSection title="Calendar">
                                         <div>
                                             <label className="text-xs font-medium text-mw-text-secondary block mb-1">Calendar ID</label>
                                             <input

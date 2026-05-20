@@ -1794,8 +1794,6 @@ export interface Workspace {
     enabled_workflow_ids: string[];
     /** LM Studio model id for interpret / routing (structured JSON); compose uses Companion Persona. */
     interpretation_model?: string | null;
-    /** Default Google workflow connection for Gmail/Calendar skills when the graph omits one. */
-    default_google_workflow_connection_id?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -1808,7 +1806,6 @@ export interface WorkspaceUpdate {
     interaction_configuration?: Record<string, unknown>;
     enabled_workflow_ids?: string[];
     interpretation_model?: string | null;
-    default_google_workflow_connection_id?: string | null;
 }
 
 export interface WorkspaceSession {

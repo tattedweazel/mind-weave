@@ -4656,7 +4656,6 @@ class WorkflowExecutorResolverMixin:
         executor = _executor_mod().WorkflowExecutor(
             self.session,
             self.user_id,
-            default_google_workflow_connection_id=self.default_google_workflow_connection_id,
         )
         result = await executor.run(
             sub_wf,

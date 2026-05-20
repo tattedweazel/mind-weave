@@ -22,6 +22,7 @@ from app.core.logging import logger
 from app.core.oauth_state import consume_workflow_google_state as consume_wf_google_state
 from app.core.oauth_state import create_workflow_google_state
 from app.core.user_api_keys_crypto import decrypt_sensitive_at_rest, encrypt_sensitive_at_rest
+from app.integrations.google_workflow_connection import delete_user_google_workflow_connections_except
 from app.persistence.db import get_session
 from app.persistence.tables import GoogleWorkflowConnection, User, utc_now
 
@@ -123,7 +124,11 @@ async def google_workflow_oauth_callback(
         existing.google_email = google_email or existing.google_email
         existing.updated_at = now
         session.add(existing)
+        delete_user_google_workflow_connections_except(
+            session, user_id, keep_id=existing.id, revoke=True
+        )
     else:
+        delete_user_google_workflow_connections_except(session, user_id, keep_id=None, revoke=True)
         session.add(
             GoogleWorkflowConnection(
                 user_id=user_id,
@@ -150,7 +155,7 @@ async def list_google_workflow_connections(
     stmt = (
         select(GoogleWorkflowConnection)
         .where(col(GoogleWorkflowConnection.user_id) == current_user.id)
-        .order_by(GoogleWorkflowConnection.created_at)  # type: ignore[arg-type]
+        .order_by(GoogleWorkflowConnection.updated_at.desc())  # type: ignore[arg-type]
     )
     rows = session.exec(stmt).all()
     return [

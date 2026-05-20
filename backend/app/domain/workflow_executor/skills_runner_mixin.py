@@ -94,6 +94,10 @@ from .diagnostics import (
     truncate_google_calendar_events_list_response,
 )
 from app.integrations.google_docs import GoogleDocsUrlParseError, parse_google_docs_url_or_id
+from app.integrations.google_workflow_connection import (
+    GOOGLE_WORKFLOW_CONNECTION_REQUIRED_MSG,
+    get_user_workflow_google_connection,
+)
 
 from .google_docs_curate import build_document_payload, truncate_google_docs_get_response
 from .fetch_url_runtime import compute_cache_key, normalize_headers
@@ -1385,20 +1389,13 @@ class WorkflowExecutorSkillsRunnerMixin:
         input_overrides: Dict[str, Any],
         execution_time_zone: Optional[str] = None,
     ) -> Dict[str, Any]:
-        cid_raw = node.data.get("google_connection_id")
-        if not cid_raw:
+        conn_row = get_user_workflow_google_connection(self.session, self.user_id)
+        if conn_row is None:
             return _error_with_resolved_inputs(
-                "Gmail List Messages requires a Google connection. Select one in the node inspector.",
+                GOOGLE_WORKFLOW_CONNECTION_REQUIRED_MSG,
                 {"google_connection_id": None},
             )
-        try:
-            conn_uuid = UUID(str(cid_raw))
-        except (ValueError, TypeError):
-            return {
-                "status": "error",
-                "error": "Invalid google_connection_id",
-                "details": {"resolved_inputs": {"google_connection_id": cid_raw}},
-            }
+        conn_uuid = conn_row.id
 
         raw_inputs = node.data.get("required_inputs") or []
         resolved = _resolve_inputs_by_target_handle(
@@ -1604,20 +1601,13 @@ class WorkflowExecutorSkillsRunnerMixin:
         outputs: Dict[str, NodeOutputUnion],
         input_overrides: Dict[str, Any],
     ) -> Dict[str, Any]:
-        cid_raw = node.data.get("google_connection_id")
-        if not cid_raw:
+        conn_row = get_user_workflow_google_connection(self.session, self.user_id)
+        if conn_row is None:
             return _error_with_resolved_inputs(
-                "Calendar List Events requires a Google connection. Select one in the node inspector.",
+                GOOGLE_WORKFLOW_CONNECTION_REQUIRED_MSG,
                 {"google_connection_id": None},
             )
-        try:
-            conn_uuid = UUID(str(cid_raw))
-        except (ValueError, TypeError):
-            return {
-                "status": "error",
-                "error": "Invalid google_connection_id",
-                "details": {"resolved_inputs": {"google_connection_id": cid_raw}},
-            }
+        conn_uuid = conn_row.id
 
         cal_raw = node.data.get("calendar_id")
         calendar_id = (str(cal_raw).strip() if cal_raw else "") or "primary"
@@ -1707,20 +1697,13 @@ class WorkflowExecutorSkillsRunnerMixin:
         outputs: Dict[str, NodeOutputUnion],
         input_overrides: Dict[str, Any],
     ) -> Dict[str, Any]:
-        cid_raw = node.data.get("google_connection_id")
-        if not cid_raw:
+        conn_row = get_user_workflow_google_connection(self.session, self.user_id)
+        if conn_row is None:
             return _error_with_resolved_inputs(
-                "Google Docs Get Document requires a Google connection. Select one in the node inspector.",
+                GOOGLE_WORKFLOW_CONNECTION_REQUIRED_MSG,
                 {"google_connection_id": None},
             )
-        try:
-            conn_uuid = UUID(str(cid_raw))
-        except (ValueError, TypeError):
-            return {
-                "status": "error",
-                "error": "Invalid google_connection_id",
-                "details": {"resolved_inputs": {"google_connection_id": cid_raw}},
-            }
+        conn_uuid = conn_row.id
 
         raw_inputs = node.data.get("required_inputs") or [
             {"key": "document_url_or_id", "type": "string", "value": None},

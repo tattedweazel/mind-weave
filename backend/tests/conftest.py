@@ -27,7 +27,7 @@ from app.domain.services.system_palette_service import SystemPaletteService
 from app.main import app
 from app.persistence import db as app_db
 from app.persistence.db import get_session
-from app.persistence.tables import User
+from app.persistence.tables import GoogleWorkflowConnection, User
 
 # Create a clean SQLite database for each test session
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -66,6 +66,15 @@ def client_fixture():
         # Create test user
         test_user = User(id=uuid.uuid4(), username="testuser", password_hash="fakehash", is_admin=False)
         session.add(test_user)
+        session.add(
+            GoogleWorkflowConnection(
+                id=uuid.uuid4(),
+                user_id=test_user.id,
+                google_sub="pytest_google_sub",
+                refresh_token_encrypted="x" * 32,
+                scopes="https://www.googleapis.com/auth/gmail.readonly",
+            )
+        )
         session.commit()
         session.refresh(test_user)
 

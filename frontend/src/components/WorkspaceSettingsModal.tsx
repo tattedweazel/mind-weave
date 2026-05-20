@@ -1,5 +1,5 @@
 /**
- * Workspace: workflows, interpretation model, default Google connection for skills.
+ * Workspace: workflows and interpretation model.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -7,7 +7,6 @@ import { Loader2 } from 'lucide-react';
 
 import { ApiClient } from '../api/client';
 import type {
-    GoogleWorkflowConnection,
     ModelsResponse,
     WorkflowDefinitionListItem,
     Workspace,
@@ -31,13 +30,11 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
 }) => {
     const [workflows, setWorkflows] = useState<WorkflowDefinitionListItem[]>([]);
     const [models, setModels] = useState<ModelsResponse | null>(null);
-    const [googleConnections, setGoogleConnections] = useState<GoogleWorkflowConnection[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
     const [interpretationModel, setInterpretationModel] = useState('');
-    const [googleConnId, setGoogleConnId] = useState('');
 
     useEffect(() => {
         if (!isOpen) {
@@ -45,21 +42,18 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
         }
         setEnabledIds(new Set(workspace.enabled_workflow_ids ?? []));
         setInterpretationModel((workspace.interpretation_model ?? '').trim());
-        setGoogleConnId(workspace.default_google_workflow_connection_id ?? '');
         setError(null);
         setLoading(true);
         Promise.all([
             ApiClient.getWorkflows(),
             ApiClient.getModels().catch(() => ({ local: [] as string[], external: [] as string[] }) as ModelsResponse),
-            ApiClient.getGoogleWorkflowConnections().catch(() => [] as GoogleWorkflowConnection[]),
         ])
-            .then(([wfs, mdl, gwc]) => {
+            .then(([wfs, mdl]) => {
                 setWorkflows(wfs);
                 setModels(mdl);
                 if (mdl.lm_studio_list_error) {
                     setError(mdl.lm_studio_list_error);
                 }
-                setGoogleConnections(gwc);
             })
             .catch(() => {
                 setWorkflows([]);
@@ -108,11 +102,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
         if (imNext !== imPrev) {
             patch.interpretation_model = imNext || null;
         }
-        const gNext = googleConnId.trim() || null;
-        const gPrev = workspace.default_google_workflow_connection_id ?? null;
-        if (gNext !== gPrev) {
-            patch.default_google_workflow_connection_id = gNext;
-        }
         if (Object.keys(patch).length === 0) {
             onClose();
             return;
@@ -129,37 +118,26 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
         }
     };
 
-    if (!isOpen) {
-        return null;
-    }
-
-    const labelCls = MANAGER_LABEL_CLS;
     const inputCls =
-        'w-full rounded-lg border border-mw-border bg-mw-page px-3 py-2 text-sm text-mw-text-primary focus:outline-none focus:ring-2 focus:ring-mw-primary';
+        'w-full px-3 py-2 text-sm border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-mw-primary/30';
+    const labelCls = MANAGER_LABEL_CLS;
 
     const renderSection = (title: string, items: WorkflowDefinitionListItem[]) => {
-        if (items.length === 0) {
-            return null;
-        }
+        if (items.length === 0) return null;
         return (
-            <div>
-                <span className={labelCls}>{title}</span>
-                <ul className="mt-2 space-y-2 border border-mw-border rounded-lg p-3 bg-mw-page">
-                    {items.map(wf => (
-                        <li key={wf.id} className="flex items-start gap-2">
-                            <input
-                                id={`ws-wf-${wf.id}`}
-                                type="checkbox"
-                                className="rounded border-mw-border mt-0.5"
-                                checked={enabledIds.has(wf.id)}
-                                onChange={() => toggleId(wf.id)}
-                            />
-                            <label htmlFor={`ws-wf-${wf.id}`} className="cursor-pointer flex-1 min-w-0">
-                                <span className="text-mw-text-primary text-sm font-medium">{wf.name}</span>
-                                {wf.description ? (
-                                    <span className="block text-xs text-mw-text-secondary">{wf.description}</span>
-                                ) : null}
-                                <span className="block font-mono text-[10px] text-mw-text-secondary">{wf.id}</span>
+            <div className="space-y-2">
+                <p className={labelCls}>{title}</p>
+                <ul className="space-y-1 max-h-48 overflow-y-auto border border-mw-border rounded-lg p-2 bg-mw-page">
+                    {items.map(w => (
+                        <li key={w.id}>
+                            <label className="flex items-center gap-2 cursor-pointer text-sm text-mw-text-primary py-1">
+                                <input
+                                    type="checkbox"
+                                    checked={enabledIds.has(w.id)}
+                                    onChange={() => toggleId(w.id)}
+                                    className="rounded border-mw-border"
+                                />
+                                <span className="truncate">{w.name}</span>
                             </label>
                         </li>
                     ))}
@@ -170,28 +148,27 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
 
     return (
         <ManagerModal isOpen={isOpen} onClose={onClose} title="Workspace settings" maxWidth="2xl">
-            <div className="flex flex-col h-full min-h-0 overflow-hidden">
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-sm text-mw-text-primary">
-                    <p className="text-mw-text-secondary text-xs">
-                        Choose which <strong className="text-mw-text-primary">workflows</strong> and{' '}
-                        <strong className="text-mw-text-primary">Custom Skills</strong> are available in this Workspace.
-                        Your Companion can only use skills that are enabled here and also enabled under{' '}
-                        <strong>Customize</strong>.
+            <div className="flex flex-col max-h-[min(85vh,720px)]">
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    <p className="text-xs text-mw-text-secondary">
+                        Choose which workflows the Companion can invoke in this workspace. Gmail, Calendar, and Google
+                        Docs skills use the Google account linked under My Settings → Google Account → Google for
+                        workflows.
                     </p>
                     <div className="rounded-lg border border-mw-border bg-mw-page p-3 space-y-2">
-                        <p className={labelCls}>Planning / routing model</p>
+                        <p className={labelCls}>Interpretation model</p>
                         <p className="text-xs text-mw-text-secondary">
-                            LM Studio model for structured interpretation (which workflows to run and Start input
-                            bindings). Chat reply wording still uses the Companion Persona model.
+                            LM Studio model for routing / structured capability selection. Leave blank to use the
+                            Companion Persona default.
                         </p>
                         <select
                             id="ws-interpretation-model"
                             className={inputCls}
                             value={interpretationModel}
                             onChange={e => setInterpretationModel(e.target.value)}
-                            aria-label="Planning model"
+                            aria-label="Interpretation model"
                         >
-                            <option value="">Default (Companion Persona)</option>
+                            <option value="">Default (Persona / env)</option>
                             {models?.local && models.local.length > 0 && (
                                 <optgroup label="Local models">
                                     {models.local.map(m => (
@@ -210,28 +187,6 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
                                     ))}
                                 </optgroup>
                             )}
-                        </select>
-                    </div>
-                    <div className="rounded-lg border border-mw-border bg-mw-page p-3 space-y-2">
-                        <p className={labelCls}>Default Google connection (Gmail / Calendar skills)</p>
-                        <p className="text-xs text-mw-text-secondary">
-                            When a workflow&apos;s Gmail or Calendar skill node has no connection selected in Build,
-                            Workspace runs use this account (must be linked under My Settings). Execution still uses
-                            your user id.
-                        </p>
-                        <select
-                            id="ws-default-google"
-                            className={inputCls}
-                            value={googleConnId}
-                            onChange={e => setGoogleConnId(e.target.value)}
-                            aria-label="Default Google workflow connection"
-                        >
-                            <option value="">None (use only node inspector selection)</option>
-                            {googleConnections.map(c => (
-                                <option key={c.id} value={c.id}>
-                                    {(c.label || c.google_email || c.id).slice(0, 80)}
-                                </option>
-                            ))}
                         </select>
                     </div>
                     {loading && (

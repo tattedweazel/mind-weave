@@ -10,7 +10,6 @@ vi.mock('../api/client', () => ({
     ApiClient: {
         getWorkflows: vi.fn(),
         getModels: vi.fn(),
-        getGoogleWorkflowConnections: vi.fn(),
         updateWorkspace: vi.fn(),
     },
 }));
@@ -40,16 +39,6 @@ describe('WorkspaceSettingsModal', () => {
             },
         ]);
         vi.mocked(ApiClient.getModels).mockResolvedValue({ local: ['planning-model-a'], external: [] });
-        vi.mocked(ApiClient.getGoogleWorkflowConnections).mockResolvedValue([
-            {
-                id: '660e8400-e29b-41d4-a716-446655440099',
-                google_email: 'a@example.com',
-                label: 'Work',
-                scopes: 'email',
-                created_at: '2020-01-01T00:00:00Z',
-                updated_at: '2020-01-01T00:00:00Z',
-            },
-        ]);
     });
 
     it('calls updateWorkspace when unchecking a workflow and saving', async () => {
@@ -70,7 +59,6 @@ describe('WorkspaceSettingsModal', () => {
         await waitFor(() => {
             expect(ApiClient.getWorkflows).toHaveBeenCalled();
             expect(ApiClient.getModels).toHaveBeenCalled();
-            expect(ApiClient.getGoogleWorkflowConnections).toHaveBeenCalled();
         });
         const checkbox = screen.getByRole('checkbox', { name: /Test WF/i });
         await user.click(checkbox);
@@ -98,7 +86,6 @@ describe('WorkspaceSettingsModal', () => {
         await waitFor(() => {
             expect(ApiClient.getWorkflows).toHaveBeenCalled();
             expect(ApiClient.getModels).toHaveBeenCalled();
-            expect(ApiClient.getGoogleWorkflowConnections).toHaveBeenCalled();
         });
         await user.click(screen.getByRole('button', { name: /^Save$/i }));
 
@@ -106,7 +93,7 @@ describe('WorkspaceSettingsModal', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('sends interpretation_model when planning model is changed', async () => {
+    it('sends interpretation_model when interpretation model is changed', async () => {
         const user = userEvent.setup();
         const onSaved = vi.fn();
         const updated: Workspace = {
@@ -125,40 +112,12 @@ describe('WorkspaceSettingsModal', () => {
         );
 
         await waitFor(() => expect(ApiClient.getModels).toHaveBeenCalled());
-        await user.selectOptions(screen.getByLabelText(/Planning model/i), 'planning-model-a');
+        await user.selectOptions(screen.getByLabelText(/Interpretation model/i), 'planning-model-a');
         await user.click(screen.getByRole('button', { name: /^Save$/i }));
 
         await waitFor(() => {
             expect(ApiClient.updateWorkspace).toHaveBeenCalledWith('w1', {
                 interpretation_model: 'planning-model-a',
-            });
-        });
-        expect(onSaved).toHaveBeenCalledWith(updated);
-    });
-
-    it('sends default_google_workflow_connection_id when default Google connection changes', async () => {
-        const user = userEvent.setup();
-        const onSaved = vi.fn();
-        const gid = '660e8400-e29b-41d4-a716-446655440099';
-        const updated: Workspace = { ...baseWorkspace, default_google_workflow_connection_id: gid };
-        vi.mocked(ApiClient.updateWorkspace).mockResolvedValue(updated);
-
-        render(
-            <WorkspaceSettingsModal
-                isOpen
-                onClose={() => {}}
-                workspace={baseWorkspace}
-                onSaved={onSaved}
-            />,
-        );
-
-        await waitFor(() => expect(ApiClient.getGoogleWorkflowConnections).toHaveBeenCalled());
-        await user.selectOptions(screen.getByLabelText(/Default Google workflow connection/i), gid);
-        await user.click(screen.getByRole('button', { name: /^Save$/i }));
-
-        await waitFor(() => {
-            expect(ApiClient.updateWorkspace).toHaveBeenCalledWith('w1', {
-                default_google_workflow_connection_id: gid,
             });
         });
         expect(onSaved).toHaveBeenCalledWith(updated);

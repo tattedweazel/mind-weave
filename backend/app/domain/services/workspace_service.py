@@ -20,7 +20,6 @@ _WORKSPACE_PATCH_KEYS = frozenset(
         "interaction_configuration",
         "enabled_workflow_ids",
         "interpretation_model",
-        "default_google_workflow_connection_id",
     }
 )
 
@@ -81,7 +80,6 @@ class WorkspaceService:
         interaction_configuration: Optional[dict] = None,
         enabled_workflow_ids: Optional[list[str]] = None,
         interpretation_model: Optional[str] = None,
-        default_google_workflow_connection_id: Optional[uuid.UUID] = None,
     ) -> Workspace:
         now = datetime.now(timezone.utc)
         im = (interpretation_model or "").strip() or None
@@ -93,7 +91,6 @@ class WorkspaceService:
             interaction_configuration=interaction_configuration or {},
             enabled_workflow_ids=list(enabled_workflow_ids) if enabled_workflow_ids is not None else [],
             interpretation_model=im,
-            default_google_workflow_connection_id=default_google_workflow_connection_id,
             created_at=now,
             updated_at=now,
         )

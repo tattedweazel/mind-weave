@@ -74,7 +74,6 @@ class WorkspaceRead(BaseModel):
     interaction_configuration: Dict[str, Any] = Field(default_factory=dict)
     enabled_workflow_ids: List[str] = Field(default_factory=list)
     interpretation_model: Optional[str] = None
-    default_google_workflow_connection_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -91,7 +90,6 @@ class WorkspaceCreate(BaseModel):
     interaction_configuration: Dict[str, Any] = Field(default_factory=dict)
     enabled_workflow_ids: List[str] = Field(default_factory=list)
     interpretation_model: Optional[str] = None
-    default_google_workflow_connection_id: Optional[UUID] = None
 
     @field_validator("enabled_workflow_ids", mode="before")
     @classmethod
@@ -106,7 +104,6 @@ class WorkspaceUpdate(BaseModel):
     interaction_configuration: Optional[Dict[str, Any]] = None
     enabled_workflow_ids: Optional[List[str]] = None
     interpretation_model: Optional[str] = None
-    default_google_workflow_connection_id: Optional[UUID] = None
 
     @field_validator("enabled_workflow_ids", mode="before")
     @classmethod
