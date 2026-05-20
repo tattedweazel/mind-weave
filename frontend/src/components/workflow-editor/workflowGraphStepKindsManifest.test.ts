@@ -266,6 +266,21 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 position: pos,
             };
         }
+        if (st === 'google_docs_get_document') {
+            return {
+                id: nodeId,
+                kind: 'skill',
+                skill_type: 'google_docs_get_document',
+                label,
+                data: {
+                    google_connection_id: null,
+                    document_url_or_id: null,
+                    include_tabs_content: true,
+                    required_inputs: [{ key: 'document_url_or_id', type: 'string', value: null }],
+                },
+                position: pos,
+            };
+        }
         if (st === 'fetch_url') {
             return {
                 id: nodeId,
@@ -518,6 +533,19 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 label,
                 data: {
                     required_inputs: [{ key: 'html', type: 'string', value: null }],
+                },
+                position: pos,
+            };
+        }
+        if (ut === 'google_docs_parse_document') {
+            return {
+                id: nodeId,
+                kind: 'utility',
+                utility_type: 'google_docs_parse_document',
+                label,
+                data: {
+                    chunk_strategy: 'structure',
+                    required_inputs: [{ key: 'document', type: 'dictionary', value: null }],
                 },
                 position: pos,
             };

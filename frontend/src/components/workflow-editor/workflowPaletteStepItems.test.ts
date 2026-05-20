@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { paletteDisplayNameForReactFlowType } from './workflowPaletteStepItems';
+import {
+    WORKFLOW_PALETTE_SKILL_ITEMS,
+    WORKFLOW_PALETTE_UTILITY_ITEMS,
+    paletteDisplayNameForReactFlowType,
+} from './workflowPaletteStepItems';
+
+function paletteTypes(items: ReadonlyArray<{ type: string }>): string[] {
+    return items.map((item) => item.type);
+}
+
+describe('workflow palette taxonomy', () => {
+    it('lists Google Docs Get in Skills and Parse in Utilities only', () => {
+        const skillTypes = paletteTypes(WORKFLOW_PALETTE_SKILL_ITEMS);
+        const utilityTypes = paletteTypes(WORKFLOW_PALETTE_UTILITY_ITEMS);
+
+        expect(skillTypes).toContain('googleDocsGetDocument');
+        expect(skillTypes).not.toContain('googleDocsParseDocument');
+        expect(utilityTypes).toContain('googleDocsParseDocument');
+        expect(utilityTypes).not.toContain('googleDocsGetDocument');
+    });
+});
 
 describe('paletteDisplayNameForReactFlowType', () => {
     it('returns palette tile labels for known types', () => {

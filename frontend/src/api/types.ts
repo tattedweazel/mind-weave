@@ -459,6 +459,33 @@ export interface CalendarListEventsSkillNode {
     position: { x: number; y: number };
 }
 
+export interface GoogleDocsGetDocumentSkillNode {
+    id: string;
+    kind: 'skill';
+    skill_type: 'google_docs_get_document';
+    label: string;
+    data: {
+        google_connection_id: string | null;
+        document_url_or_id?: string | null;
+        include_tabs_content?: boolean;
+        required_inputs: RequiredInput[];
+    };
+    position: { x: number; y: number };
+}
+
+export interface GoogleDocsParseDocumentUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'google_docs_parse_document';
+    label: string;
+    data: {
+        chunk_strategy?: 'structure' | 'tab' | 'flat';
+        max_chunk_text_chars?: number | null;
+        required_inputs: RequiredInput[];
+    };
+    position: { x: number; y: number };
+}
+
 export interface FetchUrlSkillNode {
     id: string;
     kind: 'skill';
@@ -1236,6 +1263,8 @@ export type GraphNode =
     | TranscribeFileSkillNode
     | GmailListMessagesSkillNode
     | CalendarListEventsSkillNode
+    | GoogleDocsGetDocumentSkillNode
+    | GoogleDocsParseDocumentUtilityNode
     | FetchUrlSkillNode
     | CaptureUrlSnapshotSkillNode
     | ListToStringUtilityNode
@@ -1269,6 +1298,7 @@ export type GraphNode =
     | LoadDocumentUtilityNode
     | UpsertDocumentUtilityNode
     | ParseDocumentBodyUtilityNode
+    | GoogleDocsParseDocumentUtilityNode
     | HtmlParseBasicUtilityNode
     | WriteObjectToDocumentBodyUtilityNode
     | AppendValueToDocumentUtilityNode
@@ -1434,6 +1464,8 @@ export type NodeOutputUnion =
 export type OutputExplorerKind =
     | 'gmail_list_messages'
     | 'calendar_list_events'
+    | 'google_docs_get_document'
+    | 'google_docs_parse_document'
     | 'fetch_url'
     | 'capture_url_snapshot'
     | 'list_primitive'
@@ -1518,14 +1550,23 @@ export function parseEffectiveOutputExplorer(details: Record<string, unknown> | 
 }
 
 /** @deprecated Use `OutputExplorerKind` / `OutputExplorerV1`. */
-export type SkillExplorerKind = 'gmail_list_messages' | 'calendar_list_events';
+export type SkillExplorerKind =
+    | 'gmail_list_messages'
+    | 'calendar_list_events'
+    | 'google_docs_get_document';
 /** @deprecated Use `OutputExplorerV1`. */
 export type SkillExplorerV1 = OutputExplorerV1;
 /** @deprecated Use `parseOutputExplorerV1` or `parseEffectiveOutputExplorer`. */
 export function parseSkillExplorerV1(raw: unknown): SkillExplorerV1 | null {
     const ex = parseOutputExplorerV1(raw);
     if (!ex) return null;
-    if (ex.kind !== 'gmail_list_messages' && ex.kind !== 'calendar_list_events') return null;
+    if (
+        ex.kind !== 'gmail_list_messages' &&
+        ex.kind !== 'calendar_list_events' &&
+        ex.kind !== 'google_docs_get_document'
+    ) {
+        return null;
+    }
     return ex;
 }
 

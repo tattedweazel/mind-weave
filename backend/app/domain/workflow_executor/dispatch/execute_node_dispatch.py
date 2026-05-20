@@ -14,6 +14,8 @@ from app.domain.schemas import (
     BetweenControlNode,
     BooleanPrimitiveNode,
     CalendarListEventsSkillNode,
+    GoogleDocsGetDocumentSkillNode,
+    GoogleDocsParseDocumentUtilityNode,
     CaptureUrlSnapshotSkillNode,
     DateTimePrimitiveNode,
     DecisionActionPrimitiveNode,
@@ -175,6 +177,8 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
             )
         if isinstance(node, CalendarListEventsSkillNode):
             return await executor._run_calendar_list_events_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, GoogleDocsGetDocumentSkillNode):
+            return await executor._run_google_docs_get_document_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, FetchUrlSkillNode):
             return await executor._run_fetch_url_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, CaptureUrlSnapshotSkillNode):
@@ -237,6 +241,8 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
             return executor._resolve_parse_document_body_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, HtmlParseBasicUtilityNode):
             return executor._resolve_html_parse_basic_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, GoogleDocsParseDocumentUtilityNode):
+            return executor._resolve_google_docs_parse_document_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, WriteObjectToDocumentBodyUtilityNode):
             return executor._resolve_write_object_to_document_body_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, AppendValueToDocumentUtilityNode):

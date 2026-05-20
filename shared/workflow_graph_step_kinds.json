@@ -171,6 +171,14 @@
     },
     {
       "kind": "skill",
+      "skill_type": "google_docs_get_document",
+      "react_flow_type": "googleDocsGetDocument",
+      "pydantic_model": "GoogleDocsGetDocumentSkillNode",
+      "palette_handle": "google_docs_get_document",
+      "editor_label": "Google Docs Get Document"
+    },
+    {
+      "kind": "skill",
       "skill_type": "fetch_url",
       "react_flow_type": "fetchUrl",
       "pydantic_model": "FetchUrlSkillNode",
@@ -440,6 +448,14 @@
       "pydantic_model": "HtmlParseBasicUtilityNode",
       "palette_handle": "html_parse_basic",
       "editor_label": "HTML Parse (basic)"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "google_docs_parse_document",
+      "react_flow_type": "googleDocsParseDocument",
+      "pydantic_model": "GoogleDocsParseDocumentUtilityNode",
+      "palette_handle": "google_docs_parse_document",
+      "editor_label": "Google Docs Parse Document"
     },
     {
       "kind": "utility",

@@ -146,7 +146,7 @@ Defaults from [`backend/app/core/config.py`](../backend/app/core/config.py) (pat
 | Purpose | Path (append to API origin) |
 |---------|-----------------------------|
 | Sign-in / account linking | `/api/v1/auth/google/callback` |
-| Gmail / Calendar workflow OAuth | `/api/v1/google-workflow/oauth/callback` |
+| Gmail / Calendar / Google Docs workflow OAuth | `/api/v1/google-workflow/oauth/callback` |
 
 **Example** if API origin is `https://api.example.com`:
 

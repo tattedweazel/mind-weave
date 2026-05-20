@@ -459,6 +459,71 @@ const GmailListMessagesNodeComp: React.FC<{
     );
 };
 
+const GoogleDocsGetDocumentNodeComp: React.FC<{
+    data: {
+        label: string;
+        isRunning?: boolean;
+        documentUrlOrIdHasValue?: boolean;
+        paletteColors?: Record<string, string>;
+    };
+}> = ({ data }) => {
+    const inputs: NodeSlot[] = [
+        {
+            key: 'document_url_or_id',
+            type: 'string',
+            label: 'document URL or ID',
+            hasValue: data.documentUrlOrIdHasValue,
+        },
+    ];
+    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
+    return (
+        <StyledNodeBase
+            typeLabel="Skill"
+            nodeLabel={data.label}
+            inputs={inputs}
+            outputs={outputs}
+            borderColor={getHandleColor(data.paletteColors, 'google_docs_get_document')}
+            isRunning={data.isRunning}
+            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
+            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
+            minWidth={NODE_MIN_WIDTH.medium}
+            paletteColors={data.paletteColors}
+            triggerInput
+            signalOutput
+        />
+    );
+};
+
+const GoogleDocsParseDocumentNodeComp: React.FC<{
+    data: {
+        label: string;
+        isRunning?: boolean;
+        documentHasValue?: boolean;
+        paletteColors?: Record<string, string>;
+    };
+}> = ({ data }) => {
+    const inputs: NodeSlot[] = [
+        { key: 'document', type: 'dictionary', label: 'document', hasValue: data.documentHasValue },
+    ];
+    const outputs: NodeSlot[] = [{ key: 'output', type: 'list', label: 'output' }];
+    return (
+        <StyledNodeBase
+            typeLabel="Utility"
+            nodeLabel={data.label}
+            inputs={inputs}
+            outputs={outputs}
+            borderColor={getHandleColor(data.paletteColors, 'google_docs_parse_document')}
+            isRunning={data.isRunning}
+            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
+            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
+            minWidth={NODE_MIN_WIDTH.medium}
+            paletteColors={data.paletteColors}
+            triggerInput
+            signalOutput
+        />
+    );
+};
+
 const CalendarListEventsNodeComp: React.FC<{
     data: {
         label: string;
@@ -2636,6 +2701,8 @@ export const nodeTypes = {
     transcribeFile: TranscribeFileNodeComp,
     gmailListMessages: GmailListMessagesNodeComp,
     calendarListEvents: CalendarListEventsNodeComp,
+    googleDocsGetDocument: GoogleDocsGetDocumentNodeComp,
+    googleDocsParseDocument: GoogleDocsParseDocumentNodeComp,
     fetchUrl: FetchUrlNodeComp,
     captureUrlSnapshot: CaptureUrlSnapshotNodeComp,
     listToString: ListToStringNodeComp,

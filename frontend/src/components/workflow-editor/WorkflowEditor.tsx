@@ -1525,6 +1525,35 @@ export const WorkflowEditor: React.FC<Props> = ({
                     ],
                 },
             }]);
+        } else if (type === 'googleDocsGetDocument') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'googleDocsGetDocument',
+                position,
+                data: {
+                    label: extra.label ?? 'Google Docs Get',
+                    google_connection_id: null,
+                    document_url_or_id: null,
+                    include_tabs_content: true,
+                    required_inputs: [
+                        { key: 'document_url_or_id', type: 'string', value: null },
+                    ],
+                },
+            }]);
+        } else if (type === 'googleDocsParseDocument') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'googleDocsParseDocument',
+                position,
+                data: {
+                    label: extra.label ?? 'Google Docs Parse',
+                    chunk_strategy: 'structure',
+                    max_chunk_text_chars: null,
+                    required_inputs: [
+                        { key: 'document', type: 'dictionary', value: null },
+                    ],
+                },
+            }]);
         } else if (type === 'fetchUrl') {
             setNodes(ns => [...ns, {
                 id,
@@ -5222,6 +5251,149 @@ export const WorkflowEditor: React.FC<Props> = ({
                                                     patchSelectedNodeData({ required_inputs: next, query: v });
                                                 }}
                                                 placeholder="Gmail search operators; combined with filters above"
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
+                                            />
+                                        </div>
+                                    </InspectorSection>
+                                </>
+                            );
+                        })()}
+
+                        {selectedNode.type === 'googleDocsGetDocument' && (() => {
+                            const d = selectedNode.data as any;
+                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs)
+                                ? [...d.required_inputs]
+                                : [];
+                            requiredInputs = requiredInputs.filter(
+                                (i: RequiredInput) => i.key === 'document_url_or_id',
+                            );
+                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'document_url_or_id')) {
+                                requiredInputs.push({ key: 'document_url_or_id', type: 'string', value: null });
+                            }
+                            const connId = d?.google_connection_id ?? '';
+                            const urlVal =
+                                requiredInputs.find((i: RequiredInput) => i.key === 'document_url_or_id')?.value ??
+                                d?.document_url_or_id ??
+                                '';
+                            return (
+                                <>
+                                    <InspectorSection
+                                        title="About"
+                                        description="Fetches a Google Doc (read-only) using your workflow Google connection. Output includes a curated document_payload for the Parse utility. Connect Google under My Settings → Google for workflows."
+                                    />
+                                    <InspectorSection title="Connection">
+                                        <div>
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                Google connection
+                                            </label>
+                                            <select
+                                                value={connId}
+                                                onChange={e =>
+                                                    updateSelectedNodeData({
+                                                        google_connection_id: e.target.value || null,
+                                                    })
+                                                }
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                                            >
+                                                <option value="">Select connection</option>
+                                                {googleWorkflowConnections.map(c => (
+                                                    <option key={c.id} value={c.id}>
+                                                        {c.label?.trim() || c.google_email || c.id}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </InspectorSection>
+                                    <InspectorSection title="Document">
+                                        <div>
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                Document URL or ID
+                                            </label>
+                                            <input
+                                                value={String(urlVal ?? '')}
+                                                onFocus={recordGraphBeforeMutation}
+                                                onChange={e => {
+                                                    const v = e.target.value || null;
+                                                    const idx = requiredInputs.findIndex(
+                                                        (i: RequiredInput) => i.key === 'document_url_or_id',
+                                                    );
+                                                    const next = [...requiredInputs];
+                                                    if (idx >= 0) next[idx] = { ...next[idx], value: v };
+                                                    patchSelectedNodeData({
+                                                        required_inputs: next,
+                                                        document_url_or_id: v,
+                                                    });
+                                                }}
+                                                placeholder="https://docs.google.com/document/d/… or document id"
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
+                                            />
+                                        </div>
+                                        <label className="flex items-center gap-2 cursor-pointer mt-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={d?.include_tabs_content !== false}
+                                                onChange={e =>
+                                                    updateSelectedNodeData({
+                                                        include_tabs_content: e.target.checked,
+                                                    })
+                                                }
+                                                className="rounded border-mw-border"
+                                            />
+                                            <span className="text-xs text-mw-text-primary">Include document tabs content</span>
+                                        </label>
+                                    </InspectorSection>
+                                </>
+                            );
+                        })()}
+
+                        {selectedNode.type === 'googleDocsParseDocument' && (() => {
+                            const d = selectedNode.data as any;
+                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs)
+                                ? [...d.required_inputs]
+                                : [];
+                            requiredInputs = requiredInputs.filter((i: RequiredInput) => i.key === 'document');
+                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'document')) {
+                                requiredInputs.push({ key: 'document', type: 'dictionary', value: null });
+                            }
+                            const strategy = d?.chunk_strategy ?? 'structure';
+                            return (
+                                <>
+                                    <InspectorSection
+                                        title="About"
+                                        description="Splits a Google Docs Get Document output into generic chunks (text, tables, images). Wire the Get Document dictionary output to the document input."
+                                    />
+                                    <InspectorSection title="Chunking">
+                                        <div>
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                Chunk strategy
+                                            </label>
+                                            <select
+                                                value={strategy}
+                                                onChange={e =>
+                                                    updateSelectedNodeData({ chunk_strategy: e.target.value })
+                                                }
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
+                                            >
+                                                <option value="structure">Structure (default)</option>
+                                                <option value="tab">One chunk per tab</option>
+                                                <option value="flat">Single flat text chunk</option>
+                                            </select>
+                                        </div>
+                                        <div className="mt-2">
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                Max text chars per chunk (optional)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={d?.max_chunk_text_chars ?? ''}
+                                                onFocus={recordGraphBeforeMutation}
+                                                onChange={e => {
+                                                    const raw = e.target.value;
+                                                    const v = raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0);
+                                                    patchSelectedNodeData({ max_chunk_text_chars: v });
+                                                }}
+                                                placeholder="Default from server"
                                                 className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
                                             />
                                         </div>

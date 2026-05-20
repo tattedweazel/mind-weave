@@ -10,6 +10,7 @@ from app.domain.schemas import (
     CaptureUrlSnapshotSkillNode,
     FetchUrlSkillNode,
     GmailListMessagesSkillNode,
+    GoogleDocsGetDocumentSkillNode,
     MultimodalLLMCallSkillNode,
     SimpleLLMCallSkillNode,
     TextToSpeechSkillNode,
@@ -38,6 +39,7 @@ def workflow_node_extra_concurrency_bucket(node: Any) -> ExtraKind:
             TranscribeFileSkillNode,
             GmailListMessagesSkillNode,
             CalendarListEventsSkillNode,
+            GoogleDocsGetDocumentSkillNode,
             WorkflowRefNode,
         ),
     ):

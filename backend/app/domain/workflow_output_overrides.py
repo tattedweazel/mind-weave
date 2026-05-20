@@ -22,6 +22,8 @@ from app.domain.schemas import (
     BooleanNodeOutput,
     BooleanPrimitiveNode,
     CalendarListEventsSkillNode,
+    GoogleDocsGetDocumentSkillNode,
+    GoogleDocsParseDocumentUtilityNode,
     CaptureUrlSnapshotSkillNode,
     ConditionalNodeOutput,
     DateTimeNodeOutput,
@@ -353,6 +355,16 @@ def coerce_raw_to_node_output(
         if not isinstance(raw, dict):
             raise ValueError(f"output_overrides[{node_id!r}]: skill output must be a JSON object")
         return DictionaryNodeOutput(node_id=node_id, data=dict(raw))
+
+    if isinstance(parsed, GoogleDocsGetDocumentSkillNode):
+        if not isinstance(raw, dict):
+            raise ValueError(f"output_overrides[{node_id!r}]: Google Docs Get Document requires a JSON object")
+        return DictionaryNodeOutput(node_id=node_id, data=dict(raw))
+
+    if isinstance(parsed, GoogleDocsParseDocumentUtilityNode):
+        if not isinstance(raw, list):
+            raise ValueError(f"output_overrides[{node_id!r}]: Google Docs Parse Document requires a JSON array")
+        return ListNodeOutput(node_id=node_id, data=list(raw))
 
     if isinstance(parsed, FetchUrlSkillNode):
         if not isinstance(raw, dict):

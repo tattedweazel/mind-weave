@@ -123,6 +123,21 @@ export function enrichNodesForCanvasFlow(
                 const timeMaxHasValue = hasBIn || (bVal != null && String(bVal).trim() !== '');
                 return { ...n, data: { ...baseData, timeMinHasValue, timeMaxHasValue } };
             }
+            if (n.type === 'googleDocsGetDocument') {
+                const d = n.data as any;
+                const req = d?.required_inputs ?? [];
+                const uVal = req.find((r: { key?: string }) => r?.key === 'document_url_or_id')?.value;
+                const hasIn = edges.some(e => e.target === n.id && e.targetHandle === 'document_url_or_id');
+                const documentUrlOrIdHasValue =
+                    hasIn ||
+                    (uVal != null && String(uVal).trim() !== '') ||
+                    (d?.document_url_or_id != null && String(d.document_url_or_id).trim() !== '');
+                return { ...n, data: { ...baseData, documentUrlOrIdHasValue } };
+            }
+            if (n.type === 'googleDocsParseDocument') {
+                const hasIn = edges.some(e => e.target === n.id && e.targetHandle === 'document');
+                return { ...n, data: { ...baseData, documentHasValue: hasIn } };
+            }
             if (n.type === 'fetchUrl') {
                 const d = n.data as any;
                 const req = d?.required_inputs ?? [];

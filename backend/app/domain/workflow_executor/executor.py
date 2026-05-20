@@ -177,6 +177,10 @@ def __getattr__(name: str) -> Any:
         from app.integrations.google_workspace import calendar_list_events as _v
 
         return _v
+    if name == "docs_get_document":
+        from app.integrations.google_docs import docs_get_document as _v
+
+        return _v
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)
 
@@ -186,6 +190,7 @@ def __dir__() -> list[str]:
         {
             "LMStudioProvider",
             "calendar_list_events",
+            "docs_get_document",
             "ensure_workflow_google_access_token",
             "get_speech_provider",
             "gmail_get_message_full",

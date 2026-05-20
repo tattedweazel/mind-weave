@@ -21,6 +21,7 @@ from app.domain.schemas import (
     AudioFileInputSkillNode,
     AudioNodeOutput,
     CalendarListEventsSkillNode,
+    GoogleDocsGetDocumentSkillNode,
     CaptureUrlSnapshotSkillNode,
     DictionaryNodeOutput,
     FetchUrlSkillNode,
@@ -92,6 +93,9 @@ from .diagnostics import (
     truncate_gmail_messages_list_response,
     truncate_google_calendar_events_list_response,
 )
+from app.integrations.google_docs import GoogleDocsUrlParseError, parse_google_docs_url_or_id
+
+from .google_docs_curate import build_document_payload, truncate_google_docs_get_response
 from .fetch_url_runtime import compute_cache_key, normalize_headers
 from .gmail_llm_prompt import (
     format_gmail_message_dict_for_llm_prompt,
@@ -1693,6 +1697,138 @@ class WorkflowExecutorSkillsRunnerMixin:
         return {
             "status": "ok",
             "output": DictionaryNodeOutput(node_id=node.id, data={"events": curated}),
+            "details": details,
+        }
+
+    async def _run_google_docs_get_document_node(
+        self,
+        node: GoogleDocsGetDocumentSkillNode,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        cid_raw = node.data.get("google_connection_id")
+        if not cid_raw:
+            return _error_with_resolved_inputs(
+                "Google Docs Get Document requires a Google connection. Select one in the node inspector.",
+                {"google_connection_id": None},
+            )
+        try:
+            conn_uuid = UUID(str(cid_raw))
+        except (ValueError, TypeError):
+            return {
+                "status": "error",
+                "error": "Invalid google_connection_id",
+                "details": {"resolved_inputs": {"google_connection_id": cid_raw}},
+            }
+
+        raw_inputs = node.data.get("required_inputs") or [
+            {"key": "document_url_or_id", "type": "string", "value": None},
+        ]
+        resolved = _resolve_inputs_by_target_handle(
+            node.id,
+            ["document_url_or_id"],
+            edges,
+            outputs,
+            input_overrides,
+            raw_inputs,
+        )
+        url_or_id = resolved.get("document_url_or_id") or node.data.get("document_url_or_id")
+        if url_or_id is None or not str(url_or_id).strip():
+            return _error_with_resolved_inputs(
+                "Google Docs Get Document requires a document URL or ID.",
+                {
+                    "google_connection_id": str(conn_uuid),
+                    "document_url_or_id": url_or_id,
+                },
+            )
+        url_or_id_s = str(url_or_id).strip()
+        try:
+            document_id = parse_google_docs_url_or_id(url_or_id_s)
+        except GoogleDocsUrlParseError as e:
+            return _error_with_resolved_inputs(
+                str(e),
+                {
+                    "google_connection_id": str(conn_uuid),
+                    "document_url_or_id": url_or_id_s,
+                },
+            )
+
+        include_tabs = node.data.get("include_tabs_content")
+        if include_tabs is None:
+            include_tabs_content = True
+        else:
+            include_tabs_content = bool(include_tabs)
+
+        docs_ri: Dict[str, Any] = {
+            "google_connection_id": str(conn_uuid),
+            "document_url_or_id": url_or_id_s,
+            "document_id": document_id,
+            "include_tabs_content": include_tabs_content,
+        }
+
+        try:
+            ex = _exec_skill_deps()
+            access = await ex.ensure_workflow_google_access_token(self.session, conn_uuid, self.user_id)
+            raw = await ex.docs_get_document(
+                access,
+                document_id,
+                include_tabs_content=include_tabs_content,
+            )
+        except ValueError as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "details": {"resolved_inputs": docs_ri},
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"GoogleDocsGetDocument failed: {_format_exception(e)}",
+                "details": {"resolved_inputs": docs_ri},
+            }
+
+        try:
+            document_payload, _fetch_errors = await build_document_payload(
+                self.session,
+                self.user_id,
+                access,
+                raw,
+                document_id=document_id,
+            )
+            self.session.commit()
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"GoogleDocsGetDocument curation failed: {_format_exception(e)}",
+                "details": {"resolved_inputs": docs_ri},
+            }
+
+        diag_response, diag_truncated = truncate_google_docs_get_response(raw)
+        diag_payload: Dict[str, Any] = {
+            "operation": "documents.get",
+            "document_id": document_id,
+            "response": diag_response,
+            "truncated": diag_truncated,
+            "image_count": document_payload.get("image_count"),
+            "fetch_error_count": len(document_payload.get("fetch_errors") or []),
+        }
+        details = merge_skill_diagnostics(
+            {
+                "resolved_inputs": docs_ri,
+                "tab_count": document_payload.get("tab_count"),
+                "image_count": document_payload.get("image_count"),
+            },
+            vendor_key="google_docs_v1",
+            payload=diag_payload,
+        )
+
+        return {
+            "status": "ok",
+            "output": DictionaryNodeOutput(
+                node_id=node.id,
+                data={"document_payload": document_payload},
+            ),
             "details": details,
         }
 

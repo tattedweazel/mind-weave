@@ -111,6 +111,19 @@ class CalendarListEventsSkillNode(BaseModel):
     position: Dict[str, float] = Field(default_factory=dict)
 
 
+class GoogleDocsGetDocumentSkillNode(BaseModel):
+    """Read-only Google Docs: fetch document structure and inline images via workflow OAuth."""
+
+    id: str
+    kind: Literal["skill"] = "skill"
+    skill_type: Literal["google_docs_get_document"] = "google_docs_get_document"
+    label: str
+    data: Dict[str, Any] = Field(
+        default_factory=dict,
+    )  # google_connection_id, document_url_or_id, include_tabs_content, required_inputs
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
 class FetchUrlSkillNode(BaseModel):
     """HTTP fetch of a URL: raw text body and response metadata. Optional per-user response cache."""
 
@@ -543,6 +556,19 @@ class HtmlParseBasicUtilityNode(BaseModel):
     data: Dict[str, Any] = Field(
         default_factory=dict,
     )  # required_inputs: html; optional: granularity (default|list_items|articles), content_root_css
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class GoogleDocsParseDocumentUtilityNode(BaseModel):
+    """Parse curated Google Docs document_payload into generic chunks for downstream steps."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["google_docs_parse_document"] = "google_docs_parse_document"
+    label: str
+    data: Dict[str, Any] = Field(
+        default_factory=dict,
+    )  # required_inputs: document; chunk_strategy (structure|tab|flat), max_chunk_text_chars
     position: Dict[str, float] = Field(default_factory=dict)
 
 
@@ -1055,6 +1081,7 @@ GraphNode = Union[
     TranscribeFileSkillNode,
     GmailListMessagesSkillNode,
     CalendarListEventsSkillNode,
+    GoogleDocsGetDocumentSkillNode,
     FetchUrlSkillNode,
     CaptureUrlSnapshotSkillNode,
     ListToStringUtilityNode,
@@ -1089,6 +1116,7 @@ GraphNode = Union[
     UpsertDocumentUtilityNode,
     ParseDocumentBodyUtilityNode,
     HtmlParseBasicUtilityNode,
+    GoogleDocsParseDocumentUtilityNode,
     WriteObjectToDocumentBodyUtilityNode,
     AppendValueToDocumentUtilityNode,
     ValidateAgainstStructureUtilityNode,

@@ -67,6 +67,7 @@ export const WORKFLOW_PALETTE_SKILL_ITEMS: readonly WorkflowPaletteStepItem[] = 
     },
     { type: 'gmailListMessages', label: 'Gmail List Messages', extra: { label: 'Gmail List' }, paletteType: 'gmail_list_messages' },
     { type: 'calendarListEvents', label: 'Calendar List Events', extra: { label: 'Calendar Events' }, paletteType: 'calendar_list_events' },
+    { type: 'googleDocsGetDocument', label: 'Google Docs Get Document', extra: { label: 'Google Docs Get' }, paletteType: 'google_docs_get_document' },
     { type: 'fetchUrl', label: 'Fetch URL', extra: { label: 'Fetch URL' }, paletteType: 'fetch_url' },
     {
         type: 'captureUrlSnapshot',
@@ -128,6 +129,12 @@ export const WORKFLOW_PALETTE_UTILITY_ITEMS: readonly WorkflowPaletteStepItem[] 
         label: 'HTML Parse (basic)',
         extra: { label: 'HTML Parse (basic)' },
         paletteType: 'html_parse_basic',
+    },
+    {
+        type: 'googleDocsParseDocument',
+        label: 'Google Docs Parse Document',
+        extra: { label: 'Google Docs Parse' },
+        paletteType: 'google_docs_parse_document',
     },
     {
         type: 'writeObjectToDocumentBody',

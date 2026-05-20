@@ -45,6 +45,8 @@ const FLOW_TYPE_LABELS: Record<string, string> = {
     audioFileInput: 'Audio File Input',
     gmailListMessages: 'Gmail List',
     calendarListEvents: 'Calendar List',
+    googleDocsGetDocument: 'Google Docs Get',
+    googleDocsParseDocument: 'Google Docs Parse',
     fetchUrl: 'Fetch URL',
     stringPrimitive: 'String',
     decisionActionPrimitive: 'Decision action',

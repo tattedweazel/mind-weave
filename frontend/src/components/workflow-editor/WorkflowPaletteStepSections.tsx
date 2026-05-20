@@ -117,6 +117,8 @@ function paletteStepIcon(nodeType: string): React.ReactNode {
             return <Mail size={size} />;
         case 'calendarListEvents':
             return <Calendar size={size} />;
+        case 'googleDocsGetDocument':
+            return <FileText size={size} />;
         case 'fetchUrl':
             return <Link2 size={size} />;
         case 'captureUrlSnapshot':
@@ -189,6 +191,7 @@ function paletteStepIcon(nodeType: string): React.ReactNode {
         case 'parseDocumentBody':
             return <Braces size={size} />;
         case 'htmlParseBasic':
+        case 'googleDocsParseDocument':
             return <FileText size={size} />;
         case 'writeObjectToDocumentBody':
             return <FileJson size={size} />;

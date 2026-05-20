@@ -32,11 +32,11 @@ They hold structured values: text, numbers, booleans, lists, objects, saved **St
 
 **Default expectation:** a utility is a **pure-ish data transform** at the workflow boundary—inputs in, outputs out, no surprise side effects.
 
-Examples: list ↔ string, truncation, dictionary key reads, JSON parse/serialize helpers, basic HTML structure extraction, **`Add to List`** for loop-scoped accumulation, integer math, validation against a **Structure**.
+Examples: list ↔ string, truncation, dictionary key reads, JSON parse/serialize helpers, basic HTML structure extraction (**`html_parse_basic`**), **`google_docs_parse_document`** (split curated **`document_payload`** from **Google Docs Get** into generic chunks), **`Add to List`** for loop-scoped accumulation, integer math, validation against a **Structure**.
 
 ### Skills = verbs
 
-Skills **reach outward**: LLM chat, HTTP from the API host, Playwright URL snapshots, speech bridges, Google mail/calendar, transcription providers, etc.
+Skills **reach outward**: LLM chat, HTTP from the API host, Playwright URL snapshots, speech bridges, Google mail/calendar, **Google Docs read** (`google_docs_get_document`), transcription providers, etc.
 
 If the step **depends on the network, OS services, or mutable external systems** to do its job, it is almost certainly a **Skill**.
 

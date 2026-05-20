@@ -66,6 +66,8 @@ DEFAULT_PALETTE_COLORS: Dict[str, str] = {
     "audio": "#c4b5fd",
     "gmail_list_messages": "#ea4335",
     "calendar_list_events": "#4285f4",
+    "google_docs_get_document": "#0ea5e9",
+    "google_docs_parse_document": "#65a30d",
     "fetch_url": "#0ea5e9",
     "capture_url_snapshot": "#7c3aed",
     "html_parse_basic": "#65a30d",

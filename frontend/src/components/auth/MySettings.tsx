@@ -1074,8 +1074,10 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
                             <div className="border-t border-mw-border pt-4 mt-6 space-y-3">
                                 <h4 className="text-sm font-semibold text-mw-text-primary">Google for workflows</h4>
                                 <p className="text-xs text-mw-text-secondary">
-                                    Separate from sign-in: grant read-only Gmail and Calendar so workflow skills can list
-                                    messages and events. You can connect multiple Google accounts (e.g. work and personal).
+                                    Separate from sign-in: grant read-only Gmail, Calendar, and Google Docs so workflow
+                                    skills can list messages and events and fetch documents. You can connect multiple
+                                    Google accounts (e.g. work and personal). Re-connect to add new permissions after
+                                    updates.
                                 </p>
                                 {workflowGoogleLoading ? (
                                     <p className="text-xs text-mw-text-secondary">Loading connections…</p>

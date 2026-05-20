@@ -153,6 +153,12 @@ class Settings(BaseSettings):
     CAPTURE_URL_SNAPSHOT_DEFAULT_VIEWPORT_HEIGHT: int = 720
     CAPTURE_URL_SNAPSHOT_MAX_PNG_BYTES: int = 25_165_824  # 24 MiB cap per screenshot (oversized → structured error)
 
+    # google_docs_get_document skill
+    GOOGLE_DOCS_MAX_INLINE_IMAGES_PER_RUN: int = 50
+    GOOGLE_DOCS_MAX_INLINE_IMAGE_BYTES: int = 25_165_824  # per image
+    GOOGLE_DOCS_MAX_TEXT_CHARS_PER_FIELD: int = 8000
+    GOOGLE_DOCS_GET_MAX_DIAGNOSTICS_JSON_CHARS: int = 200_000
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @model_validator(mode="after")

@@ -52,6 +52,8 @@ Cap **`items`** length (currently **50** in [`output_explorer.py`](../backend/ap
 |--------|------|
 | `gmail_list_messages` | Gmail List Messages skill: curated message rows (from **`ListNodeOutput.data`** or legacy dictionary `messages` + `resultSizeEstimate`). |
 | `calendar_list_events` | Dictionary skill output with `events` list. |
+| `google_docs_get_document` | **Google Docs Get Document** skill: document title, tab/image counts in summary. |
+| `google_docs_parse_document` | **Google Docs Parse Document** utility (`kind: "utility"`): chunk list with kind + tab path per row. |
 | `fetch_url` | **Fetch URL** skill: HTTP summary line and one row (URL / status or error type); body preview via **`teaser`** (not a forbidden item key). |
 | `capture_url_snapshot` | **URL snapshot** skill: dimensions + final URL; detail line with **`/api/v1/url-snapshot-artifacts/{id}`** resource path; or error type row. |
 | `list_primitive` | List node output (`kind: list`, `data` array). |

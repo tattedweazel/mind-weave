@@ -48,6 +48,7 @@ from app.domain.schemas import (
     GtControlNode,
     GteControlNode,
     HtmlParseBasicUtilityNode,
+    GoogleDocsParseDocumentUtilityNode,
     ImagePrimitiveNode,
     IntNodeOutput,
     IntPrimitiveNode,
@@ -112,6 +113,11 @@ from app.domain.schemas.sandbox import DecisionIntent, GridCell, SandboxTickInpu
 from app.domain.services.document_service import DocumentService
 from app.domain.services.workflow_definition_service import WorkflowDefinitionService
 from app.domain.workflow_executor.aux_outputs import record_for_loop_summary
+from app.domain.workflow_executor.google_docs_parse import (
+    extract_document_payload,
+    normalize_chunk_strategy,
+    parse_document_payload_to_chunks,
+)
 from app.domain.workflow_executor.html_parse_basic import parse_html_basic
 from app.domain.workflow_output_overrides import filter_output_overrides_for_graph
 from app.persistence.tables import (
@@ -4217,6 +4223,79 @@ class WorkflowExecutorResolverMixin:
             "status": "ok",
             "output": DictionaryNodeOutput(node_id=node.id, data=dict(out_data)),
             "details": {"resolved_inputs": ri},
+        }
+
+    def _resolve_google_docs_parse_document_node(
+        self,
+        node: GoogleDocsParseDocumentUtilityNode,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        raw_inputs = (node.data or {}).get("required_inputs") or [
+            {"key": "document", "type": "dictionary", "value": None},
+        ]
+        resolved = _resolve_inputs_by_target_handle(
+            node.id,
+            ["document"],
+            edges,
+            outputs,
+            input_overrides,
+            raw_inputs,
+        )
+        raw_doc = resolved.get("document")
+        if raw_doc is None:
+            return _executor_mod()._error_with_resolved_inputs(
+                "Google Docs Parse Document requires a document input.",
+                dict(resolved),
+            )
+        if isinstance(raw_doc, DictionaryNodeOutput):
+            doc_dict = dict(raw_doc.data)
+        elif isinstance(raw_doc, dict):
+            doc_dict = raw_doc
+        else:
+            return _executor_mod()._error_with_resolved_inputs(
+                "Google Docs Parse Document expects a dictionary-shaped document input.",
+                dict(resolved),
+            )
+        try:
+            payload = extract_document_payload(doc_dict)
+        except ValueError as e:
+            return _executor_mod()._error_with_resolved_inputs(str(e), dict(resolved))
+
+        strategy = normalize_chunk_strategy(node.data.get("chunk_strategy"))
+        max_chars_raw = node.data.get("max_chunk_text_chars")
+        max_chunk_text_chars = settings.GOOGLE_DOCS_MAX_TEXT_CHARS_PER_FIELD
+        if max_chars_raw is not None:
+            try:
+                max_chunk_text_chars = max(0, int(max_chars_raw))
+            except (TypeError, ValueError):
+                pass
+
+        chunks = parse_document_payload_to_chunks(
+            payload,
+            chunk_strategy=strategy,
+            max_chunk_text_chars=max_chunk_text_chars,
+        )
+        text_chars = sum(len(c.get("text") or "") for c in chunks if isinstance(c.get("text"), str))
+        by_kind: Dict[str, int] = {}
+        for c in chunks:
+            k = c.get("kind")
+            if isinstance(k, str):
+                by_kind[k] = by_kind.get(k, 0) + 1
+
+        return {
+            "status": "ok",
+            "output": ListNodeOutput(node_id=node.id, data=chunks),
+            "details": {
+                "resolved_inputs": {
+                    "chunk_strategy": strategy,
+                    "chunk_count": len(chunks),
+                    "chunks_by_kind": by_kind,
+                    "total_text_chars": text_chars,
+                    "max_chunk_text_chars": max_chunk_text_chars,
+                }
+            },
         }
 
     def _resolve_write_object_to_document_body_node(

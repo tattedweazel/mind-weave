@@ -425,6 +425,45 @@ export function appNodeToFlow(n: AppGraphNode): Node {
             },
         };
     }
+    if (n.kind === 'skill' && (n as AppGraphNode & { skill_type?: string }).skill_type === 'google_docs_get_document') {
+        const d = n.data as any;
+        let requiredInputs = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
+        requiredInputs = requiredInputs.filter((r: { key?: string }) => r?.key === 'document_url_or_id');
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'document_url_or_id')) {
+            requiredInputs.push({ key: 'document_url_or_id', type: 'string' as const, value: null });
+        }
+        return {
+            id: n.id,
+            type: reactFlowTypeForAppNode(n),
+            position: pos,
+            data: {
+                label: n.label,
+                required_inputs: requiredInputs,
+                google_connection_id: d?.google_connection_id ?? null,
+                document_url_or_id: d?.document_url_or_id ?? null,
+                include_tabs_content: d?.include_tabs_content !== false,
+            },
+        };
+    }
+    if (n.kind === 'utility' && (n as AppGraphNode & { utility_type?: string }).utility_type === 'google_docs_parse_document') {
+        const d = n.data as any;
+        let requiredInputs = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
+        requiredInputs = requiredInputs.filter((r: { key?: string }) => r?.key === 'document');
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'document')) {
+            requiredInputs.push({ key: 'document', type: 'dictionary' as const, value: null });
+        }
+        return {
+            id: n.id,
+            type: reactFlowTypeForAppNode(n),
+            position: pos,
+            data: {
+                label: n.label,
+                required_inputs: requiredInputs,
+                chunk_strategy: d?.chunk_strategy ?? 'structure',
+                max_chunk_text_chars: d?.max_chunk_text_chars ?? null,
+            },
+        };
+    }
     if (n.kind === 'skill' && (n as AppGraphNode & { skill_type?: string }).skill_type === 'fetch_url') {
         const d = n.data as any;
         let requiredInputs = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
@@ -1554,6 +1593,8 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (src.type === 'transcribeFile') return 'dictionary';
     if (src.type === 'gmailListMessages') return 'list';
     if (src.type === 'calendarListEvents') return 'dictionary';
+    if (src.type === 'googleDocsGetDocument') return 'dictionary';
+    if (src.type === 'googleDocsParseDocument') return 'list';
     if (src.type === 'fetchUrl') return 'dictionary';
     if (src.type === 'captureUrlSnapshot') return 'dictionary';
     if (src.type === 'workflowRef') {
@@ -1802,6 +1843,12 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
     if (targetNode && targetNode.type === 'imagePrimitive' && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'image';
     }
+    if (targetNode && targetNode.type === 'googleDocsGetDocument' && (targetHandle == null || targetHandle === '')) {
+        targetHandle = 'document_url_or_id';
+    }
+    if (targetNode && targetNode.type === 'googleDocsParseDocument' && (targetHandle == null || targetHandle === '')) {
+        targetHandle = 'document';
+    }
     if (targetNode && targetNode.type === 'calendarListEvents' && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'time_min';
     }
@@ -1815,7 +1862,7 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         targetHandle = 'message';
     }
     const sourceNode = nodes.find(n => n.id === e.source);
-    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'decisionActionPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxBehaviorPrimitive', 'sandboxTickItems', 'sandboxAvailableCells', 'sandboxWorldGrid', 'sandboxTickPet', 'sandboxFilterItemsByType', 'sandboxNearestItemByType', 'sandboxClosestItem', 'sandboxDecisionIntent', 'sandboxDecisionMoveTo', 'sandboxStarterDecision', 'sandboxPetHunger', 'sandboxPetEnergy', 'sandboxPetCell', 'sandboxIsNearby8', 'sandboxFirstNearbyFood', 'sandboxFirstFoodWorldOrder', 'workflowRef'];
+    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'googleDocsGetDocument', 'googleDocsParseDocument', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'googleDocsParseDocument', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'decisionActionPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxBehaviorPrimitive', 'sandboxTickItems', 'sandboxAvailableCells', 'sandboxWorldGrid', 'sandboxTickPet', 'sandboxFilterItemsByType', 'sandboxNearestItemByType', 'sandboxClosestItem', 'sandboxDecisionIntent', 'sandboxDecisionMoveTo', 'sandboxStarterDecision', 'sandboxPetHunger', 'sandboxPetEnergy', 'sandboxPetCell', 'sandboxIsNearby8', 'sandboxFirstNearbyFood', 'sandboxFirstFoodWorldOrder', 'workflowRef'];
     if (sourceNode && targetNode && nodesWithTrigger.includes(targetNode.type ?? '') && (targetHandle == null || targetHandle === '') &&
         ((['basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl'].includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) ||
             (sourceNode.type === 'tryCatchControl' && (sourceHandle === 'try' || sourceHandle === 'catch')))) {
@@ -3024,6 +3071,53 @@ export function flowNodeToApp(n: Node): AppGraphNode {
                 required_inputs: requiredInputs,
                 google_connection_id: d?.google_connection_id ?? null,
                 calendar_id: d?.calendar_id ?? 'primary',
+            },
+            position: pos,
+        };
+    }
+    if (n.type === 'googleDocsGetDocument') {
+        const d = n.data as any;
+        let requiredInputs = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
+        requiredInputs = requiredInputs.filter((r: { key?: string }) => r?.key === 'document_url_or_id');
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'document_url_or_id')) {
+            requiredInputs.push({ key: 'document_url_or_id', type: 'string' as const, value: null });
+        }
+        return {
+            id: n.id,
+            kind: 'skill',
+            skill_type: 'google_docs_get_document',
+            label: d?.label ?? 'Google Docs Get Document',
+            data: {
+                required_inputs: requiredInputs,
+                google_connection_id: d?.google_connection_id ?? null,
+                document_url_or_id:
+                    (requiredInputs.find((r: { key?: string }) => r?.key === 'document_url_or_id')?.value as
+                        | string
+                        | null
+                        | undefined) ??
+                    d?.document_url_or_id ??
+                    null,
+                include_tabs_content: d?.include_tabs_content !== false,
+            },
+            position: pos,
+        };
+    }
+    if (n.type === 'googleDocsParseDocument') {
+        const d = n.data as any;
+        let requiredInputs = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
+        requiredInputs = requiredInputs.filter((r: { key?: string }) => r?.key === 'document');
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'document')) {
+            requiredInputs.push({ key: 'document', type: 'dictionary' as const, value: null });
+        }
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'google_docs_parse_document',
+            label: d?.label ?? 'Google Docs Parse Document',
+            data: {
+                required_inputs: requiredInputs,
+                chunk_strategy: d?.chunk_strategy ?? 'structure',
+                max_chunk_text_chars: d?.max_chunk_text_chars ?? null,
             },
             position: pos,
         };

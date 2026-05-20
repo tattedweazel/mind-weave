@@ -132,6 +132,7 @@ Palette entries are flat string keys → hex colors in `Palette.colors`. They co
 | `fetch_url`          | Fetch URL skill                              |
 | `capture_url_snapshot` | URL snapshot (Playwright) skill              |
 | `html_parse_basic`   | HTML Parse (basic) utility                   |
+| `google_docs_parse_document` | Google Docs Parse utility            |
 | `list_to_string`     | List to String utility                       |
 | `string_to_list`     | String to List utility                       |
 | `prepend_text`       | Prepend Text utility                         |

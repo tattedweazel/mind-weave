@@ -246,7 +246,97 @@ def try_builtin_dictionary_explorer(data: dict[str, Any]) -> dict[str, Any] | No
         return build_gmail_list_explorer(data)
     if _looks_like_google_calendar_list_events_blob(data):
         return build_calendar_list_explorer(data)
+    if _looks_like_google_docs_get_document_blob(data):
+        return build_google_docs_get_document_explorer(data)
     return None
+
+
+def _looks_like_google_docs_get_document_blob(data: dict[str, Any]) -> bool:
+    payload = data.get("document_payload")
+    if isinstance(payload, dict) and isinstance(payload.get("tabs"), list):
+        return True
+    return isinstance(data.get("tabs"), list) and "document_id" in data
+
+
+def build_google_docs_get_document_explorer(data: dict[str, Any]) -> dict[str, Any]:
+    payload = data.get("document_payload")
+    if not isinstance(payload, dict):
+        payload = data
+    title = _str(payload.get("title")) or "(Untitled document)"
+    tab_count = payload.get("tab_count")
+    image_count = payload.get("image_count")
+    detail_lines: list[str] = []
+    if tab_count is not None:
+        detail_lines.append(f"Tabs: {tab_count}")
+    if image_count is not None:
+        detail_lines.append(f"Images fetched: {image_count}")
+    err_n = len(payload.get("fetch_errors") or []) if isinstance(payload.get("fetch_errors"), list) else 0
+    if err_n:
+        detail_lines.append(f"Image fetch errors: {err_n}")
+    return {
+        "version": OUTPUT_EXPLORER_VERSION,
+        "kind": "google_docs_get_document",
+        "summary": {"line": title, "detail_lines": detail_lines},
+        "items": [],
+    }
+
+
+def _looks_like_google_docs_chunk_list(arr: list[Any]) -> bool:
+    if not arr or not all(isinstance(x, dict) for x in arr):
+        return False
+    for row in arr[:5]:
+        if row.get("chunk_id") and row.get("kind") in ("text", "table", "image"):
+            return True
+    return False
+
+
+def build_google_docs_parse_document_explorer(chunks: list[Any]) -> dict[str, Any]:
+    if not isinstance(chunks, list):
+        chunks = []
+    by_kind: dict[str, int] = {}
+    for c in chunks:
+        if isinstance(c, dict):
+            k = _str(c.get("kind"))
+            if k:
+                by_kind[k] = by_kind.get(k, 0) + 1
+    detail = ", ".join(f"{k}: {v}" for k, v in sorted(by_kind.items())) if by_kind else ""
+    items: list[dict[str, Any]] = []
+    overflow = max(0, len(chunks) - OUTPUT_EXPLORER_MAX_ITEMS)
+    for idx, c in enumerate(chunks[:OUTPUT_EXPLORER_MAX_ITEMS]):
+        if not isinstance(c, dict):
+            continue
+        kind = _str(c.get("kind")) or "chunk"
+        path = c.get("tab_path")
+        path_s = " / ".join(str(p) for p in path) if isinstance(path, list) else ""
+        primary = f"{kind}" + (f" · {path_s}" if path_s else "")
+        teaser = ""
+        if kind == "text":
+            teaser = _truncate_teaser(_str(c.get("text")))
+        elif kind == "table":
+            rows = c.get("table", {}).get("rows") if isinstance(c.get("table"), dict) else []
+            teaser = f"{len(rows)} row(s)" if isinstance(rows, list) else ""
+        items.append(
+            {
+                "index": idx,
+                "row_state": "ok",
+                "primary_line": primary,
+                "secondary_line": _str(c.get("chunk_id")),
+                "teaser": teaser,
+                "badges": [kind] if kind else [],
+            }
+        )
+    out: dict[str, Any] = {
+        "version": OUTPUT_EXPLORER_VERSION,
+        "kind": "google_docs_parse_document",
+        "summary": {
+            "line": f"{len(chunks)} chunk(s)",
+            "detail_lines": [detail] if detail else [],
+        },
+        "items": items,
+    }
+    if overflow > 0:
+        out["overflow_count"] = overflow
+    return out
 
 
 def _looks_like_gmail_curated_message_list(arr: list[Any]) -> bool:
@@ -656,6 +746,8 @@ def try_build_output_explorer(raw_output_dump: dict[str, Any] | None) -> dict[st
             return None
         if _looks_like_gmail_curated_message_list(data):
             return build_gmail_list_explorer_from_messages(data, None)
+        if _looks_like_google_docs_chunk_list(data):
+            return build_google_docs_parse_document_explorer(data)
         return build_list_primitive_explorer(data)
 
     if kind == "string":

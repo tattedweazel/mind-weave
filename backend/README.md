@@ -393,7 +393,7 @@ cd backend && uv run python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | `GOOGLE_CLIENT_ID` | *(empty)* | Google OAuth 2.0 client ID. Required for Google account association. |
 | `GOOGLE_CLIENT_SECRET` | *(empty)* | Google OAuth 2.0 client secret. Required for Google account association. |
 | `GOOGLE_REDIRECT_URI` | `http://localhost:8000/api/v1/auth/google/callback` | OAuth redirect URI for **sign-in / account linking**. Must match Google Cloud Console. |
-| `GOOGLE_WORKFLOW_REDIRECT_URI` | `http://localhost:8000/api/v1/google-workflow/oauth/callback` | OAuth redirect for **workflow Gmail/Calendar** (readonly scopes). Add as a second authorized redirect URI in the same OAuth client. |
+| `GOOGLE_WORKFLOW_REDIRECT_URI` | `http://localhost:8000/api/v1/google-workflow/oauth/callback` | OAuth redirect for **workflow Gmail/Calendar/Google Docs** (readonly scopes). Add as a second authorized redirect URI in the same OAuth client. |
 | `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for post-OAuth redirects. |
 
 ### LM Studio `401 Unauthorized`
@@ -417,11 +417,12 @@ To enable Google account association (linking a Google account to an existing us
    ```
 7. Restart the backend. Users can then associate their Google account from My Settings (top-right avatar) in the frontend.
 
-**Workflow skills (Gmail / Calendar readonly)** use a **separate** consent and callback:
+**Workflow skills (Gmail / Calendar / Google Docs readonly)** use a **separate** consent and callback:
 
 - Add **Authorized redirect URI**: your `GOOGLE_WORKFLOW_REDIRECT_URI` (default above).
-- Ensure the OAuth client allows scopes: `openid`, `email`, `profile`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/calendar.readonly` (see `app/core/google_workflow_oauth.py`).
-- Users connect from **My Settings → Google Account → Google for workflows**. Tokens are stored per Google account in `google_workflow_connections` (encrypted refresh token).
+- Enable **Google Docs API** and **Google Drive API** on the same Google Cloud project.
+- Ensure the OAuth client allows scopes: `openid`, `email`, `profile`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/calendar.readonly`, `https://www.googleapis.com/auth/documents.readonly`, `https://www.googleapis.com/auth/drive.readonly` (see `app/core/google_workflow_oauth.py`).
+- Users connect from **My Settings → Google Account → Google for workflows**. Tokens are stored per Google account in `google_workflow_connections` (encrypted refresh token). Re-connect after scope updates.
 
 ## Database Migrations
 

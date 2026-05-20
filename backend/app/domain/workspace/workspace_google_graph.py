@@ -10,7 +10,9 @@ from sqlmodel import Session
 
 from app.persistence.tables import GoogleWorkflowConnection
 
-_GOOGLE_SKILL_TYPES = frozenset({"gmail_list_messages", "calendar_list_events"})
+_GOOGLE_SKILL_TYPES = frozenset(
+    {"gmail_list_messages", "calendar_list_events", "google_docs_get_document"}
+)
 
 
 def skill_node_skill_type(raw_node: Dict[str, Any]) -> Optional[str]:

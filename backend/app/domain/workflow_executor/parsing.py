@@ -12,6 +12,8 @@ from app.domain.schemas import (
     BetweenControlNode,
     BooleanPrimitiveNode,
     CalendarListEventsSkillNode,
+    GoogleDocsGetDocumentSkillNode,
+    GoogleDocsParseDocumentUtilityNode,
     CaptureUrlSnapshotSkillNode,
     DateTimePrimitiveNode,
     DecisionActionPrimitiveNode,
@@ -171,6 +173,12 @@ def _parse_node(raw: Dict[str, Any]):
         normalized["skill_type"] = "simple_llm_call"
         normalized.pop("utility_type", None)
         return SimpleLLMCallSkillNode(**normalized)
+    if kind == "skill" and raw.get("skill_type") == "google_docs_parse_document":
+        normalized = dict(raw)
+        normalized["kind"] = "utility"
+        normalized["utility_type"] = "google_docs_parse_document"
+        normalized.pop("skill_type", None)
+        return GoogleDocsParseDocumentUtilityNode(**normalized)
     if kind == "skill":
         stype = raw.get("skill_type")
         if stype == "simple_llm_call":
@@ -189,6 +197,8 @@ def _parse_node(raw: Dict[str, Any]):
             return GmailListMessagesSkillNode(**raw)
         if stype == "calendar_list_events":
             return CalendarListEventsSkillNode(**raw)
+        if stype == "google_docs_get_document":
+            return GoogleDocsGetDocumentSkillNode(**raw)
         if stype == "fetch_url":
             return FetchUrlSkillNode(**raw)
         if stype == "capture_url_snapshot":
@@ -259,6 +269,8 @@ def _parse_node(raw: Dict[str, Any]):
             return ParseDocumentBodyUtilityNode(**raw)
         if utype == "html_parse_basic":
             return HtmlParseBasicUtilityNode(**raw)
+        if utype == "google_docs_parse_document":
+            return GoogleDocsParseDocumentUtilityNode(**raw)
         if utype == "write_object_to_document_body":
             return WriteObjectToDocumentBodyUtilityNode(**raw)
         if utype == "append_value_to_document":
