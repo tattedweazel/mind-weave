@@ -96,6 +96,7 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | Baseline CSP meta (tune `connect-src` for prod API) | `frontend/index.html` |
 | Workflow editor **step kind manifest** vs `nodeTypes` + `appNodeToFlow` / `flowNodeToApp` | `frontend/src/components/workflow-editor/workflowGraphStepKindsManifest.test.ts` |
 | **Manifest-aligned** `getSourceOutputType` default behavior (explicit `any` allowlist incl. Stop / For-loop item) | `workflowGraphStepKindsManifest.test.ts` (`getSourceOutputType vs manifest`) |
+| **Workflow bundle export/import** (closure BFS, resource refs, remap, parse/plan, import execute) | `frontend/src/domain/workflowBundleImportExport.test.ts` |
 | **Workflow editor (ReactFlow) end-to-end** | Not automated — manual QA or future Playwright/Cypress. |
 | **Sandbox Phaser adapter** | `frontend/src/sandbox/runtime/phaserSandboxAdapter.test.ts` (resize only on grid dimension change; Phaser mocked) |
 | **Sandbox `last_error` hint matching** | `frontend/src/sandbox/sandboxLastErrorHint.test.ts` |

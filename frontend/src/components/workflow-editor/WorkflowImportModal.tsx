@@ -6,15 +6,34 @@ import {
     readWorkflowImportFile,
     WorkflowImportError,
 } from '../../domain/workflowImportExport';
+import {
+    isWorkflowBundleExport,
+    parseWorkflowBundleImport,
+    type WorkflowBundleExportDocument,
+} from '../../domain/workflowBundleImportExport';
 
 export interface WorkflowImportModalProps {
     isOpen: boolean;
     onClose: () => void;
-    /** Called with create payload; parent applies palette validation and API create. */
+    /** Single-workflow import (v1 export or legacy JSON). */
     onImport: (payload: WorkflowDefinitionCreate) => Promise<void>;
+    /** Bundle import (nested workflows + referenced resources). */
+    onImportBundle: (bundle: WorkflowBundleExportDocument) => Promise<void>;
 }
 
-export function WorkflowImportModal({ isOpen, onClose, onImport }: WorkflowImportModalProps) {
+function parseImportText(text: string): unknown {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+        throw new WorkflowImportError('Paste or upload workflow JSON to import.');
+    }
+    try {
+        return JSON.parse(trimmed) as unknown;
+    } catch {
+        throw new WorkflowImportError('Invalid JSON: could not parse.');
+    }
+}
+
+export function WorkflowImportModal({ isOpen, onClose, onImport, onImportBundle }: WorkflowImportModalProps) {
     const [text, setText] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -48,8 +67,14 @@ export function WorkflowImportModal({ isOpen, onClose, onImport }: WorkflowImpor
         setError(null);
         setBusy(true);
         try {
-            const payload = parseWorkflowImport(text.trim() === '' ? '{}' : text);
-            await onImport(payload);
+            const parsed = parseImportText(text);
+            if (isWorkflowBundleExport(parsed)) {
+                const bundle = parseWorkflowBundleImport(parsed);
+                await onImportBundle(bundle);
+            } else {
+                const payload = parseWorkflowImport(parsed);
+                await onImport(payload);
+            }
             reset();
             onClose();
         } catch (e) {
@@ -61,7 +86,7 @@ export function WorkflowImportModal({ isOpen, onClose, onImport }: WorkflowImpor
         } finally {
             setBusy(false);
         }
-    }, [text, onImport, onClose, reset]);
+    }, [text, onImport, onImportBundle, onClose, reset]);
 
     if (!isOpen) return null;
 
@@ -88,9 +113,11 @@ export function WorkflowImportModal({ isOpen, onClose, onImport }: WorkflowImpor
                 </div>
                 <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
                     <p className="text-xs text-mw-text-secondary leading-relaxed">
-                        Paste a workflow export JSON or choose a <code className="text-[11px]">.json</code> file. A{' '}
-                        <strong>new</strong> workflow is created; nested <strong>Workflow</strong> node references may need
-                        to be re-linked if IDs do not exist in this environment.
+                        Paste a workflow <strong>bundle</strong> (<code className="text-[11px]">mind_weave_workflow_bundle_export</code>
+                        ) or a single-workflow export. A bundle creates the root workflow, nested workflows, and referenced
+                        personas, structures, and documents. Image, voice, and audio file references are not embedded—re-attach
+                        those after import. Google workflow skills require connecting Google for workflows in My Settings before
+                        running.
                     </p>
                     <div className="flex flex-wrap gap-2">
                         <label
@@ -104,7 +131,7 @@ export function WorkflowImportModal({ isOpen, onClose, onImport }: WorkflowImpor
                     <textarea
                         value={text}
                         onChange={e => setText(e.target.value)}
-                        placeholder='{"kind":"mind_weave_workflow_export",...}'
+                        placeholder='{"kind":"mind_weave_workflow_bundle_export",...}'
                         rows={14}
                         className="w-full font-mono text-[11px] px-3 py-2 border border-mw-border bg-mw-page rounded-lg text-mw-text-primary resize-y min-h-[12rem]"
                         spellCheck={false}

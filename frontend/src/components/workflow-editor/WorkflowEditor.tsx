@@ -109,9 +109,19 @@ import { isWorkflowInspectorOpen } from './workflowInspectorVisibility';
 import { WorkflowImportModal } from './WorkflowImportModal';
 import { OutputOverrideModal } from './OutputOverrideModal';
 import {
+    bundleImportExistingNames,
+    executeWorkflowBundleImport,
+} from '../../domain/executeWorkflowBundleImport';
+import {
+    assembleWorkflowBundleExport,
+    planBundleImport,
+    serializeWorkflowBundleExport,
+    slugifyWorkflowBundleExportBasename,
+    WorkflowBundleExportError,
+    type WorkflowBundleExportDocument,
+} from '../../domain/workflowBundleImportExport';
+import {
     collectWorkflowRefIds,
-    serializeWorkflowExport,
-    slugifyWorkflowExportBasename,
     WorkflowImportError,
 } from '../../domain/workflowImportExport';
 import { isDeletableProject, workflowsInProject } from '../../domain/workflowProjectMembership';
@@ -407,6 +417,7 @@ export const WorkflowEditor: React.FC<Props> = ({
 
     const [workflowImportModalOpen, setWorkflowImportModalOpen] = useState(false);
     const [workflowImportNotice, setWorkflowImportNotice] = useState<string | null>(null);
+    const [bundleExportBusy, setBundleExportBusy] = useState(false);
     const copyWithFeedback = useCopyWithFeedback();
     const showStatusToast = useStatusToast();
 
@@ -1089,12 +1100,16 @@ export const WorkflowEditor: React.FC<Props> = ({
         onSyncWorkflowPath,
     ]);
 
-    const handleImportWorkflow = async (payload: WorkflowDefinitionCreate) => {
+    const confirmDiscardAndImport = (): void => {
         if (isDirty && activeWf) {
             if (!window.confirm('You have unsaved changes. Discard them and import a new workflow?')) {
                 throw new WorkflowImportError('Import cancelled.');
             }
         }
+    };
+
+    const handleImportWorkflow = async (payload: WorkflowDefinitionCreate) => {
+        confirmDiscardAndImport();
         const paletteOk = payload.palette_id && palettes.some(p => p.id === payload.palette_id);
         const baseName = payload.name.trim();
         const name = baseName.toLowerCase().endsWith(' (imported)') ? baseName : `${baseName} (imported)`;
@@ -1123,6 +1138,109 @@ export const WorkflowEditor: React.FC<Props> = ({
                 : null,
         );
         await openWorkflow(created);
+    };
+
+    const handleImportWorkflowBundle = async (bundle: WorkflowBundleExportDocument) => {
+        confirmDiscardAndImport();
+        if (!selectedProjectId) {
+            throw new WorkflowImportError('Select a project folder first.');
+        }
+        const plan = planBundleImport(
+            bundle,
+            bundleImportExistingNames({
+                workflows,
+                personas,
+                structures,
+                documents,
+                palettes,
+            }),
+        );
+        const { root, importWarnings } = await executeWorkflowBundleImport({
+            bundle,
+            plan,
+            projectId: selectedProjectId,
+            api: {
+                createPalette: data => ApiClient.createPalette(data),
+                getPaletteBySlug: slug => ApiClient.getPaletteBySlug(slug),
+                createPersona: data => ApiClient.createPersona(data),
+                createStructure: data => ApiClient.createStructure(data),
+                createDocument: data => ApiClient.createDocument(data),
+                createWorkflow: data => ApiClient.createWorkflow(data),
+                updateWorkflow: (id, data) => ApiClient.updateWorkflow(id, data),
+            },
+        });
+        await loadAll();
+        const nestedCount = bundle.included_workflows.length;
+        const parts = [
+            `Imported bundle: ${root.name}` +
+                (nestedCount > 0 ? ` (+${nestedCount} nested workflow${nestedCount === 1 ? '' : 's'})` : ''),
+        ];
+        if (importWarnings.length > 0) {
+            parts.push(importWarnings.join(' '));
+        }
+        setWorkflowImportNotice(parts.join(' '));
+        await openWorkflow(root);
+    };
+
+    const exportActiveWorkflowBundleJson = async (): Promise<string> => {
+        if (!activeWf) {
+            throw new WorkflowBundleExportError('No workflow open to export.');
+        }
+        const doc = await assembleWorkflowBundleExport(activeWf, {
+            fetchWorkflow: id => ApiClient.getWorkflow(id),
+            fetchPersona: id => ApiClient.getPersona(id),
+            fetchStructure: id => ApiClient.getStructure(id),
+            fetchDocument: id => ApiClient.getDocument(id),
+            fetchPalette: id => ApiClient.getPalette(id),
+        });
+        return serializeWorkflowBundleExport(doc);
+    };
+
+    const handleExportBundleDownload = async () => {
+        if (!activeWf || bundleExportBusy) return;
+        setBundleExportBusy(true);
+        try {
+            const json = await exportActiveWorkflowBundleJson();
+            const blob = new Blob([json], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${slugifyWorkflowBundleExportBasename(activeWf.name)}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        } catch (e) {
+            if (e instanceof WorkflowBundleExportError) {
+                const detail =
+                    e.missingWorkflowIds.length > 0
+                        ? `\n\nMissing nested workflow id(s): ${e.missingWorkflowIds.join(', ')}`
+                        : '';
+                window.alert(`${e.message}${detail}`);
+            } else {
+                window.alert(e instanceof Error ? e.message : 'Export failed.');
+            }
+        } finally {
+            setBundleExportBusy(false);
+        }
+    };
+
+    const handleExportBundleCopy = async () => {
+        if (!activeWf || bundleExportBusy) return;
+        setBundleExportBusy(true);
+        try {
+            const json = await exportActiveWorkflowBundleJson();
+            await copyWithFeedback(json);
+        } catch (e) {
+            if (e instanceof WorkflowBundleExportError) {
+                const detail =
+                    e.missingWorkflowIds.length > 0
+                        ? ` Missing nested workflow id(s): ${e.missingWorkflowIds.join(', ')}`
+                        : '';
+                showStatusToast(`${e.message}${detail}`, true);
+            } else {
+                showStatusToast(e instanceof Error ? e.message : 'Export failed.', true);
+            }
+        } finally {
+            setBundleExportBusy(false);
+        }
     };
 
     const createWorkflow = async () => {
@@ -3516,29 +3634,20 @@ export const WorkflowEditor: React.FC<Props> = ({
                             </button>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!activeWf) return;
-                                    const blob = new Blob([serializeWorkflowExport(activeWf)], { type: 'application/json' });
-                                    const a = document.createElement('a');
-                                    a.href = URL.createObjectURL(blob);
-                                    a.download = `${slugifyWorkflowExportBasename(activeWf.name)}.json`;
-                                    a.click();
-                                    URL.revokeObjectURL(a.href);
-                                }}
-                                className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-mw-text-primary border border-mw-border hover:bg-mw-card-alt rounded-lg transition-colors"
-                                title="Download workflow as JSON"
+                                onClick={() => void handleExportBundleDownload()}
+                                disabled={!activeWf || bundleExportBusy}
+                                className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-mw-text-primary border border-mw-border hover:bg-mw-card-alt rounded-lg transition-colors disabled:opacity-50"
+                                title="Download workflow bundle (nested workflows and referenced resources)"
                             >
                                 <Download size={13} />
-                                <span className="hidden sm:inline">Export</span>
+                                <span className="hidden sm:inline">{bundleExportBusy ? 'Exporting…' : 'Export'}</span>
                             </button>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!activeWf) return;
-                                    void copyWithFeedback(serializeWorkflowExport(activeWf));
-                                }}
-                                className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-mw-text-primary border border-mw-border hover:bg-mw-card-alt rounded-lg transition-colors"
-                                title="Copy workflow JSON"
+                                onClick={() => void handleExportBundleCopy()}
+                                disabled={!activeWf || bundleExportBusy}
+                                className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-mw-text-primary border border-mw-border hover:bg-mw-card-alt rounded-lg transition-colors disabled:opacity-50"
+                                title="Copy workflow bundle JSON"
                             >
                                 <Copy size={13} />
                             </button>
@@ -8570,6 +8679,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 isOpen={workflowImportModalOpen}
                 onClose={() => setWorkflowImportModalOpen(false)}
                 onImport={handleImportWorkflow}
+                onImportBundle={handleImportWorkflowBundle}
             />
         </div>
     );

@@ -212,7 +212,7 @@ Skills need **live configuration** (accounts, models, time zones). For hand-auth
 | `data.workflow_id` | UUID string of another saved workflow definition. |
 | `expose_as_custom_skill` (on **WorkflowDefinition**, not on the node) | When `true`, the workflow appears in the editor **Custom Skills** palette (same `workflow` node shape). |
 
-**Suggested usage:** Only when a real id is known; after import, references may need re-linking in the target environment. **Custom Skills** entries are normal **Workflow** nodes; they differ only in how the palette is populated.
+**Suggested usage:** Only when a real id is known. **Bundle export/import** (Workflow Editor **Export** / **Import**) transitively includes nested definitions and remaps **`workflow_id`** on import; legacy single-file `mind_weave_workflow_export` imports still require manual re-linking. **Custom Skills** entries are normal **Workflow** nodes; they differ only in how the palette is populated (`expose_as_custom_skill` on the child definition is preserved in bundles).
 
 ---
 

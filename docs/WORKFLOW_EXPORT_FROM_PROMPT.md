@@ -2,6 +2,8 @@
 
 This document is written for a language model that has **no prior knowledge of Mind Weave** and **no access to any source repository**. Follow it **literally**. When your job is to turn a user’s natural-language request into a workflow, your **only** required deliverable is **one JSON document** in the format below (unless the user explicitly asks for explanation text in addition).
 
+**Editor bundle exports are out of scope here:** The Workflow Editor’s **Export** button produces **`mind_weave_workflow_bundle_export`** (nested workflows plus referenced resources). LLM hosts should continue to emit **single-workflow** **`mind_weave_workflow_export`** only, as specified below—not the bundle envelope.
+
 ### Required root JSON shape (read second)
 
 **Persona / host one-liner:** The model’s entire JSON reply must be **one object** whose **top-level** keys are **`kind`**, **`schema_version`**, **`exported_at`**, and **`definition`** only. Do **not** put **`name`**, **`description`**, or **`graph`** at the root (those live **inside** `definition`).
