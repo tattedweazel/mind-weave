@@ -158,20 +158,25 @@ class WorkflowProjectService:
         self.session.refresh(row)
         return row
 
-    def delete_project(self, project_id: uuid.UUID) -> bool:
+    def delete_project(self, project_id: uuid.UUID, *, delete_workflows: bool = False) -> bool:
         row = self.get_project(project_id)
         if not row:
             return False
         if row.name_lower == SHARED_NAME_LOWER:
             raise ValueError("Cannot delete Shared folder")
-        shared = self.ensure_shared_project()
-        wfs = self.session.exec(select(WorkflowDefinition).where(WorkflowDefinition.project_id == project_id)).all()
-        for wf in wfs:
-            wf.project_id = shared.id
-            wf.updated_at = datetime.now(timezone.utc)
-            self.session.add(wf)
+        wfs = list(
+            self.session.exec(select(WorkflowDefinition).where(WorkflowDefinition.project_id == project_id)).all()
+        )
+        if wfs and not delete_workflows:
+            raise ValueError(
+                "Project is not empty; pass delete_workflows=true to delete all workflows in this project."
+            )
+        if delete_workflows:
+            from app.domain.services.workflow_definition_service import WorkflowDefinitionService
+
+            wf_svc = WorkflowDefinitionService(self.session, self.user_id)
+            for wf in wfs:
+                wf_svc.delete_workflow(wf.id)
         self.session.delete(row)
-        shared.updated_at = datetime.now(timezone.utc)
-        self.session.add(shared)
         self.session.commit()
         return True

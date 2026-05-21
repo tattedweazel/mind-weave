@@ -7,7 +7,7 @@ and created automatically.
   GET    /api/v1/workflow-projects/        — list folders + workflow counts
   POST   /api/v1/workflow-projects/        — create
   PATCH  /api/v1/workflow-projects/{id}     — rename / reorder
-  DELETE /api/v1/workflow-projects/{id}     — delete (workflows move to Shared)
+  DELETE /api/v1/workflow-projects/{id}     — delete folder (non-empty requires delete_workflows=true)
 """
 
 import uuid
@@ -84,15 +84,19 @@ def update_workflow_project(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_workflow_project(
     id: uuid.UUID,
+    delete_workflows: bool = False,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a folder; workflows inside are moved to Shared."""
+    """Delete a folder. Non-empty folders require ``delete_workflows=true`` to cascade-delete workflows."""
     svc = WorkflowProjectService(session, current_user.id)
     try:
-        ok = svc.delete_project(id)
+        ok = svc.delete_project(id, delete_workflows=delete_workflows)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        msg = str(e)
+        if msg.startswith("Project is not empty"):
+            raise HTTPException(status_code=409, detail=msg) from e
+        raise HTTPException(status_code=400, detail=msg) from e
     if not ok:
         raise HTTPException(status_code=404, detail="Project not found")
     return None

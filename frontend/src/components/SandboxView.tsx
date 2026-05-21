@@ -23,6 +23,8 @@ import type { SandboxEnvelopeJson } from '../domain/sandbox/types';
 import { getHandleColor } from './workflow-editor/constants';
 import { filterNamesByPrefix } from './workflow-editor/workflowListFilter';
 import { WorkflowPaletteWorkflowRow } from './workflow-editor/WorkflowPaletteWorkflowRow';
+import { WorkflowProjectDeleteControl } from './workflow-editor/WorkflowProjectDeleteControl';
+import { isDeletableProject, workflowsInProject } from '../domain/workflowProjectMembership';
 import { DEFAULT_PALETTE_COLORS } from '../domain/paletteDefaults';
 import {
     DEFAULT_TICK_RATE_MS,
@@ -505,6 +507,35 @@ export const SandboxView: React.FC = () => {
         }
     };
 
+    const handleDeleteProject = async () => {
+        if (!selectedProjectId || !selectedProject) return;
+        const inProject = workflowsInProject(selectedProjectId, sharedProjectId, workflows);
+        const workflowCount = inProject.length;
+        try {
+            await ApiClient.deleteWorkflowProject(selectedProjectId, {
+                deleteWorkflows: workflowCount > 0,
+            });
+            if (selectedWorkflow && inProject.some(w => w.id === selectedWorkflow.id)) {
+                setSelectedWorkflow(null);
+            }
+            setSelectedProjectId(null);
+            setWorkflowNameFilter('');
+            const [wfs, projs] = await Promise.all([
+                ApiClient.getWorkflows(),
+                ApiClient.getWorkflowProjects().catch(() => [] as WorkflowProject[]),
+            ]);
+            setWorkflows(wfs);
+            setWorkflowProjects(projs);
+        } catch (err) {
+            console.error('Failed to delete project:', err);
+        }
+    };
+
+    const selectedProjectDeleteWorkflowCount = React.useMemo(() => {
+        if (!selectedProjectId) return 0;
+        return workflowsInProject(selectedProjectId, sharedProjectId, workflows).length;
+    }, [selectedProjectId, sharedProjectId, workflows]);
+
     const moveWorkflowToProject = async (wfId: string, projectId: string): Promise<boolean> => {
         try {
             await ApiClient.updateWorkflow(wfId, { project_id: projectId });
@@ -668,6 +699,14 @@ export const SandboxView: React.FC = () => {
                                             >
                                                 {selectedProject?.name ?? 'Project'}
                                             </span>
+                                            {selectedProject && (
+                                                <WorkflowProjectDeleteControl
+                                                    projectName={selectedProject.name}
+                                                    workflowCount={selectedProjectDeleteWorkflowCount}
+                                                    disabled={!isDeletableProject(selectedProject)}
+                                                    onConfirmDelete={handleDeleteProject}
+                                                />
+                                            )}
                                         </div>
                                         <div
                                             role="group"

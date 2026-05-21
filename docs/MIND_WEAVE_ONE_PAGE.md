@@ -91,7 +91,7 @@ flowchart LR
 
 ### Left column: Workflows
 
-Opening **Workflows** shows **projects** first (including **Shared** and **New project**). Selecting a project drills into that folder: **Back**, **Import**, **New workflow**, a sort control (**Last updated** vs **Name**), a **Filter** on workflow names, **Move** per row, and the list of workflows in that project (definitions that are **not** exposed as custom skills; exposed ones are listed only under **Custom Skills**).
+Opening **Workflows** shows **projects** first (including **Shared** and **New project**). Selecting a project drills into that folder: **Back**, **Import**, **New workflow**, **Delete project** (non-empty folders prompt before deleting all workflows in the folder), a sort control (**Last updated** vs **Name**), a **Filter** on workflow names, **Move** per row, and the list of workflows in that project (definitions that are **not** exposed as custom skills; exposed ones are listed only under **Custom Skills**).
 
 Dragging a workflow from the list or from **Custom Skills** onto the canvas adds a nested **workflow** step (`kind: workflow`) that references that definition. The canvas type badge reads **Workflow** for normal project-list drops and **Custom Skill** when the referenced definition has **Expose as Custom Skill** set. New nodes appear under the pointer at the current pan and zoom. Use **Explorer** (with no node or edge selected) and the caution **Expose as Custom Skill** button at the bottom of the panel to publish the current definition under **Custom Skills** (same graph shape as dragging from the project list). The workflow you are editing still appears there for confirmation, with **drag** disabled so you cannot nest it into itself.
 

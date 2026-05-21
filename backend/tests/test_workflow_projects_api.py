@@ -42,7 +42,7 @@ def test_workflow_projects_create_rejects_shared_name(client: TestClient):
     assert r.status_code == 400
 
 
-def test_workflow_projects_crud_and_delete_moves_workflows(client: TestClient):
+def test_workflow_projects_crud_and_delete_empty(client: TestClient):
     create = client.post(
         "/api/v1/workflow-projects/",
         json={"name": "Alpha Project"},
@@ -53,25 +53,72 @@ def test_workflow_projects_crud_and_delete_moves_workflows(client: TestClient):
     dup = client.post("/api/v1/workflow-projects/", json={"name": "Alpha Project"})
     assert dup.status_code == 400
 
-    wf = client.post(
-        "/api/v1/workflow-definitions/",
-        json={"name": "In Alpha", "graph": _MINIMAL_GRAPH, "project_id": pid},
-    )
-    assert wf.status_code == 201
-    assert wf.json()["project_id"] == pid
+    deleted = client.delete(f"/api/v1/workflow-projects/{pid}")
+    assert deleted.status_code == 204
 
     listed = client.get("/api/v1/workflow-projects/")
-    alpha = next(p for p in listed.json() if p["id"] == pid)
-    assert alpha["workflow_count"] >= 1
+    assert listed.status_code == 200
+    assert not any(p["id"] == pid for p in listed.json())
 
-    deleted = client.delete(f"/api/v1/workflow-projects/{pid}")
+
+def test_workflow_projects_delete_nonempty_requires_cascade(client: TestClient):
+    create = client.post(
+        "/api/v1/workflow-projects/",
+        json={"name": "Beta Project"},
+    )
+    assert create.status_code == 201
+    pid = create.json()["id"]
+
+    wf = client.post(
+        "/api/v1/workflow-definitions/",
+        json={"name": "In Beta", "graph": _MINIMAL_GRAPH, "project_id": pid},
+    )
+    assert wf.status_code == 201
+    wf_id = wf.json()["id"]
+
+    blocked = client.delete(f"/api/v1/workflow-projects/{pid}")
+    assert blocked.status_code == 409
+
+    still_there = client.get("/api/v1/workflow-definitions/")
+    assert still_there.status_code == 200
+    assert any(w["id"] == wf_id for w in still_there.json())
+
+    deleted = client.delete(f"/api/v1/workflow-projects/{pid}?delete_workflows=true")
     assert deleted.status_code == 204
 
     wfs = client.get("/api/v1/workflow-definitions/")
     assert wfs.status_code == 200
-    row = next(w for w in wfs.json() if w["name"] == "In Alpha")
-    shared = next(p for p in client.get("/api/v1/workflow-projects/").json() if p["name"] == "Shared")
-    assert row["project_id"] == shared["id"]
+    assert not any(w["id"] == wf_id for w in wfs.json())
+
+    projects = client.get("/api/v1/workflow-projects/")
+    assert not any(p["id"] == pid for p in projects.json())
+
+
+def test_workflow_projects_cascade_delete_includes_custom_skills(client: TestClient):
+    create = client.post(
+        "/api/v1/workflow-projects/",
+        json={"name": "Gamma Project"},
+    )
+    assert create.status_code == 201
+    pid = create.json()["id"]
+
+    wf = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "Custom In Gamma",
+            "graph": _MINIMAL_GRAPH,
+            "project_id": pid,
+            "expose_as_custom_skill": True,
+        },
+    )
+    assert wf.status_code == 201
+    wf_id = wf.json()["id"]
+
+    deleted = client.delete(f"/api/v1/workflow-projects/{pid}?delete_workflows=true")
+    assert deleted.status_code == 204
+
+    wfs = client.get("/api/v1/workflow-definitions/")
+    assert not any(w["id"] == wf_id for w in wfs.json())
 
 
 def test_workflow_definitions_list_ordered_by_updated_at_desc(client: TestClient):

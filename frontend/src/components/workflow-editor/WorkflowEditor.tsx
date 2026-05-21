@@ -114,6 +114,7 @@ import {
     slugifyWorkflowExportBasename,
     WorkflowImportError,
 } from '../../domain/workflowImportExport';
+import { isDeletableProject, workflowsInProject } from '../../domain/workflowProjectMembership';
 import { resolveTtsPlaybackWhen, type TtsPlaybackWhen } from '../../domain/resolveAutoPlayTtsOnNodeEnd';
 import { sortTtsQueuedClips, type TtsQueuedClip } from '../../domain/ttsPlaybackQueue';
 import { isPlayableTtsAudioOutput, mergeLastRunNodeResult } from '../../domain/ttsPlayableOutput';
@@ -196,6 +197,7 @@ import {
 } from './workflowGraphUndoContext';
 import { WorkflowPaletteStepSections } from './WorkflowPaletteStepSections';
 import { WorkflowPaletteWorkflowRow } from './WorkflowPaletteWorkflowRow';
+import { WorkflowProjectDeleteControl } from './WorkflowProjectDeleteControl';
 import { paletteDisplayNameForReactFlowType } from './workflowPaletteStepItems';
 import { useCompactViewport } from '../../hooks/useCompactViewport';
 
@@ -1185,6 +1187,31 @@ export const WorkflowEditor: React.FC<Props> = ({
             /* ignore */
         }
     };
+
+    const handleDeleteProject = async () => {
+        if (!selectedProjectId || !selectedProject) return;
+        const inProject = workflowsInProject(selectedProjectId, sharedProjectId, workflows);
+        const workflowCount = inProject.length;
+        try {
+            await ApiClient.deleteWorkflowProject(selectedProjectId, {
+                deleteWorkflows: workflowCount > 0,
+            });
+            if (activeWf && inProject.some(w => w.id === activeWf.id)) {
+                closeActiveWorkflowSession();
+                onSyncWorkflowPath?.(null);
+            }
+            setSelectedProjectId(null);
+            setWorkflowNameFilter('');
+            await refreshWorkflowLists();
+        } catch (err) {
+            console.error('Failed to delete project:', err);
+        }
+    };
+
+    const selectedProjectDeleteWorkflowCount = React.useMemo(() => {
+        if (!selectedProjectId) return 0;
+        return workflowsInProject(selectedProjectId, sharedProjectId, workflows).length;
+    }, [selectedProjectId, sharedProjectId, workflows]);
 
     const loopBodyNodeIds = useMemo(
         () =>
@@ -3247,6 +3274,14 @@ export const WorkflowEditor: React.FC<Props> = ({
                                         <Upload size={14} />
                                     </button>
                                     <button id="new-workflow-btn" onClick={createWorkflow} className="p-1 text-mw-primary hover:bg-mw-primary-muted rounded transition-colors" title="New Workflow"><Plus size={14} /></button>
+                                    {selectedProject && (
+                                        <WorkflowProjectDeleteControl
+                                            projectName={selectedProject.name}
+                                            workflowCount={selectedProjectDeleteWorkflowCount}
+                                            disabled={!isDeletableProject(selectedProject)}
+                                            onConfirmDelete={handleDeleteProject}
+                                        />
+                                    )}
                                 </div>
                             </div>
                             <div

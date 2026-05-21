@@ -371,8 +371,9 @@ export class ApiClient {
         return this.request<WorkflowProject>(`/workflow-projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
     }
 
-    static async deleteWorkflowProject(id: string): Promise<void> {
-        await this.request<void>(`/workflow-projects/${id}`, { method: 'DELETE' });
+    static async deleteWorkflowProject(id: string, options?: { deleteWorkflows?: boolean }): Promise<void> {
+        const qs = options?.deleteWorkflows ? '?delete_workflows=true' : '';
+        await this.request<void>(`/workflow-projects/${id}${qs}`, { method: 'DELETE' });
     }
 
     // -------------------------------------------------------------------------
