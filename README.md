@@ -6,6 +6,11 @@ Mind Weave is also **multimodal**: the same graph can combine text, structured d
 
 For a full tour of the product shell (Build, Workspace, Sandbox, Configure), see **[docs/MIND_WEAVE_ONE_PAGE.md](docs/MIND_WEAVE_ONE_PAGE.md)**.
 
+<p align="center">
+  <img src="docs/Workflow_Screenshot.png" alt="Mind Weave Workflow Editor — palette, canvas graph, and Explorer inspector with a loaded workflow" width="900" />
+</p>
+<p align="center"><em>Workflow Editor: build and run graph-based automations on the canvas.</em></p>
+
 ## What can I build?
 
 - **Multimodal analysis pipelines** — Combine text, images, and tool outputs in one graph; route them through a local model or structured extraction.
