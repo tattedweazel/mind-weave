@@ -8,7 +8,6 @@ import type {
     RequiredInput,
     WorkflowDefinitionListItemHydrated,
 } from '../../api/types';
-import { DEFAULT_SANDBOX_DECISION_ACTION, isSandboxDecisionAction } from '../../domain/sandbox/decisionActions';
 import { resolveWorkflowPaletteColor } from '../../domain/paletteDefaults';
 import { reactFlowTypeForAppNode } from './stepKindRegistry';
 import { normalizeAnnotationTextAlign } from './annotationTextAlign';
@@ -545,81 +544,27 @@ export function appNodeToFlow(n: AppGraphNode): Node {
     if (n.kind === 'utility' && n.utility_type === 'random_item_from_list') {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
     }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_tick_items') {
-        const d = n.data as { item_type?: string } | undefined;
-        const item_type = d?.item_type === 'food' ? 'food' : 'all';
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label, item_type } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_world_grid') {
+    if (
+        n.kind === 'utility' &&
+        (n.utility_type === 'sandbox_get_position' ||
+            n.utility_type === 'sandbox_get_facing' ||
+            n.utility_type === 'sandbox_get_nearby')
+    ) {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
     }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_available_cells') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_tick_pet') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_nearest_item_by_type') {
+    if (
+        n.kind === 'utility' &&
+        (n.utility_type === 'sandbox_move_forward' ||
+            n.utility_type === 'sandbox_turn_left' ||
+            n.utility_type === 'sandbox_turn_right' ||
+            n.utility_type === 'sandbox_idle')
+    ) {
         const d = n.data as any;
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'sandbox_tick' || r?.key === 'item_type')
-            : [
-                  { key: 'sandbox_tick', type: 'dictionary' as const, value: null },
-                  { key: 'item_type', type: 'string' as const, value: 'food' },
-              ];
-        const hasTick = requiredInputs.some((r: { key?: string }) => r?.key === 'sandbox_tick');
-        const hasType = requiredInputs.some((r: { key?: string }) => r?.key === 'item_type');
-        if (!hasTick) requiredInputs.push({ key: 'sandbox_tick', type: 'dictionary' as const, value: null });
-        if (!hasType) requiredInputs.push({ key: 'item_type', type: 'string' as const, value: 'food' });
-        return {
-            id: n.id,
-            type: reactFlowTypeForAppNode(n),
-            position: pos,
-            data: { label: n.label, required_inputs: requiredInputs },
-        };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_closest_item') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'sandbox_tick' || r?.key === 'item_type')
-            : [
-                  { key: 'sandbox_tick', type: 'dictionary' as const, value: null },
-                  { key: 'item_type', type: 'string' as const, value: 'food' },
-              ];
-        const hasTick = requiredInputs.some((r: { key?: string }) => r?.key === 'sandbox_tick');
-        const hasType = requiredInputs.some((r: { key?: string }) => r?.key === 'item_type');
-        if (!hasTick) requiredInputs.push({ key: 'sandbox_tick', type: 'dictionary' as const, value: null });
-        if (!hasType) requiredInputs.push({ key: 'item_type', type: 'string' as const, value: 'food' });
-        return {
-            id: n.id,
-            type: reactFlowTypeForAppNode(n),
-            position: pos,
-            data: { label: n.label, required_inputs: requiredInputs },
-        };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_decision_move_to') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter(
-                  (r: { key?: string }) =>
-                      r?.key === 'target_item_id' || r?.key === 'target_cell' || r?.key === 'reason',
-              )
-            : [
-                  { key: 'target_item_id', type: 'string' as const, value: null },
-                  { key: 'target_cell', type: 'dictionary' as const, value: null },
-                  { key: 'reason', type: 'string' as const, value: null },
-              ];
-        const keys = ['target_item_id', 'target_cell', 'reason'] as const;
-        for (const k of keys) {
-            if (!requiredInputs.some((r: { key?: string }) => r?.key === k)) {
-                if (k === 'target_item_id') {
-                    requiredInputs.push({ key: 'target_item_id', type: 'string' as const, value: null });
-                } else if (k === 'target_cell') {
-                    requiredInputs.push({ key: 'target_cell', type: 'dictionary' as const, value: null });
-                } else {
-                    requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
-                }
-            }
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'reason')
+            : [{ key: 'reason', type: 'string' as const, value: null }];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'reason')) {
+            requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
         }
         return {
             id: n.id,
@@ -627,98 +572,6 @@ export function appNodeToFlow(n: AppGraphNode): Node {
             position: pos,
             data: { label: n.label, required_inputs: requiredInputs },
         };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_starter_decision') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_filter_items_by_type') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'items' || r?.key === 'item_type')
-            : [
-                  { key: 'items', type: 'list' as const, value: null },
-                  { key: 'item_type', type: 'string' as const, value: 'food' },
-              ];
-        const hasItems = requiredInputs.some((r: { key?: string }) => r?.key === 'items');
-        const hasType = requiredInputs.some((r: { key?: string }) => r?.key === 'item_type');
-        if (!hasItems) requiredInputs.push({ key: 'items', type: 'list' as const, value: null });
-        if (!hasType) requiredInputs.push({ key: 'item_type', type: 'string' as const, value: 'food' });
-        return {
-            id: n.id,
-            type: reactFlowTypeForAppNode(n),
-            position: pos,
-            data: { label: n.label, required_inputs: requiredInputs },
-        };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_decision_intent') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter(
-                  (r: { key?: string }) =>
-                      r?.key === 'action' ||
-                      r?.key === 'target_item_id' ||
-                      r?.key === 'target_cell' ||
-                      r?.key === 'reason',
-              )
-            : [
-                  { key: 'action', type: 'string' as const, value: 'wander' },
-                  { key: 'target_item_id', type: 'string' as const, value: null },
-                  { key: 'target_cell', type: 'dictionary' as const, value: null },
-                  { key: 'reason', type: 'string' as const, value: null },
-              ];
-        const keys = ['action', 'target_item_id', 'target_cell', 'reason'] as const;
-        for (const k of keys) {
-            if (!requiredInputs.some((r: { key?: string }) => r?.key === k)) {
-                if (k === 'action') requiredInputs.push({ key: 'action', type: 'string' as const, value: 'wander' });
-                else if (k === 'target_item_id') {
-                    requiredInputs.push({ key: 'target_item_id', type: 'string' as const, value: null });
-                } else if (k === 'target_cell') {
-                    requiredInputs.push({ key: 'target_cell', type: 'dictionary' as const, value: null });
-                } else {
-                    requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
-                }
-            }
-        }
-        return {
-            id: n.id,
-            type: reactFlowTypeForAppNode(n),
-            position: pos,
-            data: { label: n.label, required_inputs: requiredInputs },
-        };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_pet_hunger') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_pet_energy') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_pet_cell') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_is_nearby8') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'cell_a' || r?.key === 'cell_b')
-            : [
-                  { key: 'cell_a', type: 'dictionary' as const, value: null },
-                  { key: 'cell_b', type: 'dictionary' as const, value: null },
-              ];
-        const hasA = requiredInputs.some((r: { key?: string }) => r?.key === 'cell_a');
-        const hasB = requiredInputs.some((r: { key?: string }) => r?.key === 'cell_b');
-        if (!hasA) requiredInputs.push({ key: 'cell_a', type: 'dictionary' as const, value: null });
-        if (!hasB) requiredInputs.push({ key: 'cell_b', type: 'dictionary' as const, value: null });
-        return {
-            id: n.id,
-            type: reactFlowTypeForAppNode(n),
-            position: pos,
-            data: { label: n.label, required_inputs: requiredInputs },
-        };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_first_nearby_food') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'utility' && n.utility_type === 'sandbox_first_food_world_order') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
     }
     if (n.kind === 'utility' && n.utility_type === 'int_to_string') {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
@@ -1279,16 +1132,6 @@ export function appNodeToFlow(n: AppGraphNode): Node {
             },
         };
     }
-    if (n.kind === 'primitive' && n.primitive_type === 'sandbox_behavior') {
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
-    }
-    if (n.kind === 'primitive' && n.primitive_type === 'decision_action') {
-        const d = n.data as { action?: string } | undefined;
-        const raw = d?.action;
-        const action =
-            typeof raw === 'string' && isSandboxDecisionAction(raw) ? raw : DEFAULT_SANDBOX_DECISION_ACTION;
-        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label, action } };
-    }
     if (n.kind === 'primitive' && n.primitive_type === 'sandbox_tick') {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
     }
@@ -1476,7 +1319,6 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (!src) return 'any';
     if (isAnnotationFlowNodeType(src.type)) return 'any';
     if (src.type === 'stringPrimitive') return 'string';
-    if (src.type === 'decisionActionPrimitive') return 'string';
     if (src.type === 'sandboxTickPrimitive') return 'dictionary';
     if (src.type === 'listPrimitive') return 'list';
     if (src.type === 'dictionaryPrimitive') return 'dictionary';
@@ -1487,28 +1329,17 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (src.type === 'documentPrimitive') return 'document';
     if (src.type === 'imagePrimitive') return 'dictionary';
     if (src.type === 'gmailPrimitive') return 'gmail';
-    if (src.type === 'sandboxBehaviorPrimitive') return 'dictionary';
+    if (src.type === 'sandboxGetPosition') return 'dictionary';
+    if (src.type === 'sandboxGetFacing') return 'string';
+    if (src.type === 'sandboxGetNearby') return 'list';
     if (
-        src.type === 'sandboxTickItems' ||
-        src.type === 'sandboxAvailableCells' ||
-        src.type === 'sandboxFilterItemsByType' ||
-        src.type === 'sandboxNearestItemByType'
-    ) {
-        return 'list';
-    }
-    if (
-        src.type === 'sandboxWorldGrid' ||
-        src.type === 'sandboxTickPet' ||
-        src.type === 'sandboxPetCell' ||
-        src.type === 'sandboxDecisionMoveTo' ||
-        src.type === 'sandboxClosestItem'
+        src.type === 'sandboxMoveForward' ||
+        src.type === 'sandboxTurnLeft' ||
+        src.type === 'sandboxTurnRight' ||
+        src.type === 'sandboxIdle'
     ) {
         return 'dictionary';
     }
-    if (src.type === 'sandboxFirstNearbyFood' || src.type === 'sandboxFirstFoodWorldOrder') return 'list';
-    if (src.type === 'sandboxPetHunger' || src.type === 'sandboxPetEnergy') return 'int';
-    if (src.type === 'sandboxIsNearby8') return 'boolean';
-    if (src.type === 'sandboxDecisionIntent' || src.type === 'sandboxStarterDecision') return 'dictionary';
     if (src.type === 'listToString') return 'string';
     if (src.type === 'stringToList') return 'list';
     if (src.type === 'prependText') return 'string';
@@ -1618,7 +1449,7 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
     let sourceHandle = e.source_handle ?? undefined;
     let targetHandle = e.target_handle ?? undefined;
     const targetNode = nodes.find(n => n.id === e.target);
-    if (targetNode && (targetNode.type === 'stringPrimitive' || targetNode.type === 'decisionActionPrimitive' || targetNode.type === 'sandboxTickPrimitive' || targetNode.type === 'listPrimitive' || targetNode.type === 'dictionaryPrimitive' || targetNode.type === 'booleanPrimitive' || targetNode.type === 'intPrimitive' || targetNode.type === 'dateTimePrimitive' || targetNode.type === 'listToString' || targetNode.type === 'stringToList' || targetNode.type === 'intToString') && (targetHandle == null || targetHandle === '')) {
+    if (targetNode && (targetNode.type === 'stringPrimitive' || targetNode.type === 'sandboxTickPrimitive' || targetNode.type === 'listPrimitive' || targetNode.type === 'dictionaryPrimitive' || targetNode.type === 'booleanPrimitive' || targetNode.type === 'intPrimitive' || targetNode.type === 'dateTimePrimitive' || targetNode.type === 'listToString' || targetNode.type === 'stringToList' || targetNode.type === 'intToString') && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'input';
     }
     if (targetNode && targetNode.type === 'lenFromList' && (targetHandle == null || targetHandle === '')) {
@@ -1632,37 +1463,22 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
     }
     if (
         targetNode &&
-        (targetNode.type === 'sandboxTickItems' ||
-            targetNode.type === 'sandboxAvailableCells' ||
-            targetNode.type === 'sandboxWorldGrid' ||
-            targetNode.type === 'sandboxTickPet' ||
-            targetNode.type === 'sandboxStarterDecision' ||
-            targetNode.type === 'sandboxPetHunger' ||
-            targetNode.type === 'sandboxPetEnergy' ||
-            targetNode.type === 'sandboxPetCell' ||
-            targetNode.type === 'sandboxFirstNearbyFood' ||
-            targetNode.type === 'sandboxFirstFoodWorldOrder') &&
+        (targetNode.type === 'sandboxGetPosition' ||
+            targetNode.type === 'sandboxGetFacing' ||
+            targetNode.type === 'sandboxGetNearby') &&
         (targetHandle == null || targetHandle === '')
     ) {
         targetHandle = 'input';
     }
-    if (targetNode && targetNode.type === 'sandboxNearestItemByType' && (targetHandle == null || targetHandle === '')) {
-        targetHandle = 'sandbox_tick';
-    }
-    if (targetNode && targetNode.type === 'sandboxClosestItem' && (targetHandle == null || targetHandle === '')) {
-        targetHandle = 'sandbox_tick';
-    }
-    if (targetNode && targetNode.type === 'sandboxDecisionMoveTo' && (targetHandle == null || targetHandle === '')) {
-        targetHandle = 'target_item_id';
-    }
-    if (targetNode && targetNode.type === 'sandboxIsNearby8' && (targetHandle == null || targetHandle === '')) {
-        targetHandle = 'cell_a';
-    }
-    if (targetNode && targetNode.type === 'sandboxFilterItemsByType' && (targetHandle == null || targetHandle === '')) {
-        targetHandle = 'items';
-    }
-    if (targetNode && targetNode.type === 'sandboxDecisionIntent' && (targetHandle == null || targetHandle === '')) {
-        targetHandle = 'action';
+    if (
+        targetNode &&
+        (targetNode.type === 'sandboxMoveForward' ||
+            targetNode.type === 'sandboxTurnLeft' ||
+            targetNode.type === 'sandboxTurnRight' ||
+            targetNode.type === 'sandboxIdle') &&
+        (targetHandle == null || targetHandle === '')
+    ) {
+        targetHandle = 'reason';
     }
     if (targetNode && targetNode.type === 'dictionaryValueByKey' && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'dictionary';
@@ -1862,14 +1678,14 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         targetHandle = 'message';
     }
     const sourceNode = nodes.find(n => n.id === e.source);
-    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'googleDocsGetDocument', 'googleDocsParseDocument', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'googleDocsParseDocument', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'decisionActionPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxBehaviorPrimitive', 'sandboxTickItems', 'sandboxAvailableCells', 'sandboxWorldGrid', 'sandboxTickPet', 'sandboxFilterItemsByType', 'sandboxNearestItemByType', 'sandboxClosestItem', 'sandboxDecisionIntent', 'sandboxDecisionMoveTo', 'sandboxStarterDecision', 'sandboxPetHunger', 'sandboxPetEnergy', 'sandboxPetCell', 'sandboxIsNearby8', 'sandboxFirstNearbyFood', 'sandboxFirstFoodWorldOrder', 'workflowRef'];
+    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'googleDocsGetDocument', 'googleDocsParseDocument', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'googleDocsParseDocument', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxGetPosition', 'sandboxGetFacing', 'sandboxGetNearby', 'sandboxMoveForward', 'sandboxTurnLeft', 'sandboxTurnRight', 'sandboxIdle', 'workflowRef'];
     if (sourceNode && targetNode && nodesWithTrigger.includes(targetNode.type ?? '') && (targetHandle == null || targetHandle === '') &&
         ((['basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl'].includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) ||
             (sourceNode.type === 'tryCatchControl' && (sourceHandle === 'try' || sourceHandle === 'catch')))) {
         targetHandle = 'trigger';
     }
     if (sourceNode && (sourceHandle == null || sourceHandle === '') &&
-        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'decisionActionPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxBehaviorPrimitive' || sourceNode.type === 'sandboxTickItems' || sourceNode.type === 'sandboxAvailableCells' || sourceNode.type === 'sandboxWorldGrid' || sourceNode.type === 'sandboxTickPet' || sourceNode.type === 'sandboxFilterItemsByType' || sourceNode.type === 'sandboxNearestItemByType' || sourceNode.type === 'sandboxClosestItem' || sourceNode.type === 'sandboxDecisionIntent' || sourceNode.type === 'sandboxDecisionMoveTo' || sourceNode.type === 'sandboxStarterDecision' || sourceNode.type === 'sandboxPetHunger' || sourceNode.type === 'sandboxPetEnergy' || sourceNode.type === 'sandboxPetCell' || sourceNode.type === 'sandboxIsNearby8' || sourceNode.type === 'sandboxFirstNearbyFood' || sourceNode.type === 'sandboxFirstFoodWorldOrder' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
+        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxGetPosition' || sourceNode.type === 'sandboxGetFacing' || sourceNode.type === 'sandboxGetNearby' || sourceNode.type === 'sandboxMoveForward' || sourceNode.type === 'sandboxTurnLeft' || sourceNode.type === 'sandboxTurnRight' || sourceNode.type === 'sandboxIdle' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
         sourceHandle = (sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' ? 'output_string' : 'output');
     }
     if (sourceNode && sourceNode.type === 'forLoopControl' && (sourceHandle == null || sourceHandle === '')) {
@@ -2243,270 +2059,74 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             position: pos,
         };
     }
-    if (n.type === 'sandboxTickItems') {
-        const d = n.data as any;
-        const item_type = d?.item_type === 'food' ? 'food' : 'all';
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_tick_items',
-            label: d?.label ?? 'Sandbox get items',
-            data: { item_type },
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxWorldGrid') {
+    if (n.type === 'sandboxGetPosition') {
         const d = n.data as any;
         return {
             id: n.id,
             kind: 'utility',
-            utility_type: 'sandbox_world_grid',
-            label: d?.label ?? 'Sandbox world grid',
+            utility_type: 'sandbox_get_position',
+            label: d?.label ?? 'Get position',
             data: {},
             position: pos,
         };
     }
-    if (n.type === 'sandboxAvailableCells') {
+    if (n.type === 'sandboxGetFacing') {
         const d = n.data as any;
         return {
             id: n.id,
             kind: 'utility',
-            utility_type: 'sandbox_available_cells',
-            label: d?.label ?? 'Sandbox available cells',
+            utility_type: 'sandbox_get_facing',
+            label: d?.label ?? 'Get facing',
             data: {},
             position: pos,
         };
     }
-    if (n.type === 'sandboxTickPet') {
+    if (n.type === 'sandboxGetNearby') {
         const d = n.data as any;
         return {
             id: n.id,
             kind: 'utility',
-            utility_type: 'sandbox_tick_pet',
-            label: d?.label ?? 'Sandbox tick pet',
+            utility_type: 'sandbox_get_nearby',
+            label: d?.label ?? 'Get nearby',
             data: {},
             position: pos,
         };
     }
-    if (n.type === 'sandboxNearestItemByType') {
+    if (
+        n.type === 'sandboxMoveForward' ||
+        n.type === 'sandboxTurnLeft' ||
+        n.type === 'sandboxTurnRight' ||
+        n.type === 'sandboxIdle'
+    ) {
         const d = n.data as any;
+        const utility_type =
+            n.type === 'sandboxMoveForward'
+                ? 'sandbox_move_forward'
+                : n.type === 'sandboxTurnLeft'
+                  ? 'sandbox_turn_left'
+                  : n.type === 'sandboxTurnRight'
+                    ? 'sandbox_turn_right'
+                    : 'sandbox_idle';
+        const defaultLabel =
+            n.type === 'sandboxMoveForward'
+                ? 'Move forward'
+                : n.type === 'sandboxTurnLeft'
+                  ? 'Turn left'
+                  : n.type === 'sandboxTurnRight'
+                    ? 'Turn right'
+                    : 'Idle';
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter(
-                  (r: { key?: string }) => r?.key === 'sandbox_tick' || r?.key === 'item_type',
-              )
-            : [
-                  { key: 'sandbox_tick', type: 'dictionary' as const, value: null },
-                  { key: 'item_type', type: 'string' as const, value: 'food' },
-              ];
-        const hasTick = requiredInputs.some((r: { key?: string }) => r?.key === 'sandbox_tick');
-        const hasType = requiredInputs.some((r: { key?: string }) => r?.key === 'item_type');
-        if (!hasTick) requiredInputs.push({ key: 'sandbox_tick', type: 'dictionary' as const, value: null });
-        if (!hasType) requiredInputs.push({ key: 'item_type', type: 'string' as const, value: 'food' });
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_nearest_item_by_type',
-            label: d?.label ?? 'Sandbox nearest item by type',
-            data: { required_inputs: requiredInputs },
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxClosestItem') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter(
-                  (r: { key?: string }) => r?.key === 'sandbox_tick' || r?.key === 'item_type',
-              )
-            : [
-                  { key: 'sandbox_tick', type: 'dictionary' as const, value: null },
-                  { key: 'item_type', type: 'string' as const, value: 'food' },
-              ];
-        const hasTick = requiredInputs.some((r: { key?: string }) => r?.key === 'sandbox_tick');
-        const hasType = requiredInputs.some((r: { key?: string }) => r?.key === 'item_type');
-        if (!hasTick) requiredInputs.push({ key: 'sandbox_tick', type: 'dictionary' as const, value: null });
-        if (!hasType) requiredInputs.push({ key: 'item_type', type: 'string' as const, value: 'food' });
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_closest_item',
-            label: d?.label ?? 'Get Closest Item',
-            data: { required_inputs: requiredInputs },
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxDecisionMoveTo') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter(
-                  (r: { key?: string }) =>
-                      r?.key === 'target_item_id' || r?.key === 'target_cell' || r?.key === 'reason',
-              )
-            : [
-                  { key: 'target_item_id', type: 'string' as const, value: null },
-                  { key: 'target_cell', type: 'dictionary' as const, value: null },
-                  { key: 'reason', type: 'string' as const, value: null },
-              ];
-        const keys = ['target_item_id', 'target_cell', 'reason'] as const;
-        for (const k of keys) {
-            if (!requiredInputs.some((r: { key?: string }) => r?.key === k)) {
-                if (k === 'target_item_id') {
-                    requiredInputs.push({ key: 'target_item_id', type: 'string' as const, value: null });
-                } else if (k === 'target_cell') {
-                    requiredInputs.push({ key: 'target_cell', type: 'dictionary' as const, value: null });
-                } else {
-                    requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
-                }
-            }
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'reason')
+            : [{ key: 'reason', type: 'string' as const, value: null }];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'reason')) {
+            requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
         }
         return {
             id: n.id,
             kind: 'utility',
-            utility_type: 'sandbox_decision_move_to',
-            label: d?.label ?? 'Sandbox decision move_to',
+            utility_type,
+            label: d?.label ?? defaultLabel,
             data: { required_inputs: requiredInputs },
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxStarterDecision') {
-        const d = n.data as any;
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_starter_decision',
-            label: d?.label ?? 'Starter sandbox decision',
-            data: {},
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxFilterItemsByType') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'items' || r?.key === 'item_type')
-            : [{ key: 'items', type: 'list' as const, value: null }, { key: 'item_type', type: 'string' as const, value: 'food' }];
-        const hasItems = requiredInputs.some((r: { key?: string }) => r?.key === 'items');
-        const hasType = requiredInputs.some((r: { key?: string }) => r?.key === 'item_type');
-        if (!hasItems) requiredInputs.push({ key: 'items', type: 'list' as const, value: null });
-        if (!hasType) requiredInputs.push({ key: 'item_type', type: 'string' as const, value: 'food' });
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_filter_items_by_type',
-            label: d?.label ?? 'Sandbox filter items by type',
-            data: { required_inputs: requiredInputs },
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxDecisionIntent') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter(
-                  (r: { key?: string }) =>
-                      r?.key === 'action' ||
-                      r?.key === 'target_item_id' ||
-                      r?.key === 'target_cell' ||
-                      r?.key === 'reason',
-              )
-            : [
-                  { key: 'action', type: 'string' as const, value: 'wander' },
-                  { key: 'target_item_id', type: 'string' as const, value: null },
-                  { key: 'target_cell', type: 'dictionary' as const, value: null },
-                  { key: 'reason', type: 'string' as const, value: null },
-              ];
-        const keys = ['action', 'target_item_id', 'target_cell', 'reason'] as const;
-        for (const k of keys) {
-            if (!requiredInputs.some((r: { key?: string }) => r?.key === k)) {
-                if (k === 'action') requiredInputs.push({ key: 'action', type: 'string' as const, value: 'wander' });
-                else if (k === 'target_item_id') {
-                    requiredInputs.push({ key: 'target_item_id', type: 'string' as const, value: null });
-                } else if (k === 'target_cell') {
-                    requiredInputs.push({ key: 'target_cell', type: 'dictionary' as const, value: null });
-                } else {
-                    requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
-                }
-            }
-        }
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_decision_intent',
-            label: d?.label ?? 'Sandbox decision intent',
-            data: { required_inputs: requiredInputs },
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxPetHunger') {
-        const d = n.data as any;
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_pet_hunger',
-            label: d?.label ?? 'Sandbox pet hunger',
-            data: {},
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxPetEnergy') {
-        const d = n.data as any;
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_pet_energy',
-            label: d?.label ?? 'Sandbox pet energy',
-            data: {},
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxPetCell') {
-        const d = n.data as any;
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_pet_cell',
-            label: d?.label ?? 'Sandbox pet cell',
-            data: {},
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxIsNearby8') {
-        const d = n.data as any;
-        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'cell_a' || r?.key === 'cell_b')
-            : [
-                  { key: 'cell_a', type: 'dictionary' as const, value: null },
-                  { key: 'cell_b', type: 'dictionary' as const, value: null },
-              ];
-        const hasA = requiredInputs.some((r: { key?: string }) => r?.key === 'cell_a');
-        const hasB = requiredInputs.some((r: { key?: string }) => r?.key === 'cell_b');
-        if (!hasA) requiredInputs.push({ key: 'cell_a', type: 'dictionary' as const, value: null });
-        if (!hasB) requiredInputs.push({ key: 'cell_b', type: 'dictionary' as const, value: null });
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_is_nearby8',
-            label: d?.label ?? 'Sandbox is nearby8',
-            data: { required_inputs: requiredInputs },
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxFirstNearbyFood') {
-        const d = n.data as any;
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_first_nearby_food',
-            label: d?.label ?? 'Sandbox first nearby food',
-            data: {},
-            position: pos,
-        };
-    }
-    if (n.type === 'sandboxFirstFoodWorldOrder') {
-        const d = n.data as any;
-        return {
-            id: n.id,
-            kind: 'utility',
-            utility_type: 'sandbox_first_food_world_order',
-            label: d?.label ?? 'Sandbox first food (world order)',
-            data: {},
             position: pos,
         };
     }
@@ -3233,30 +2853,13 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             position: pos,
         };
     }
-    if (n.type === 'sandboxBehaviorPrimitive') {
-        return { id: n.id, kind: 'primitive', primitive_type: 'sandbox_behavior', label: (n.data as any).label ?? 'Sandbox behavior', data: {}, position: pos };
-    }
-    if (n.type === 'decisionActionPrimitive') {
-        const d = n.data as any;
-        const raw = d?.action;
-        const action =
-            typeof raw === 'string' && isSandboxDecisionAction(raw) ? raw : DEFAULT_SANDBOX_DECISION_ACTION;
-        return {
-            id: n.id,
-            kind: 'primitive',
-            primitive_type: 'decision_action',
-            label: d?.label ?? 'Decision action',
-            data: { action },
-            position: pos,
-        };
-    }
     if (n.type === 'sandboxTickPrimitive') {
         const d = n.data as any;
         return {
             id: n.id,
             kind: 'primitive',
             primitive_type: 'sandbox_tick',
-            label: d?.label ?? 'Sandbox tick',
+            label: d?.label ?? 'Tick input',
             data: {},
             position: pos,
         };

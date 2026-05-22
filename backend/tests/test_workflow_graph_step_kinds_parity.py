@@ -112,24 +112,6 @@ def _minimal_raw_step(step: Dict[str, Any]) -> Dict[str, Any]:
                 },
                 "position": pos,
             }
-        if pt == "sandbox_behavior":
-            return {
-                "id": node_id,
-                "kind": "primitive",
-                "primitive_type": "sandbox_behavior",
-                "label": label,
-                "data": {},
-                "position": pos,
-            }
-        if pt == "decision_action":
-            return {
-                "id": node_id,
-                "kind": "primitive",
-                "primitive_type": "decision_action",
-                "label": label,
-                "data": {"action": "wander"},
-                "position": pos,
-            }
         if pt == "sandbox_tick":
             return {
                 "id": node_id,
@@ -257,51 +239,6 @@ def _minimal_raw_step(step: Dict[str, Any]) -> Dict[str, Any]:
                 "required_inputs": [
                     {"key": "list", "type": "list", "value": None},
                     {"key": "value", "type": "any", "value": None},
-                ]
-            }
-        if ut == "sandbox_filter_items_by_type":
-            base["data"] = {
-                "required_inputs": [
-                    {"key": "items", "type": "list", "value": None},
-                    {"key": "item_type", "type": "string", "value": "food"},
-                ]
-            }
-        if ut == "sandbox_decision_intent":
-            base["data"] = {
-                "required_inputs": [
-                    {"key": "action", "type": "string", "value": "wander"},
-                    {"key": "target_item_id", "type": "string", "value": None},
-                    {"key": "target_cell", "type": "dictionary", "value": None},
-                    {"key": "reason", "type": "string", "value": None},
-                ]
-            }
-        if ut == "sandbox_nearest_item_by_type":
-            base["data"] = {
-                "required_inputs": [
-                    {"key": "sandbox_tick", "type": "dictionary", "value": None},
-                    {"key": "item_type", "type": "string", "value": "food"},
-                ]
-            }
-        if ut == "sandbox_closest_item":
-            base["data"] = {
-                "required_inputs": [
-                    {"key": "sandbox_tick", "type": "dictionary", "value": None},
-                    {"key": "item_type", "type": "string", "value": "food"},
-                ]
-            }
-        if ut == "sandbox_decision_move_to":
-            base["data"] = {
-                "required_inputs": [
-                    {"key": "target_item_id", "type": "string", "value": None},
-                    {"key": "target_cell", "type": "dictionary", "value": None},
-                    {"key": "reason", "type": "string", "value": None},
-                ]
-            }
-        if ut == "sandbox_is_nearby8":
-            base["data"] = {
-                "required_inputs": [
-                    {"key": "cell_a", "type": "dictionary", "value": None},
-                    {"key": "cell_b", "type": "dictionary", "value": None},
                 ]
             }
         if ut == "message":

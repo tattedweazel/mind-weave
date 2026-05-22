@@ -1,17 +1,4 @@
-"""
-Canonical default colors for workflow palettes (API + seeding).
-
-Single source of truth for node-type and edge handle colors. Import this from
-`PaletteCreate`, palette seeding, and tests—do not copy the dict elsewhere.
-
-`Palette.colors` is a flat string map. Optional **step-family** keys (`primitive`,
-`skill`, `utility`, `control`) are resolved on the SPA; see
-`frontend/src/domain/paletteDefaults.ts` (`resolveWorkflowPaletteColor`).
-
-**Built-in presets** (`BuiltinPalette`) seed system rows (`user_id` NULL) with a
-stable `slug`. Maps may be sparse (families + overrides); **Default** keeps a
-full per-step map to match shipped fallbacks exactly.
-"""
+"""Canonical default colors for workflow palettes (API + seeding)."""
 
 from __future__ import annotations
 
@@ -29,25 +16,14 @@ DEFAULT_PALETTE_COLORS: Dict[str, str] = {
     "document": "#2dd4bf",
     "image": "#f43f5e",
     "gmail": "#f97316",
-    "sandbox_behavior": "#34d399",
-    "decision_action": "#2dd4bf",
     "sandbox_tick": "#2dd4bf",
-    "sandbox_tick_items": "#2dd4bf",
-    "sandbox_world_grid": "#5eead4",
-    "sandbox_available_cells": "#5eead4",
-    "sandbox_tick_pet": "#14b8a6",
-    "sandbox_filter_items_by_type": "#5eead4",
-    "sandbox_nearest_item_by_type": "#34d399",
-    "sandbox_closest_item": "#34d399",
-    "sandbox_decision_intent": "#10b981",
-    "sandbox_decision_move_to": "#059669",
-    "sandbox_starter_decision": "#059669",
-    "sandbox_pet_hunger": "#14b8a6",
-    "sandbox_pet_energy": "#0d9488",
-    "sandbox_pet_cell": "#0f766e",
-    "sandbox_is_nearby8": "#5eead4",
-    "sandbox_first_nearby_food": "#34d399",
-    "sandbox_first_food_world_order": "#2dd4bf",
+    "sandbox_get_position": "#0f766e",
+    "sandbox_get_facing": "#14b8a6",
+    "sandbox_get_nearby": "#5eead4",
+    "sandbox_move_forward": "#10b981",
+    "sandbox_turn_left": "#059669",
+    "sandbox_turn_right": "#059669",
+    "sandbox_idle": "#34d399",
     "read_document_property": "#14b8a6",
     "load_document": "#2dd4bf",
     "upsert_document": "#14b8a6",
@@ -111,7 +87,6 @@ DEFAULT_PALETTE_COLORS: Dict[str, str] = {
     "for_loop_end_control": "#047857",
     "annotation_note": "#94a3b8",
     "annotation_region": "#64748b",
-    # Editor flow anchors (SPA `EDITOR_NODE_PALETTE_EXTRA`; persisted workflows omit these handles).
     "start": "#6366f1",
     "stop": "#f43f5e",
 }
@@ -121,8 +96,6 @@ WORKFLOW_PALETTE_FAMILY_KEYS = frozenset({"primitive", "skill", "utility", "cont
 
 @dataclass(frozen=True)
 class BuiltinPalette:
-    """Shorthand system preset: display name, API slug, and sparse or full `colors`."""
-
     name: str
     slug: str
     colors: Dict[str, str]
@@ -221,5 +194,4 @@ for _b in BUILTIN_WORKFLOW_PALETTES:
 
 
 def default_palette_colors_copy() -> Dict[str, str]:
-    """Return a shallow copy for Pydantic defaults and mutation-safe forms."""
     return dict(DEFAULT_PALETTE_COLORS)

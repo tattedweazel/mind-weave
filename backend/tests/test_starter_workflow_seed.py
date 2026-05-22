@@ -4,9 +4,11 @@ import json
 import uuid
 from pathlib import Path
 
-from sqlmodel import Session
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
 
 from app.domain.sandbox.builtins import STARTER_SANDBOX_WORKFLOW_ID
+from app.domain.sandbox.engine import initial_sandbox_state_clean
 from app.domain.sandbox.starter_workflow_seed import (
     STARTER_BUILTIN_SLUG,
     STARTER_SANDBOX_NAME,
@@ -14,7 +16,8 @@ from app.domain.sandbox.starter_workflow_seed import (
     ensure_starter_sandbox_workflow,
     graphs_equivalent,
 )
-from app.persistence.tables import WorkflowDefinition
+from app.domain.schemas.sandbox import CreatureState, GridCell, SandboxItem, SandboxTickInput
+from app.persistence.tables import User, WorkflowDefinition
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _EXPORT_GRAPH_PATH = _REPO_ROOT / "sandbox-behavior-imported.json"
@@ -105,3 +108,121 @@ def test_graphs_equivalent_semantic_normalization():
     bad_edges = json.loads(json.dumps(STARTER_SANDBOX_WORKFLOW_GRAPH))
     bad_edges["edges"] = "not-a-list"  # type: ignore[assignment]
     assert not graphs_equivalent(bad_edges, STARTER_SANDBOX_WORKFLOW_GRAPH)
+
+
+def _tick_dict(*, x: int = 2, y: int = 2, facing: str = "N", items: list | None = None) -> dict:
+    st = initial_sandbox_state_clean()
+    st.world.grid.width = 8
+    st.world.grid.height = 8
+    c = CreatureState(
+        id="c1",
+        workflow_id=str(STARTER_SANDBOX_WORKFLOW_ID),
+        position=GridCell(x=x, y=y),
+        facing=facing,  # type: ignore[arg-type]
+    )
+    if items:
+        for it in items:
+            st.world.items.append(SandboxItem.model_validate(it))
+    return SandboxTickInput(
+        tick=1, creature=c, creatures=[c], world=st.world, recent_actions=[]
+    ).model_dump(mode="json")
+
+
+def test_starter_sandbox_workflow_runs_move_forward_on_empty_ahead(client: TestClient):
+    """Open cell ahead → Is false branch → Move forward → Stop dictionary intent."""
+    run = client.post(
+        f"/api/v1/workflow-definitions/{STARTER_SANDBOX_WORKFLOW_ID}/run",
+        json={"input_overrides": {"sandbox_tick": _tick_dict(x=4, y=4)}},
+    )
+    assert run.status_code == 200
+    body = run.json()
+    assert body["status"] == "ok"
+    stop = next(r for r in body["node_results"] if r["node_id"] == "stop")
+    assert stop["status"] == "ok"
+    assert stop["output"]["data"]["action"] == "move_forward"
+
+
+def test_starter_sandbox_workflow_runs_turn_left_when_wall_ahead(client: TestClient):
+    """Wall in forward cell → not empty → Turn left."""
+    run = client.post(
+        f"/api/v1/workflow-definitions/{STARTER_SANDBOX_WORKFLOW_ID}/run",
+        json={
+            "input_overrides": {
+                "sandbox_tick": _tick_dict(
+                    x=2,
+                    y=2,
+                    items=[{"id": "w1", "type": "wall", "position": {"x": 2, "y": 1}}],
+                )
+            }
+        },
+    )
+    assert run.status_code == 200
+    body = run.json()
+    assert body["status"] == "ok"
+    stop = next(r for r in body["node_results"] if r["node_id"] == "stop")
+    assert stop["output"]["data"]["action"] == "turn_left"
+
+
+def test_starter_sandbox_workflow_runs_turn_left_when_out_of_bounds_ahead(client: TestClient):
+    """Canvas edge ahead → out_of_bounds → not empty → Turn left."""
+    run = client.post(
+        f"/api/v1/workflow-definitions/{STARTER_SANDBOX_WORKFLOW_ID}/run",
+        json={"input_overrides": {"sandbox_tick": _tick_dict(x=0, y=0, facing="N")}},
+    )
+    assert run.status_code == 200
+    body = run.json()
+    assert body["status"] == "ok"
+    stop = next(r for r in body["node_results"] if r["node_id"] == "stop")
+    assert stop["output"]["data"]["action"] == "turn_left"
+
+
+def test_starter_graph_has_no_basic_conditional_branch_node():
+    node_ids = {n["id"] for n in STARTER_SANDBOX_WORKFLOW_GRAPH["nodes"]}
+    assert "branch" not in node_ids
+
+
+def test_system_workflow_get_visible_to_non_admin(client: TestClient):
+    r = client.get(f"/api/v1/workflow-definitions/{STARTER_SANDBOX_WORKFLOW_ID}")
+    assert r.status_code == 200
+    assert r.json()["is_system"] is True
+
+
+def test_system_workflow_update_forbidden_non_admin(client: TestClient):
+    r = client.put(
+        f"/api/v1/workflow-definitions/{STARTER_SANDBOX_WORKFLOW_ID}",
+        json={"description": "attempted override"},
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == "System workflows are read-only"
+
+
+def test_system_workflow_update_allowed_admin(client: TestClient, db_session: Session):
+    user = db_session.exec(select(User)).first()
+    assert user is not None
+    user.is_admin = True
+    db_session.add(user)
+    db_session.commit()
+
+    new_desc = "admin patched starter description"
+    r = client.put(
+        f"/api/v1/workflow-definitions/{STARTER_SANDBOX_WORKFLOW_ID}",
+        json={"description": new_desc},
+    )
+    assert r.status_code == 200
+    assert r.json()["description"] == new_desc
+
+    wf = db_session.get(WorkflowDefinition, STARTER_SANDBOX_WORKFLOW_ID)
+    assert wf is not None
+    assert wf.description == new_desc
+
+
+def test_system_workflow_delete_still_forbidden_admin(client: TestClient, db_session: Session):
+    user = db_session.exec(select(User)).first()
+    assert user is not None
+    user.is_admin = True
+    db_session.add(user)
+    db_session.commit()
+
+    r = client.delete(f"/api/v1/workflow-definitions/{STARTER_SANDBOX_WORKFLOW_ID}")
+    assert r.status_code == 404
+    assert db_session.get(WorkflowDefinition, STARTER_SANDBOX_WORKFLOW_ID) is not None

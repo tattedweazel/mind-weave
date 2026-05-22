@@ -21,6 +21,7 @@ import {
     Circle,
     CircleDot,
     CircleSlash,
+    Compass,
     Divide,
     Equal,
     FileAudio,
@@ -43,11 +44,14 @@ import {
     Mail,
     MessageSquare,
     Minus,
+    MoveUp,
     Octagon,
     Percent,
     Plus,
+    Pause,
     Puzzle,
     Repeat,
+    RotateCcw,
     Save,
     ShieldHalf,
     Ruler,
@@ -76,7 +80,7 @@ import {
     type WorkflowPaletteStepItem,
 } from './workflowPaletteStepItems';
 
-function paletteStepIcon(nodeType: string): React.ReactNode {
+export function paletteStepIcon(nodeType: string): React.ReactNode {
     const size = 13;
     switch (nodeType) {
         case 'stringPrimitive':
@@ -141,39 +145,20 @@ function paletteStepIcon(nodeType: string): React.ReactNode {
             return <Ruler size={size} />;
         case 'randomItemFromList':
             return <Shuffle size={size} />;
-        case 'decisionActionPrimitive':
-            return <Target size={size} />;
         case 'sandboxTickPrimitive':
             return <LayoutGrid size={size} />;
-        case 'sandboxTickItems':
+        case 'sandboxGetPosition':
+        case 'sandboxGetNearby':
             return <LayoutGrid size={size} />;
-        case 'sandboxWorldGrid':
-            return <LayoutGrid size={size} />;
-        case 'sandboxAvailableCells':
-            return <LayoutGrid size={size} />;
-        case 'sandboxTickPet':
-            return <Hash size={size} />;
-        case 'sandboxNearestItemByType':
-            return <ListFilter size={size} />;
-        case 'sandboxClosestItem':
-            return <ListFilter size={size} />;
-        case 'sandboxDecisionMoveTo':
-            return <GitBranch size={size} />;
-        case 'sandboxFilterItemsByType':
-            return <ListFilter size={size} />;
-        case 'sandboxDecisionIntent':
-            return <GitBranch size={size} />;
-        case 'sandboxStarterDecision':
-            return <LayoutGrid size={size} />;
-        case 'sandboxPetHunger':
-        case 'sandboxPetEnergy':
-        case 'sandboxPetCell':
-            return <Hash size={size} />;
-        case 'sandboxIsNearby8':
-            return <ArrowLeftRight size={size} />;
-        case 'sandboxFirstNearbyFood':
-        case 'sandboxFirstFoodWorldOrder':
-            return <ListFilter size={size} />;
+        case 'sandboxGetFacing':
+            return <Compass size={size} />;
+        case 'sandboxMoveForward':
+            return <MoveUp size={size} />;
+        case 'sandboxTurnLeft':
+        case 'sandboxTurnRight':
+            return <RotateCcw size={size} />;
+        case 'sandboxIdle':
+            return <Pause size={size} />;
         case 'intToString':
             return <ArrowLeftRight size={size} />;
         case 'listItemByIndex':

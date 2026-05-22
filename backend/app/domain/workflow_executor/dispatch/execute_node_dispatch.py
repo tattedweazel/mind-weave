@@ -18,7 +18,6 @@ from app.domain.schemas import (
     GoogleDocsParseDocumentUtilityNode,
     CaptureUrlSnapshotSkillNode,
     DateTimePrimitiveNode,
-    DecisionActionPrimitiveNode,
     DictionaryPrimitiveNode,
     DictionarySetValueByKeyUtilityNode,
     DictionaryValueByKeyUtilityNode,
@@ -54,24 +53,14 @@ from app.domain.schemas import (
     PrependTextUtilityNode,
     RandomItemFromListUtilityNode,
     ReadDocumentPropertyUtilityNode,
-    SandboxAvailableCellsUtilityNode,
-    SandboxBehaviorPrimitiveNode,
-    SandboxClosestItemUtilityNode,
-    SandboxDecisionIntentUtilityNode,
-    SandboxDecisionMoveToUtilityNode,
-    SandboxFilterItemsByTypeUtilityNode,
-    SandboxFirstFoodWorldOrderUtilityNode,
-    SandboxFirstNearbyFoodUtilityNode,
-    SandboxIsNearby8UtilityNode,
-    SandboxNearestItemByTypeUtilityNode,
-    SandboxPetCellUtilityNode,
-    SandboxPetEnergyUtilityNode,
-    SandboxPetHungerUtilityNode,
-    SandboxStarterDecisionUtilityNode,
-    SandboxTickItemsUtilityNode,
-    SandboxTickPetUtilityNode,
+    SandboxGetFacingUtilityNode,
+    SandboxGetNearbyUtilityNode,
+    SandboxGetPositionUtilityNode,
+    SandboxIdleUtilityNode,
+    SandboxMoveForwardUtilityNode,
+    SandboxTurnLeftUtilityNode,
+    SandboxTurnRightUtilityNode,
     SandboxTickPrimitiveNode,
-    SandboxWorldGridUtilityNode,
     SimpleLLMCallSkillNode,
     StartGraphNode,
     StopGraphNode,
@@ -107,8 +96,6 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
     stack = ctx.execution_stack or frozenset()
     node = ctx.node
     try:
-        if isinstance(node, DecisionActionPrimitiveNode):
-            return executor._resolve_decision_action_primitive_node(node, ctx.upstream)
         if isinstance(node, SandboxTickPrimitiveNode):
             return executor._resolve_sandbox_tick_primitive_node(node, ctx.upstream, overrides)
         if isinstance(node, StringPrimitiveNode):
@@ -131,8 +118,6 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
             return executor._resolve_image_primitive_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, GmailPrimitiveNode):
             return executor._resolve_gmail_primitive_node(node, ctx.edges, ctx.outputs, overrides)
-        if isinstance(node, SandboxBehaviorPrimitiveNode):
-            return executor._resolve_sandbox_behavior_primitive_node(node, ctx.upstream)
         if isinstance(node, StartGraphNode):
             return executor._resolve_start_node(node, overrides)
         if isinstance(node, StopGraphNode):
@@ -193,38 +178,20 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
             return executor._resolve_len_from_list_node(node, ctx.upstream)
         if isinstance(node, RandomItemFromListUtilityNode):
             return executor._resolve_random_item_from_list_node(node, ctx.upstream)
-        if isinstance(node, SandboxTickItemsUtilityNode):
-            return executor._resolve_sandbox_tick_items_node(node, ctx.upstream)
-        if isinstance(node, SandboxWorldGridUtilityNode):
-            return executor._resolve_sandbox_world_grid_node(node, ctx.upstream)
-        if isinstance(node, SandboxAvailableCellsUtilityNode):
-            return executor._resolve_sandbox_available_cells_node(node, ctx.upstream)
-        if isinstance(node, SandboxTickPetUtilityNode):
-            return executor._resolve_sandbox_tick_pet_node(node, ctx.upstream)
-        if isinstance(node, SandboxFilterItemsByTypeUtilityNode):
-            return executor._resolve_sandbox_filter_items_by_type_node(node, ctx.edges, ctx.outputs, overrides)
-        if isinstance(node, SandboxNearestItemByTypeUtilityNode):
-            return executor._resolve_sandbox_nearest_item_by_type_node(node, ctx.edges, ctx.outputs, overrides)
-        if isinstance(node, SandboxClosestItemUtilityNode):
-            return executor._resolve_sandbox_closest_item_node(node, ctx.edges, ctx.outputs, overrides)
-        if isinstance(node, SandboxDecisionIntentUtilityNode):
-            return executor._resolve_sandbox_decision_intent_node(node, ctx.edges, ctx.outputs, overrides)
-        if isinstance(node, SandboxDecisionMoveToUtilityNode):
-            return executor._resolve_sandbox_decision_move_to_node(node, ctx.edges, ctx.outputs, overrides)
-        if isinstance(node, SandboxStarterDecisionUtilityNode):
-            return executor._resolve_sandbox_starter_decision_node(node, ctx.upstream)
-        if isinstance(node, SandboxPetHungerUtilityNode):
-            return executor._resolve_sandbox_pet_hunger_node(node, ctx.upstream)
-        if isinstance(node, SandboxPetEnergyUtilityNode):
-            return executor._resolve_sandbox_pet_energy_node(node, ctx.upstream)
-        if isinstance(node, SandboxPetCellUtilityNode):
-            return executor._resolve_sandbox_pet_cell_node(node, ctx.upstream)
-        if isinstance(node, SandboxIsNearby8UtilityNode):
-            return executor._resolve_sandbox_is_nearby8_node(node, ctx.edges, ctx.outputs, overrides)
-        if isinstance(node, SandboxFirstNearbyFoodUtilityNode):
-            return executor._resolve_sandbox_first_nearby_food_node(node, ctx.upstream)
-        if isinstance(node, SandboxFirstFoodWorldOrderUtilityNode):
-            return executor._resolve_sandbox_first_food_world_order_node(node, ctx.upstream)
+        if isinstance(node, SandboxGetPositionUtilityNode):
+            return executor._resolve_sandbox_get_position_node(node, ctx.upstream)
+        if isinstance(node, SandboxGetFacingUtilityNode):
+            return executor._resolve_sandbox_get_facing_node(node, ctx.upstream)
+        if isinstance(node, SandboxGetNearbyUtilityNode):
+            return executor._resolve_sandbox_get_nearby_node(node, ctx.upstream)
+        if isinstance(node, SandboxMoveForwardUtilityNode):
+            return executor._resolve_sandbox_move_forward_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, SandboxTurnLeftUtilityNode):
+            return executor._resolve_sandbox_turn_left_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, SandboxTurnRightUtilityNode):
+            return executor._resolve_sandbox_turn_right_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, SandboxIdleUtilityNode):
+            return executor._resolve_sandbox_idle_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, ListItemByIndexUtilityNode):
             return executor._resolve_list_item_by_index_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, DictionaryValueByKeyUtilityNode):

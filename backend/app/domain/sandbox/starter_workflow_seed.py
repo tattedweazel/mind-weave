@@ -1,31 +1,4 @@
-"""Canonical built-in starter sandbox workflow graph + idempotent DB seed.
-
-Alembic and app startup both rely on the same graph and id constant as
-``builtins.STARTER_SANDBOX_WORKFLOW_ID``.
-
-The graph JSON is kept in sync with ``sandbox-behavior-imported.json`` (repo
-root) so the default matches a workflow editor export. The default brain uses
-the ``sandbox_starter_decision`` utility (same deterministic policy as the
-legacy ``sandbox_behavior`` primitive).
-
-**Regenerating the fixture** after you change ``_STARTER_GRAPH_JSON`` /
-``STARTER_SANDBOX_WORKFLOW_GRAPH``: from ``backend/`` (writes
-``../sandbox-behavior-imported.json``), run:
-
-    uv run python <<'PY'
-    import json
-    from pathlib import Path
-    from app.domain.sandbox.starter_workflow_seed import STARTER_SANDBOX_WORKFLOW_GRAPH
-    Path("../sandbox-behavior-imported.json").write_text(
-        json.dumps({"definition": {"graph": STARTER_SANDBOX_WORKFLOW_GRAPH}}, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    PY
-
-Then run ``pytest tests/test_starter_workflow_seed.py`` and commit both the
-Python change and the JSON. Maintainer notes also live under **Starter graph
-export fixture** in ``docs/SANDBOX.md``.
-"""
+"""Canonical built-in starter sandbox workflow graph + idempotent DB seed."""
 
 from __future__ import annotations
 
@@ -41,23 +14,113 @@ from app.persistence.tables import WorkflowDefinition
 
 STARTER_BUILTIN_SLUG = "starter_sandbox_behavior"
 
-# Minified graph (definition.graph); control flow: signal_out → trigger; data: sandbox_tick → input.
-_STARTER_GRAPH_JSON = (
-    '{"nodes":[{"id":"sandbox_start","kind":"start","label":"Start","data":{"required_inputs":'
-    '[{"key":"sandbox_tick","type":"dictionary","value":null}]},"position":{"x":0,"y":0}},'
-    '{"id":"sandbox_brain","kind":"utility","utility_type":"sandbox_starter_decision",'
-    '"label":"Starter sandbox decision","data":{},"position":{"x":220,"y":0}},'
-    '{"id":"sandbox_stop","kind":"stop","label":"Stop","data":{"required_outputs":'
-    '[{"key":"output","type":"dictionary"}]},"position":{"x":480,"y":0}}],'
-    '"edges":['
-    '{"source":"sandbox_start","target":"sandbox_brain","source_handle":"signal_out","target_handle":"trigger"},'
-    '{"source":"sandbox_start","target":"sandbox_brain","source_handle":"sandbox_tick","target_handle":"input"},'
-    '{"source":"sandbox_brain","target":"sandbox_stop","source_handle":"signal_out","target_handle":"trigger"},'
-    '{"source":"sandbox_brain","target":"sandbox_stop","source_handle":"output","target_handle":"output"}'
-    "]}"
-)
-
-STARTER_SANDBOX_WORKFLOW_GRAPH: dict = json.loads(_STARTER_GRAPH_JSON)
+STARTER_SANDBOX_WORKFLOW_GRAPH: dict[str, Any] = {
+    "nodes": [
+        {
+            "id": "start",
+            "kind": "start",
+            "label": "Start",
+            "data": {"required_inputs": [{"key": "sandbox_tick", "type": "dictionary", "value": None}]},
+            "position": {"x": 0, "y": 0},
+        },
+        {
+            "id": "nearby",
+            "kind": "utility",
+            "utility_type": "sandbox_get_nearby",
+            "label": "Get nearby",
+            "data": {},
+            "position": {"x": 220, "y": 0},
+        },
+        {
+            "id": "forward_cell",
+            "kind": "utility",
+            "utility_type": "list_item_by_index",
+            "label": "Forward cell",
+            "data": {
+                "required_inputs": [
+                    {"key": "index", "type": "int", "value": 0},
+                    {"key": "list", "type": "list", "value": None},
+                ]
+            },
+            "position": {"x": 460, "y": 0},
+        },
+        {
+            "id": "forward_kind",
+            "kind": "utility",
+            "utility_type": "dictionary_value_by_key",
+            "label": "Forward kind",
+            "data": {
+                "output_value_type": "string",
+                "required_inputs": [
+                    {"key": "dictionary", "type": "dictionary", "value": None},
+                    {"key": "key", "type": "string", "value": "kind"},
+                ]
+            },
+            "position": {"x": 700, "y": 0},
+        },
+        {
+            "id": "empty_label",
+            "kind": "primitive",
+            "primitive_type": "string",
+            "label": "empty",
+            "data": {"text": "empty"},
+            "position": {"x": 700, "y": 120},
+        },
+        {
+            "id": "is_empty",
+            "kind": "control",
+            "control_type": "is",
+            "label": "Is empty?",
+            "data": {
+                "required_inputs": [
+                    {"key": "input_a", "type": "string", "value": None},
+                    {"key": "input_b", "type": "string", "value": None},
+                ]
+            },
+            "position": {"x": 940, "y": 0},
+        },
+        {
+            "id": "turn_left",
+            "kind": "utility",
+            "utility_type": "sandbox_turn_left",
+            "label": "Turn left",
+            "data": {},
+            "position": {"x": 1180, "y": -80},
+        },
+        {
+            "id": "move_forward",
+            "kind": "utility",
+            "utility_type": "sandbox_move_forward",
+            "label": "Move forward",
+            "data": {},
+            "position": {"x": 1180, "y": 80},
+        },
+        {
+            "id": "stop",
+            "kind": "stop",
+            "label": "Stop",
+            "data": {"required_outputs": [{"key": "output", "type": "dictionary"}]},
+            "position": {"x": 1420, "y": 0},
+        },
+    ],
+    "edges": [
+        {"source": "start", "target": "nearby", "source_handle": "signal_out", "target_handle": "trigger"},
+        {"source": "start", "target": "nearby", "source_handle": "sandbox_tick", "target_handle": "input"},
+        {"source": "nearby", "target": "forward_cell", "source_handle": "signal_out", "target_handle": "trigger"},
+        {"source": "nearby", "target": "forward_cell", "source_handle": "output", "target_handle": "list"},
+        {"source": "forward_cell", "target": "forward_kind", "source_handle": "signal_out", "target_handle": "trigger"},
+        {"source": "forward_cell", "target": "forward_kind", "source_handle": "output", "target_handle": "dictionary"},
+        {"source": "forward_kind", "target": "is_empty", "source_handle": "signal_out", "target_handle": "trigger"},
+        {"source": "forward_kind", "target": "is_empty", "source_handle": "output", "target_handle": "input_a"},
+        {"source": "empty_label", "target": "is_empty", "source_handle": "output", "target_handle": "input_b"},
+        {"source": "is_empty", "target": "move_forward", "source_handle": "true", "target_handle": "trigger"},
+        {"source": "is_empty", "target": "turn_left", "source_handle": "false", "target_handle": "trigger"},
+        {"source": "turn_left", "target": "stop", "source_handle": "signal_out", "target_handle": "trigger"},
+        {"source": "turn_left", "target": "stop", "source_handle": "output", "target_handle": "output"},
+        {"source": "move_forward", "target": "stop", "source_handle": "signal_out", "target_handle": "trigger"},
+        {"source": "move_forward", "target": "stop", "source_handle": "output", "target_handle": "output"},
+    ],
+}
 
 
 def _normalize_value(obj: Any) -> Any:
@@ -97,7 +160,6 @@ def _normalize_edges(edges: list[Any]) -> list[dict[str, Any]]:
 
 
 def _normalize_graph_for_compare(graph: dict | None) -> dict[str, Any]:
-    """Semantic shape for equality (DB JSON may use floats, omit null keys, or add schema_version)."""
     if not isinstance(graph, dict):
         return {"edges": [], "nodes": []}
     g = {k: v for k, v in graph.items() if k != "schema_version"}
@@ -114,14 +176,16 @@ def _normalize_graph_for_compare(graph: dict | None) -> dict[str, Any]:
 
 
 def graphs_equivalent(a: dict | None, b: dict | None) -> bool:
-    """True if two workflow graphs match semantically (ignores key order and int/float drift)."""
     sa = json.dumps(_normalize_graph_for_compare(a), sort_keys=True, separators=(",", ":"))
     sb = json.dumps(_normalize_graph_for_compare(b), sort_keys=True, separators=(",", ":"))
     return sa == sb
 
 
-STARTER_SANDBOX_NAME = "Starter Sandbox Behavior"
-STARTER_SANDBOX_DESCRIPTION = "Built-in deterministic pet brain (sandbox_starter_decision utility; legacy sandbox_behavior primitive remains available)."
+STARTER_SANDBOX_NAME = "Starter Sandbox Navigation"
+STARTER_SANDBOX_DESCRIPTION = (
+    "Built-in left-hand wall follower: Get nearby → if forward cell is empty, Move forward, "
+    "else Turn left (walls, canvas edge, creatures, food)."
+)
 
 
 def ensure_starter_sandbox_workflow(session: Session) -> None:
@@ -132,14 +196,14 @@ def ensure_starter_sandbox_workflow(session: Session) -> None:
         select(WorkflowDefinition).where(WorkflowDefinition.builtin_slug == STARTER_BUILTIN_SLUG)
     ).first()
     if existing is not None:
-        # Compare as str so SQLite UUID storage remains idempotent with Alembic-seeded rows.
         if str(existing.id) == str(STARTER_SANDBOX_WORKFLOW_ID):
             stored = existing.graph if isinstance(existing.graph, dict) else {}
-            # Strip legacy top-level schema_version etc. even if nodes/edges match semantically.
             needs_cleanup = isinstance(stored, dict) and "schema_version" in stored
             if not needs_cleanup and graphs_equivalent(stored, canonical):
                 return
             existing.graph = copy.deepcopy(canonical)
+            existing.name = STARTER_SANDBOX_NAME
+            existing.description = STARTER_SANDBOX_DESCRIPTION
             existing.updated_at = now
             session.add(existing)
             session.commit()

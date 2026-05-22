@@ -4,16 +4,19 @@
 import Phaser from 'phaser';
 
 import type { SandboxSandboxStateJson } from '../../domain/sandbox/types';
-import type { SandboxRuntimeAdapter } from './types';
+import type { SandboxRuntimeAdapter, SandboxSetStateOptions } from './types';
 import {
     BOARD_BG,
     BOARD_PADDING,
     CELL_PX,
+    CREATURE_FILL,
+    CREATURE_SELECTED_FILL,
     FOOD_FILL,
     GRID_LINE,
-    PET_FILL,
     SANDBOX_GRID_DEFAULT_HEIGHT,
     SANDBOX_GRID_DEFAULT_WIDTH,
+    WALL_FILL,
+    creatureColor,
 } from '../sandboxVisualDefaults';
 
 function hexToRgbInt(hex: string): number {
@@ -26,6 +29,7 @@ class SandboxScene extends Phaser.Scene {
     private cellHandler: CellHandler | null = null;
     private graphics: Phaser.GameObjects.Graphics | null = null;
     private lastState: SandboxSandboxStateJson | null = null;
+    private selectedCreatureId: string | null = null;
 
     constructor() {
         super({ key: 'SandboxScene' });
@@ -33,6 +37,11 @@ class SandboxScene extends Phaser.Scene {
 
     setCellHandler(h: CellHandler | null) {
         this.cellHandler = h;
+    }
+
+    setSelectedCreatureId(id: string | null) {
+        this.selectedCreatureId = id;
+        if (this.lastState) this.sync(this.lastState);
     }
 
     create() {
@@ -76,24 +85,54 @@ class SandboxScene extends Phaser.Scene {
         }
 
         for (const it of state.world.items) {
-            if (it.type !== 'food') continue;
             const cx = ox + it.position.x * CELL_PX + CELL_PX / 2;
             const cy = oy + it.position.y * CELL_PX + CELL_PX / 2;
-            g.fillStyle(hexToRgbInt(FOOD_FILL), 1);
-            g.fillCircle(cx, cy, CELL_PX * 0.28);
+            if (it.type === 'wall') {
+                g.fillStyle(hexToRgbInt(WALL_FILL), 1);
+                g.fillRect(
+                    ox + it.position.x * CELL_PX + 2,
+                    oy + it.position.y * CELL_PX + 2,
+                    CELL_PX - 4,
+                    CELL_PX - 4,
+                );
+            } else if (it.type === 'food') {
+                g.fillStyle(hexToRgbInt(FOOD_FILL), 1);
+                g.fillCircle(cx, cy, CELL_PX * 0.28);
+            }
         }
 
-        const px = state.pet.position.x;
-        const py = state.pet.position.y;
-        g.fillStyle(hexToRgbInt(PET_FILL), 1);
-        g.fillRect(ox + px * CELL_PX + 4, oy + py * CELL_PX + 4, CELL_PX - 8, CELL_PX - 8);
+        state.creatures.forEach((creature, idx) => {
+            const px = creature.position.x;
+            const py = creature.position.y;
+            const selected = creature.id === this.selectedCreatureId;
+            const fill = selected ? CREATURE_SELECTED_FILL : creatureColor(idx);
+            const cx = ox + px * CELL_PX + CELL_PX / 2;
+            const cy = oy + py * CELL_PX + CELL_PX / 2;
+            const half = (CELL_PX - 8) / 2;
+            g.fillStyle(hexToRgbInt(fill), 1);
+            g.fillRect(ox + px * CELL_PX + 4, oy + py * CELL_PX + 4, CELL_PX - 8, CELL_PX - 8);
+            const nose = CELL_PX * 0.18;
+            g.fillStyle(hexToRgbInt('#ffffff'), 0.95);
+            if (creature.facing === 'N') {
+                g.fillTriangle(cx, cy - half + 2, cx - nose, cy - 2, cx + nose, cy - 2);
+            } else if (creature.facing === 'E') {
+                g.fillTriangle(cx + half - 2, cy, cx + 2, cy - nose, cx + 2, cy + nose);
+            } else if (creature.facing === 'S') {
+                g.fillTriangle(cx, cy + half - 2, cx - nose, cy + 2, cx + nose, cy + 2);
+            } else {
+                g.fillTriangle(cx - half + 2, cy, cx - 2, cy - nose, cx - 2, cy + nose);
+            }
+            if (selected) {
+                g.lineStyle(2, hexToRgbInt(CREATURE_FILL), 1);
+                g.strokeRect(ox + px * CELL_PX + 2, oy + py * CELL_PX + 2, CELL_PX - 4, CELL_PX - 4);
+            }
+        });
     }
 }
 
 export class PhaserSandboxAdapter implements SandboxRuntimeAdapter {
     private game: Phaser.Game | null = null;
     private scene: SandboxScene | null = null;
-    /** Last grid dimensions used for scale.resize — avoid FIT/resize feedback loops each tick. */
     private lastGridW = -1;
     private lastGridH = -1;
 
@@ -126,7 +165,7 @@ export class PhaserSandboxAdapter implements SandboxRuntimeAdapter {
         this.lastGridH = -1;
     }
 
-    setState(state: SandboxSandboxStateJson): void {
+    setState(state: SandboxSandboxStateJson, options?: SandboxSetStateOptions): void {
         const scene = this.scene;
         const game = this.game;
         if (scene && game) {
@@ -137,6 +176,9 @@ export class PhaserSandboxAdapter implements SandboxRuntimeAdapter {
                 const wpx = BOARD_PADDING * 2 + width * CELL_PX;
                 const hpx = BOARD_PADDING * 2 + height * CELL_PX;
                 game.scale.resize(wpx, hpx);
+            }
+            if (options?.selectedCreatureId !== undefined) {
+                scene.setSelectedCreatureId(options.selectedCreatureId);
             }
             scene.sync(state);
         }

@@ -209,7 +209,7 @@ def _sandbox_tick_dict_from_upstream(upstream: list[NodeOutputUnion]) -> dict | 
     for out in upstream:
         if isinstance(out, DictionaryNodeOutput):
             d = dict(out.data)
-            if "world" in d and "pet" in d and "tick" in d:
+            if "world" in d and "creature" in d and "tick" in d:
                 return d
         if isinstance(out, StartNodeOutput):
             st = out.outputs.get("sandbox_tick")

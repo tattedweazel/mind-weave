@@ -301,6 +301,22 @@ class WorkflowDefinition(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class SandboxBoard(SQLModel, table=True):
+    """Persisted sandbox board template (grid, items, optional creature placements)."""
+
+    __tablename__ = "sandbox_boards"  # type: ignore
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    description: str = Field(default="")
+    body: str = Field(default="", sa_column=Column(Text, nullable=False, server_default=""))
+    is_system: bool = Field(default=False, index=True)
+    builtin_slug: Optional[str] = Field(default=None, index=True, unique=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class UrlFetchCache(SQLModel, table=True):
     """Cached successful fetch_url response payload for reuse (default cache policy)."""
 

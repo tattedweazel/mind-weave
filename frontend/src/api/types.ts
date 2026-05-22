@@ -619,31 +619,75 @@ export interface GmailPrimitiveNode {
     position: { x: number; y: number };
 }
 
-export interface SandboxBehaviorPrimitiveNode {
-    id: string;
-    kind: 'primitive';
-    primitive_type: 'sandbox_behavior';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface DecisionActionPrimitiveNode {
-    id: string;
-    kind: 'primitive';
-    primitive_type: 'decision_action';
-    label: string;
-    data: { action: string };
-    position: { x: number; y: number };
-}
-
-/** Emits the current sandbox tick as a dictionary (run override or wired Start/tick). */
 export interface SandboxTickPrimitiveNode {
     id: string;
     kind: 'primitive';
     primitive_type: 'sandbox_tick';
     label: string;
     data: Record<string, unknown>;
+    position: { x: number; y: number };
+}
+
+export interface SandboxGetPositionUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_get_position';
+    label: string;
+    data: Record<string, unknown>;
+    position: { x: number; y: number };
+}
+
+export interface SandboxGetFacingUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_get_facing';
+    label: string;
+    data: Record<string, unknown>;
+    position: { x: number; y: number };
+}
+
+export interface SandboxGetNearbyUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_get_nearby';
+    label: string;
+    data: Record<string, unknown>;
+    position: { x: number; y: number };
+}
+
+export interface SandboxMoveForwardUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_move_forward';
+    label: string;
+    data: { required_inputs?: RequiredInput[] };
+    position: { x: number; y: number };
+}
+
+export interface SandboxTurnLeftUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_turn_left';
+    label: string;
+    data: { required_inputs?: RequiredInput[] };
+    position: { x: number; y: number };
+}
+
+export interface SandboxTurnRightUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_turn_right';
+    label: string;
+    data: { required_inputs?: RequiredInput[] };
+    position: { x: number; y: number };
+}
+
+export interface SandboxIdleUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_idle';
+    label: string;
+    data: { required_inputs?: RequiredInput[] };
     position: { x: number; y: number };
 }
 
@@ -714,150 +758,6 @@ export interface RandomItemFromListUtilityNode {
     id: string;
     kind: 'utility';
     utility_type: 'random_item_from_list';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxTickItemsUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_tick_items';
-    label: string;
-    data: { item_type?: 'all' | 'food' } & Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxWorldGridUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_world_grid';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxAvailableCellsUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_available_cells';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxTickPetUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_tick_pet';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxNearestItemByTypeUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_nearest_item_by_type';
-    label: string;
-    data: { required_inputs?: RequiredInput[] };
-    position: { x: number; y: number };
-}
-
-export interface SandboxClosestItemUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_closest_item';
-    label: string;
-    data: { required_inputs?: RequiredInput[] };
-    position: { x: number; y: number };
-}
-
-export interface SandboxDecisionMoveToUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_decision_move_to';
-    label: string;
-    data: { required_inputs?: RequiredInput[] };
-    position: { x: number; y: number };
-}
-
-export interface SandboxFilterItemsByTypeUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_filter_items_by_type';
-    label: string;
-    data: { required_inputs?: RequiredInput[] };
-    position: { x: number; y: number };
-}
-
-export interface SandboxDecisionIntentUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_decision_intent';
-    label: string;
-    data: { required_inputs?: RequiredInput[] };
-    position: { x: number; y: number };
-}
-
-export interface SandboxStarterDecisionUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_starter_decision';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxPetHungerUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_pet_hunger';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxPetEnergyUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_pet_energy';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxPetCellUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_pet_cell';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxIsNearby8UtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_is_nearby8';
-    label: string;
-    data: { required_inputs?: RequiredInput[] };
-    position: { x: number; y: number };
-}
-
-export interface SandboxFirstNearbyFoodUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_first_nearby_food';
-    label: string;
-    data: Record<string, unknown>;
-    position: { x: number; y: number };
-}
-
-export interface SandboxFirstFoodWorldOrderUtilityNode {
-    id: string;
-    kind: 'utility';
-    utility_type: 'sandbox_first_food_world_order';
     label: string;
     data: Record<string, unknown>;
     position: { x: number; y: number };
@@ -1274,22 +1174,13 @@ export type GraphNode =
     | MessageUtilityNode
     | LenFromListUtilityNode
     | RandomItemFromListUtilityNode
-    | SandboxTickItemsUtilityNode
-    | SandboxWorldGridUtilityNode
-    | SandboxAvailableCellsUtilityNode
-    | SandboxTickPetUtilityNode
-    | SandboxNearestItemByTypeUtilityNode
-    | SandboxClosestItemUtilityNode
-    | SandboxDecisionMoveToUtilityNode
-    | SandboxFilterItemsByTypeUtilityNode
-    | SandboxDecisionIntentUtilityNode
-    | SandboxStarterDecisionUtilityNode
-    | SandboxPetHungerUtilityNode
-    | SandboxPetEnergyUtilityNode
-    | SandboxPetCellUtilityNode
-    | SandboxIsNearby8UtilityNode
-    | SandboxFirstNearbyFoodUtilityNode
-    | SandboxFirstFoodWorldOrderUtilityNode
+    | SandboxGetPositionUtilityNode
+    | SandboxGetFacingUtilityNode
+    | SandboxGetNearbyUtilityNode
+    | SandboxMoveForwardUtilityNode
+    | SandboxTurnLeftUtilityNode
+    | SandboxTurnRightUtilityNode
+    | SandboxIdleUtilityNode
     | IntToStringUtilityNode
     | ListItemByIndexUtilityNode
     | DictionaryValueByKeyUtilityNode
@@ -1331,8 +1222,6 @@ export type GraphNode =
     | DocumentPrimitiveNode
     | ImagePrimitiveNode
     | GmailPrimitiveNode
-    | SandboxBehaviorPrimitiveNode
-    | DecisionActionPrimitiveNode
     | SandboxTickPrimitiveNode
     | AnnotationNoteGraphNode
     | AnnotationRegionGraphNode
@@ -1591,10 +1480,10 @@ export interface WorkflowRunResult {
     error?: string;
 }
 
-/** `POST /api/v1/sandbox/sessions/{id}/tick` — envelope plus optional in-process workflow trace. */
+/** `POST /api/v1/sandbox/sessions/{id}/tick` — envelope plus per-creature workflow traces. */
 export interface SandboxTickResponseJson {
     envelope: import('../domain/sandbox/types').SandboxEnvelopeJson;
-    last_workflow_run: WorkflowRunResult | null;
+    last_workflow_runs: Record<string, WorkflowRunResult | null>;
 }
 
 // Run log records returned from the history API.

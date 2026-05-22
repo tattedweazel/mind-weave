@@ -130,9 +130,16 @@ def update_workflow(
 ):
     """Update an existing WorkflowDefinition (name, description, or graph)."""
     try:
-        wf = WorkflowDefinitionService(session, current_user.id).update_workflow(id, data)
+        wf = WorkflowDefinitionService(session, current_user.id).update_workflow(
+            id,
+            data,
+            allow_system_mutation=current_user.is_admin,
+        )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        msg = str(e)
+        if msg == "System workflows are read-only":
+            raise HTTPException(status_code=403, detail=msg) from e
+        raise HTTPException(status_code=400, detail=msg) from e
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
     return wf

@@ -108,8 +108,12 @@ Each utility typically includes `data.required_inputs`: `{ "key", "type", "value
 | `modulo_ints` | two int inputs | `output` | |
 | `min_ints` | two int inputs | `output` | |
 | `max_ints` | two int inputs | `output` | |
-| `sandbox_nearest_item_by_type` | `sandbox_tick`, `item_type` | `output` (dictionary) | Sandbox: nearest item to the pet by Manhattan distance as **one** item dict or **`{}`** (same geometry as `sandbox_closest_item`). See [SANDBOX.md](SANDBOX.md). |
-| `sandbox_closest_item` | `sandbox_tick`, `item_type` | `output` (dictionary) | Same as `sandbox_nearest_item_by_type`; palette **Get Closest Item**. See [SANDBOX.md](SANDBOX.md). |
+| `sandbox_tick` | (run override or wired tick) | `output` (dictionary) | Full `SandboxTickInput` for sandbox brains. See [SANDBOX.md](SANDBOX.md). |
+| `sandbox_get_position` | `sandbox_tick` | `output` (dictionary) | Creature `{x, y}`. |
+| `sandbox_get_facing` | `sandbox_tick` | `output` (string) | Creature facing `N`/`E`/`S`/`W`. |
+| `sandbox_get_nearby` | `sandbox_tick` | `output` (list) | Eight typed neighbor cells clockwise from facing. |
+| `sandbox_move_forward` | optional `reason` | `output` (dictionary) | `{action: "move_forward"}` for Stop. |
+| `sandbox_turn_left` / `sandbox_turn_right` / `sandbox_idle` | optional `reason` | `output` (dictionary) | Navigation action dict for Stop. |
 
 ---
 

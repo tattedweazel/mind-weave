@@ -97,26 +97,6 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 position: pos,
             };
         }
-        if (pt === 'sandbox_behavior') {
-            return {
-                id: nodeId,
-                kind: 'primitive',
-                primitive_type: 'sandbox_behavior',
-                label,
-                data: {},
-                position: pos,
-            };
-        }
-        if (pt === 'decision_action') {
-            return {
-                id: nodeId,
-                kind: 'primitive',
-                primitive_type: 'decision_action',
-                label,
-                data: { action: 'wander' },
-                position: pos,
-            };
-        }
         if (pt === 'sandbox_tick') {
             return {
                 id: nodeId,
@@ -386,110 +366,14 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 position: pos,
             };
         }
-        if (ut === 'sandbox_filter_items_by_type') {
-            return {
-                id: nodeId,
-                kind: 'utility',
-                utility_type: 'sandbox_filter_items_by_type',
-                label,
-                data: {
-                    required_inputs: [
-                        { key: 'items', type: 'list', value: null },
-                        { key: 'item_type', type: 'string', value: 'food' },
-                    ],
-                },
-                position: pos,
-            };
-        }
-        if (ut === 'sandbox_decision_intent') {
-            return {
-                id: nodeId,
-                kind: 'utility',
-                utility_type: 'sandbox_decision_intent',
-                label,
-                data: {
-                    required_inputs: [
-                        { key: 'action', type: 'string', value: 'wander' },
-                        { key: 'target_item_id', type: 'string', value: null },
-                        { key: 'target_cell', type: 'dictionary', value: null },
-                        { key: 'reason', type: 'string', value: null },
-                    ],
-                },
-                position: pos,
-            };
-        }
-        if (
-            ut === 'sandbox_world_grid' ||
-            ut === 'sandbox_available_cells' ||
-            ut === 'sandbox_tick_pet' ||
-            ut === 'sandbox_pet_cell'
-        ) {
+        if (ut === 'sandbox_move_forward' || ut === 'sandbox_idle') {
             return {
                 id: nodeId,
                 kind: 'utility',
                 utility_type: ut,
                 label,
-                data: {},
-                position: pos,
-            };
-        }
-        if (ut === 'sandbox_nearest_item_by_type') {
-            return {
-                id: nodeId,
-                kind: 'utility',
-                utility_type: 'sandbox_nearest_item_by_type',
-                label,
                 data: {
-                    required_inputs: [
-                        { key: 'sandbox_tick', type: 'dictionary', value: null },
-                        { key: 'item_type', type: 'string', value: 'food' },
-                    ],
-                },
-                position: pos,
-            };
-        }
-        if (ut === 'sandbox_closest_item') {
-            return {
-                id: nodeId,
-                kind: 'utility',
-                utility_type: 'sandbox_closest_item',
-                label,
-                data: {
-                    required_inputs: [
-                        { key: 'sandbox_tick', type: 'dictionary', value: null },
-                        { key: 'item_type', type: 'string', value: 'food' },
-                    ],
-                },
-                position: pos,
-            };
-        }
-        if (ut === 'sandbox_decision_move_to') {
-            return {
-                id: nodeId,
-                kind: 'utility',
-                utility_type: 'sandbox_decision_move_to',
-                label,
-                data: {
-                    required_inputs: [
-                        { key: 'target_item_id', type: 'string', value: null },
-                        { key: 'target_cell', type: 'dictionary', value: null },
-                        { key: 'reason', type: 'string', value: null },
-                    ],
-                },
-                position: pos,
-            };
-        }
-        if (ut === 'sandbox_is_nearby8') {
-            return {
-                id: nodeId,
-                kind: 'utility',
-                utility_type: 'sandbox_is_nearby8',
-                label,
-                data: {
-                    required_inputs: [
-                        { key: 'cell_a', type: 'dictionary', value: null },
-                        { key: 'cell_b', type: 'dictionary', value: null },
-                    ],
+                    required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
                 position: pos,
             };

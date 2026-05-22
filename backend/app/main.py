@@ -77,6 +77,7 @@ from app.core.auth_rate_limit import (
 from app.core.config import settings
 from app.core.workflow_execution_hub import WorkflowExecutionHub
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.domain.sandbox.empty_board_seed import ensure_empty_sandbox_board
 from app.domain.sandbox.starter_workflow_seed import ensure_starter_sandbox_workflow
 from app.domain.services.palette_service import PaletteService
 from app.domain.services.persona_service import PersonaService
@@ -152,6 +153,7 @@ async def lifespan(app: FastAPI):
         PaletteService(session).initialize_default_palette()
         SystemPaletteService(session).initialize_builtin_system_palettes()
         ensure_starter_sandbox_workflow(session)
+        ensure_empty_sandbox_board(session)
 
         if settings.BOOTSTRAP_DEFAULT_ADMIN and settings.APP_ENV == "local" and not session.exec(select(User)).first():
             session.add(

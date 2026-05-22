@@ -118,17 +118,23 @@ class WorkflowDefinitionService:
         self.session.refresh(wf)
         return wf
 
-    def update_workflow(self, id: uuid.UUID, data: WorkflowDefinitionUpdate) -> Optional[WorkflowDefinition]:
+    def update_workflow(
+        self,
+        id: uuid.UUID,
+        data: WorkflowDefinitionUpdate,
+        *,
+        allow_system_mutation: bool = False,
+    ) -> Optional[WorkflowDefinition]:
         """Update a user-owned WorkflowDefinition. Returns None if not found."""
         proj_svc = WorkflowProjectService(self.session, self.user_id)
         wf = self.get_workflow(id)
         if not wf:
             return None
 
-        if getattr(wf, "is_system", False):
-            return None
+        if getattr(wf, "is_system", False) and not allow_system_mutation:
+            raise ValueError("System workflows are read-only")
 
-        if wf.user_id is None:
+        if wf.user_id is None and not getattr(wf, "is_system", False):
             wf.user_id = self.user_id
 
         payload = data.model_dump(exclude_unset=True)

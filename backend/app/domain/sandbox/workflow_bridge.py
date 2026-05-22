@@ -46,8 +46,7 @@ def decision_intent_from_workflow_result(
         return (
             None,
             "Stop output is not a valid DecisionIntent: empty object {}. "
-            "Wire sandbox_decision_intent, sandbox_starter_decision, or sandbox_behavior output to Stop, "
-            "not an empty dictionary primitive or an empty string.",
+            "Wire Move forward, Turn left, Turn right, or Idle output to Stop.",
         )
     try:
         return DecisionIntent.model_validate(data), None

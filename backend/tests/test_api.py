@@ -177,20 +177,20 @@ def test_list_palettes(client: TestClient):
     assert "prepend_text" in default["colors"]
     assert "string_trunc" in default["colors"]
     assert "message" in default["colors"]
-    assert "decision_action" in default["colors"]
+    assert "sandbox_get_position" in default["colors"]
+    assert "sandbox_move_forward" in default["colors"]
     assert "basic_conditional" in default["colors"]
     assert "is_control" in default["colors"]
     assert "boolean" in default["colors"]
     assert "int" in default["colors"]
     assert "len_from_list" in default["colors"]
     assert "random_item_from_list" in default["colors"]
-    assert "sandbox_pet_cell" in default["colors"]
     assert "int_to_string" in default["colors"]
     assert "add_ints" in default["colors"]
     assert "add_days" in default["colors"]
     assert "between_control" in default["colors"]
     assert isinstance(default["entries"], list)
-    assert len(default["entries"]) >= 85
+    assert len(default["entries"]) >= 75
     assert isinstance(default["effective_colors"], dict)
     assert "string" in default["effective_colors"]
     assert isinstance(default["warnings"], list)

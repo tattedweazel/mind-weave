@@ -4,7 +4,7 @@
  * Static helper class for all HTTP calls to the Mind Weave backend.
  */
 
-import type { SandboxEnvelopeJson } from '../domain/sandbox/types';
+import type { SandboxBoardJson, SandboxEnvelopeJson } from '../domain/sandbox/types';
 import type { SandboxTickResponseJson } from './types';
 import {
     ModelsResponse,
@@ -725,10 +725,50 @@ export class ApiClient {
     }
 
     // -------------------------------------------------------------------------
-    // Sandbox (workflow-driven simulation)
+    // Sandbox (board-driven simulation)
     // -------------------------------------------------------------------------
 
-    static createSandboxSession(body?: { workflow_id?: string }): Promise<{
+    static listSandboxBoards(): Promise<{ boards: SandboxBoardJson[] }> {
+        return this.request('/sandbox/boards');
+    }
+
+    static getSandboxBoard(boardId: string): Promise<SandboxBoardJson> {
+        return this.request(`/sandbox/boards/${boardId}`);
+    }
+
+    static createSandboxBoard(body: {
+        name: string;
+        description?: string;
+        definition?: Record<string, unknown>;
+    }): Promise<SandboxBoardJson> {
+        return this.request('/sandbox/boards', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    }
+
+    static updateSandboxBoard(
+        boardId: string,
+        body: { name?: string; description?: string; definition?: Record<string, unknown> },
+    ): Promise<SandboxBoardJson> {
+        return this.request(`/sandbox/boards/${boardId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+        });
+    }
+
+    static deleteSandboxBoard(boardId: string): Promise<{ ok: boolean }> {
+        return this.request(`/sandbox/boards/${boardId}`, { method: 'DELETE' });
+    }
+
+    static duplicateSandboxBoard(boardId: string, body?: { name?: string }): Promise<SandboxBoardJson> {
+        return this.request(`/sandbox/boards/${boardId}/duplicate`, {
+            method: 'POST',
+            body: JSON.stringify(body ?? {}),
+        });
+    }
+
+    static createSandboxSession(body?: { board_id?: string }): Promise<{
         document_id: string;
         envelope: SandboxEnvelopeJson;
     }> {
@@ -744,7 +784,7 @@ export class ApiClient {
 
     static tickSandbox(
         documentId: string,
-        body: { interactions: unknown[]; state_version: number; workflow_id?: string },
+        body: { interactions: unknown[]; state_version: number },
     ): Promise<SandboxTickResponseJson> {
         return this.request(`/sandbox/sessions/${documentId}/tick`, {
             method: 'POST',
@@ -757,6 +797,16 @@ export class ApiClient {
         body: { width: number; height: number; state_version: number },
     ): Promise<{ envelope: SandboxEnvelopeJson }> {
         return this.request(`/sandbox/sessions/${documentId}/grid`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    }
+
+    static saveSandboxSessionAsBoard(
+        documentId: string,
+        body: { mode: 'save_as_new' | 'update_source'; name?: string },
+    ): Promise<SandboxBoardJson> {
+        return this.request(`/sandbox/sessions/${documentId}/save-board`, {
             method: 'POST',
             body: JSON.stringify(body),
         });

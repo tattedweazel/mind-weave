@@ -44,13 +44,14 @@ describe('PhaserSandboxAdapter', () => {
 
         const base = {
             tick: 1,
-            pet: {
-                hunger: 50,
-                energy: 50,
-                mood: 50,
-                position: { x: 0, y: 0 },
-                intent: null,
-            },
+            creatures: [
+                {
+                    id: 'c1',
+                    workflow_id: 'wf-1',
+                    position: { x: 0, y: 0 },
+                    facing: 'N' as const,
+                },
+            ],
             world: {
                 grid: { width: 16, height: 16 },
                 items: [],

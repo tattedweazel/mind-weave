@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional, Set
 
 from sqlmodel import Session
 
-from app.domain.sandbox.constants import DECISION_ACTION_STRINGS
 from app.domain.schemas import (
     AddDaysUtilityNode,
     AddIntsUtilityNode,
@@ -28,7 +27,6 @@ from app.domain.schemas import (
     ConditionalNodeOutput,
     DateTimeNodeOutput,
     DateTimePrimitiveNode,
-    DecisionActionPrimitiveNode,
     DictionaryNodeOutput,
     DictionaryPrimitiveNode,
     DictionarySetValueByKeyUtilityNode,
@@ -73,22 +71,13 @@ from app.domain.schemas import (
     RandomItemFromListUtilityNode,
     ReadDocumentPropertyUtilityNode,
     ResponseNodeOutput,
-    SandboxAvailableCellsUtilityNode,
-    SandboxClosestItemUtilityNode,
-    SandboxDecisionIntentUtilityNode,
-    SandboxDecisionMoveToUtilityNode,
-    SandboxFilterItemsByTypeUtilityNode,
-    SandboxFirstFoodWorldOrderUtilityNode,
-    SandboxFirstNearbyFoodUtilityNode,
-    SandboxIsNearby8UtilityNode,
-    SandboxNearestItemByTypeUtilityNode,
-    SandboxPetCellUtilityNode,
-    SandboxPetEnergyUtilityNode,
-    SandboxPetHungerUtilityNode,
-    SandboxStarterDecisionUtilityNode,
-    SandboxTickItemsUtilityNode,
-    SandboxTickPetUtilityNode,
-    SandboxWorldGridUtilityNode,
+    SandboxGetFacingUtilityNode,
+    SandboxGetNearbyUtilityNode,
+    SandboxGetPositionUtilityNode,
+    SandboxIdleUtilityNode,
+    SandboxMoveForwardUtilityNode,
+    SandboxTurnLeftUtilityNode,
+    SandboxTurnRightUtilityNode,
     SimpleLLMCallSkillNode,
     StartGraphNode,
     StartNodeOutput,
@@ -166,16 +155,6 @@ def coerce_raw_to_node_output(
         if not isinstance(raw, str):
             raise ValueError(f"output_overrides[{node_id!r}]: string primitive requires a JSON string")
         return StringNodeOutput(node_id=node_id, text=raw)
-
-    if isinstance(parsed, DecisionActionPrimitiveNode):
-        if not isinstance(raw, str):
-            raise ValueError(f"output_overrides[{node_id!r}]: decision_action primitive requires a JSON string")
-        s = raw.strip()
-        if s not in DECISION_ACTION_STRINGS:
-            raise ValueError(
-                f"output_overrides[{node_id!r}]: decision_action must be one of {sorted(DECISION_ACTION_STRINGS)}"
-            )
-        return StringNodeOutput(node_id=node_id, text=s)
 
     if isinstance(parsed, ListPrimitiveNode):
         if not isinstance(raw, list):
@@ -400,44 +379,24 @@ def coerce_raw_to_node_output(
             raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON integer")
         return IntNodeOutput(node_id=node_id, value=int(raw))
 
-    if isinstance(
-        parsed,
-        (
-            SandboxTickItemsUtilityNode,
-            SandboxAvailableCellsUtilityNode,
-            SandboxFilterItemsByTypeUtilityNode,
-        ),
-    ):
+    if isinstance(parsed, SandboxGetNearbyUtilityNode):
         if not isinstance(raw, list):
             raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON array")
         return ListNodeOutput(node_id=node_id, data=list(raw))
 
-    if isinstance(parsed, (SandboxFirstNearbyFoodUtilityNode, SandboxFirstFoodWorldOrderUtilityNode)):
-        if not isinstance(raw, list):
-            raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON array")
-        return ListNodeOutput(node_id=node_id, data=list(raw))
-
-    if isinstance(parsed, (SandboxPetHungerUtilityNode, SandboxPetEnergyUtilityNode)):
-        if isinstance(raw, bool) or not isinstance(raw, int):
-            raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON integer")
-        return IntNodeOutput(node_id=node_id, value=int(raw))
-
-    if isinstance(parsed, SandboxIsNearby8UtilityNode):
-        if not isinstance(raw, bool):
-            raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON boolean")
-        return BooleanNodeOutput(node_id=node_id, value=raw)
+    if isinstance(parsed, SandboxGetFacingUtilityNode):
+        if not isinstance(raw, str):
+            raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON string")
+        return StringNodeOutput(node_id=node_id, text=raw)
 
     if isinstance(
         parsed,
         (
-            SandboxClosestItemUtilityNode,
-            SandboxDecisionIntentUtilityNode,
-            SandboxDecisionMoveToUtilityNode,
-            SandboxNearestItemByTypeUtilityNode,
-            SandboxStarterDecisionUtilityNode,
-            SandboxWorldGridUtilityNode,
-            SandboxTickPetUtilityNode,
-            SandboxPetCellUtilityNode,
+            SandboxGetPositionUtilityNode,
+            SandboxMoveForwardUtilityNode,
+            SandboxTurnLeftUtilityNode,
+            SandboxTurnRightUtilityNode,
+            SandboxIdleUtilityNode,
         ),
     ):
         if not isinstance(raw, dict):

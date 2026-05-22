@@ -5,21 +5,26 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlmodel import Session
 
 from app.domain.document_json import deterministic_json_dumps
-from app.domain.sandbox.builtins import STARTER_SANDBOX_WORKFLOW_ID
-from app.domain.sandbox.constants import SANDBOX_GRID_MAX_SIZE, SANDBOX_GRID_MIN_SIZE
-from app.domain.sandbox.engine import SandboxEngine, initial_sandbox_state_clean, resize_world_grid
+from app.domain.sandbox.engine import (
+    SandboxEngine,
+    board_definition_from_sandbox_state,
+    initial_sandbox_state_clean,
+    resize_world_grid,
+    sandbox_state_from_board,
+)
 from app.domain.schemas.documents import DocumentCreate
-from app.domain.schemas.sandbox import SandboxDocumentEnvelope, SandboxPlaybackState
+from app.domain.schemas.sandbox import BoardDefinition, SandboxDocumentEnvelope, SandboxPlaybackState
 from app.domain.schemas.workflow_run import WorkflowRunResult
+from app.domain.services.board_service import BoardService
 from app.domain.services.document_service import DocumentService
 from app.domain.services.workflow_definition_service import WorkflowDefinitionService
 from app.domain.workflow_executor.executor import WorkflowExecutor
-from app.persistence.tables import Document
+from app.persistence.tables import Document, SandboxBoard
 
 
 def _parse_envelope(body: str) -> SandboxDocumentEnvelope:
@@ -27,33 +32,15 @@ def _parse_envelope(body: str) -> SandboxDocumentEnvelope:
     return SandboxDocumentEnvelope.model_validate(data)
 
 
-def _default_envelope(workflow_id: uuid.UUID) -> SandboxDocumentEnvelope:
+def _default_envelope(board_id: Optional[str] = None) -> SandboxDocumentEnvelope:
     st = initial_sandbox_state_clean()
     return SandboxDocumentEnvelope(
-        workflow_id=str(workflow_id),
+        board_id=board_id,
         sandbox=st,
         playback=SandboxPlaybackState().model_dump(),
         state_version=1,
-        last_error=None,
+        last_errors={},
     )
-
-
-def _apply_sandbox_defaults_from_graph(env: SandboxDocumentEnvelope, graph: dict) -> None:
-    """If ``graph`` contains ``sandbox_defaults``, resize the initial grid (min/max enforced)."""
-    sd = graph.get("sandbox_defaults")
-    if not isinstance(sd, dict):
-        return
-    gw = sd.get("grid_width")
-    gh = sd.get("grid_height")
-    if gw is None or gh is None:
-        return
-    try:
-        w_i, h_i = int(gw), int(gh)
-    except (TypeError, ValueError):
-        return
-    w_i = max(SANDBOX_GRID_MIN_SIZE, min(SANDBOX_GRID_MAX_SIZE, w_i))
-    h_i = max(SANDBOX_GRID_MIN_SIZE, min(SANDBOX_GRID_MAX_SIZE, h_i))
-    resize_world_grid(env.sandbox, w_i, h_i)
 
 
 class SandboxService:
@@ -63,23 +50,32 @@ class SandboxService:
         self.session = session
         self.user_id = user_id
         self._docs = DocumentService(session, user_id)
-
-    def get_starter_workflow_id(self) -> uuid.UUID:
-        return STARTER_SANDBOX_WORKFLOW_ID
+        self._boards = BoardService(session, user_id)
 
     def get_document(self, document_id: uuid.UUID) -> Optional[Document]:
         return self._docs.get_document(document_id)
 
-    def create_session(self, workflow_id: Optional[uuid.UUID] = None) -> Tuple[Document, SandboxDocumentEnvelope]:
-        wf_id = workflow_id or STARTER_SANDBOX_WORKFLOW_ID
-        wf_svc = WorkflowDefinitionService(self.session, self.user_id)
-        wf = wf_svc.get_workflow(wf_id)
-        if not wf:
-            raise ValueError("workflow not found")
+    def create_session(self, board_id: Optional[uuid.UUID] = None) -> Tuple[Document, SandboxDocumentEnvelope]:
+        board_svc = self._boards
+        bid = board_id or board_svc.get_empty_board_id()
+        board_def = board_svc.get_board_definition(bid)
+        if board_def is None:
+            raise ValueError("board not found")
 
-        env = _default_envelope(wf_id)
-        graph = wf.graph if isinstance(wf.graph, dict) else {}
-        _apply_sandbox_defaults_from_graph(env, graph)
+        wf_svc = WorkflowDefinitionService(self.session, self.user_id)
+        for bp in board_def.creatures:
+            wf = wf_svc.get_workflow(uuid.UUID(bp.workflow_id))
+            if not wf:
+                raise ValueError(f"workflow not found for creature: {bp.workflow_id}")
+
+        st = sandbox_state_from_board(board_def)
+        env = SandboxDocumentEnvelope(
+            board_id=str(bid),
+            sandbox=st,
+            playback=SandboxPlaybackState().model_dump(),
+            state_version=1,
+            last_errors={},
+        )
         body = deterministic_json_dumps(env.model_dump(mode="json"))
         doc = self._docs.create_document(
             DocumentCreate(
@@ -113,64 +109,52 @@ class SandboxService:
         *,
         interactions: List[dict[str, Any]],
         client_version: int,
-        workflow_id_override: Optional[uuid.UUID] = None,
-    ) -> Tuple[SandboxDocumentEnvelope, bool, Optional[WorkflowRunResult]]:
-        """
-        Run one tick. Returns (envelope, ok, last_workflow_run).
-        last_workflow_run is set only when this tick invoked WorkflowExecutor.run (not intent-continuation-only).
-        On version mismatch, ok is False and last_workflow_run is None.
-        """
+    ) -> Tuple[SandboxDocumentEnvelope, bool, Dict[str, Optional[WorkflowRunResult]]]:
         doc = self._docs.get_document(document_id)
         if not doc or doc.user_id != self.user_id:
             raise ValueError("document not found")
 
         env = _parse_envelope(doc.body)
         if env.state_version != client_version:
-            return env, False, None
-
-        wf_raw = workflow_id_override or env.workflow_id
-        wf_id = wf_raw if isinstance(wf_raw, uuid.UUID) else uuid.UUID(str(wf_raw))
-        wf_svc = WorkflowDefinitionService(self.session, self.user_id)
-        wf = wf_svc.get_workflow(wf_id)
-        if not wf:
-            raise ValueError("workflow not found")
-
-        if workflow_id_override is not None:
-            env.workflow_id = str(workflow_id_override)
+            return env, False, {}
 
         st = env.sandbox.model_copy(deep=True)
         eng = SandboxEngine()
-        last_run: Optional[WorkflowRunResult] = None
+        last_runs: Dict[str, Optional[WorkflowRunResult]] = {}
 
         eng.apply_interactions(st, interactions)
-        eng.passive_tick_start(st)
         eng.advance_tick_counter(st)
 
-        if st.pet.intent and st.pet.intent.status == "in_progress":
-            eng.continue_intent_step(st)
-            env.last_error = None
-        else:
-            tick_in = eng.build_tick_input(st)
-            executor = WorkflowExecutor(self.session, self.user_id)
+        wf_svc = WorkflowDefinitionService(self.session, self.user_id)
+        executor = WorkflowExecutor(self.session, self.user_id)
+        last_errors: Dict[str, Optional[str]] = dict(env.last_errors or {})
+
+        for creature in st.creatures:
+            wf = wf_svc.get_workflow(uuid.UUID(creature.workflow_id))
+            if not wf:
+                last_errors[creature.id] = f"workflow not found: {creature.workflow_id}"
+                last_runs[creature.id] = None
+                continue
+
+            tick_in = eng.build_tick_input(st, creature)
             run_result = await executor.run(
                 wf,
                 input_overrides={"sandbox_tick": tick_in.model_dump(mode="json")},
             )
-            last_run = run_result
+            last_runs[creature.id] = run_result
             dec, perr = eng.parse_workflow_decision(run_result, wf.graph)
             if dec is None:
-                env.last_error = perr
+                last_errors[creature.id] = perr
             else:
-                eng.start_intent_from_decision(st, dec)
-                if st.pet.intent and st.pet.intent.status == "in_progress":
-                    eng.continue_intent_step(st)
-                env.last_error = None
+                eng.apply_decision(st, creature, dec)
+                last_errors[creature.id] = None
 
         env.sandbox = st
+        env.last_errors = last_errors
         env.state_version = client_version + 1
         self.save_envelope(document_id, env)
         fresh = self.get_envelope(document_id)
-        return (fresh if fresh else env), True, last_run
+        return (fresh if fresh else env), True, last_runs
 
     def resize_grid(
         self,
@@ -180,7 +164,8 @@ class SandboxService:
         height: int,
         client_version: int,
     ) -> Tuple[SandboxDocumentEnvelope, bool]:
-        """Resize world grid when playback is paused. Returns (envelope, ok); ok False on version mismatch."""
+        from app.domain.sandbox.constants import SANDBOX_GRID_MAX_SIZE, SANDBOX_GRID_MIN_SIZE
+
         doc = self._docs.get_document(document_id)
         if not doc or doc.user_id != self.user_id:
             raise ValueError("document not found")
@@ -209,3 +194,39 @@ class SandboxService:
         self.save_envelope(document_id, env)
         fresh = self.get_envelope(document_id)
         return (fresh if fresh else env), True
+
+    def save_session_as_board(
+        self,
+        document_id: uuid.UUID,
+        *,
+        mode: str,
+        name: Optional[str] = None,
+    ) -> SandboxBoard:
+        doc = self._docs.get_document(document_id)
+        if not doc or doc.user_id != self.user_id:
+            raise ValueError("document not found")
+
+        env = _parse_envelope(doc.body)
+        pb = SandboxPlaybackState.model_validate(env.playback) if env.playback else SandboxPlaybackState()
+        if not pb.paused:
+            raise ValueError("playback must be paused to save board")
+
+        defn = board_definition_from_sandbox_state(env.sandbox)
+
+        if mode == "update_source":
+            if not env.board_id:
+                raise ValueError("session has no source board to update")
+            board_id = uuid.UUID(env.board_id)
+            row = self._boards.get_board(board_id)
+            if not row or row.is_system:
+                raise ValueError("source board cannot be updated")
+            updated = self._boards.update_board(board_id, definition=defn)
+            if not updated:
+                raise ValueError("failed to update board")
+            return updated
+
+        if mode == "save_as_new":
+            board_name = (name or "").strip() or f"Board from session {doc.name}"
+            return self._boards.create_board(name=board_name, definition=defn)
+
+        raise ValueError("mode must be 'save_as_new' or 'update_source'")

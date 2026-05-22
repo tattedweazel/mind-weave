@@ -78,8 +78,8 @@ Single place to see **what must not break** and **which test demonstrates it**. 
 | **Sandbox** domain engine (no LLM) | `test_sandbox_engine.py` |
 | **Sandbox** HTTP: session create + tick + starter id + `last_workflow_run` + `workflow_id` persist on tick; `sandbox_defaults` on workflow graph applied at create; grid resize (paused-only, version, bounds) | `test_sandbox_api.py` |
 | **Sandbox** starter workflow seed: `ensure_starter_sandbox_workflow` re-syncs stale stored graph | `test_starter_workflow_seed.py` |
-| **Sandbox** pure query helpers (`query.py`: adjacency, first-food ordering, pet stats, nearest-by-type, world grid dimensions) | `test_sandbox_query.py` |
-| **`sandbox_*` workflow utilities** (executor HTTP runs; no LLM) | `test_sandbox_workflow_utilities.py` |
+| **Sandbox** pure query helpers (`query.py`: nearby cells clockwise, position/facing from tick) | `test_sandbox_query.py` |
+| **`sandbox_*` navigation workflow utilities** (executor HTTP runs; no LLM) | `test_sandbox_workflow_utilities.py` |
 | **Companion / Workspace** bootstrap, stream turn (LLM mocked via `WorkspaceRuntimeService` patches), disabled flag, `PUT /companion/` partial + clear persona, `PUT /workspaces/{id}` `enabled_workflow_ids` + 422 on unknown workflow | `test_workspace_api.py` |
 | **User-level Google workflow connection** resolved at run time for Gmail / Calendar / Docs skills (legacy node `google_connection_id` ignored) | `test_google_workflow_connection.py`, `test_workflow_executor_nested_google.py` |
 | **Workspace Google injection** wired through **`WorkflowExecutor`** nested-schedule path | `test_workflow_executor_nested_google.py` |

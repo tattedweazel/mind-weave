@@ -4,28 +4,25 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    FolderPlus,
     Loader2,
     PanelLeft,
     PanelRight,
     Pause,
     Play,
+    Plus,
+    Save,
     StepForward,
 } from 'lucide-react';
 
 import { ApiClient } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import type { WorkflowDefinition, WorkflowDefinitionListItem, WorkflowProject, WorkflowRunResult } from '../api/types';
-import type { SandboxEnvelopeJson } from '../domain/sandbox/types';
-import { getHandleColor } from './workflow-editor/constants';
-import { filterNamesByPrefix } from './workflow-editor/workflowListFilter';
-import { WorkflowPaletteWorkflowRow } from './workflow-editor/WorkflowPaletteWorkflowRow';
-import { WorkflowProjectDeleteControl } from './workflow-editor/WorkflowProjectDeleteControl';
-import { isDeletableProject, workflowsInProject } from '../domain/workflowProjectMembership';
-import { DEFAULT_PALETTE_COLORS } from '../domain/paletteDefaults';
+import type { BoardDefinitionJson, SandboxBoardJson, SandboxEnvelopeJson } from '../domain/sandbox/types';
+import { SANDBOX_FACING_VALUES, sandboxStateFromBoardDefinition } from '../domain/sandbox/types';
+import {
+    projectsWithCreatureBrains,
+    sharedProjectIdFromProjects,
+} from '../domain/workflowProjectMembership';
 import {
     DEFAULT_TICK_RATE_MS,
     SANDBOX_GRID_DEFAULT_HEIGHT,
@@ -45,13 +42,27 @@ import type { SandboxGridCellJson } from '../domain/sandbox/types';
 import type { SandboxCellInteraction } from '../sandbox/sandboxCellInteractions';
 import { collectUserMessagesFromNodeResults } from '../sandbox/userMessageFromRun';
 import { SANDBOX_DECISION_ERROR_HINT, shouldShowSandboxDecisionHint } from '../sandbox/sandboxLastErrorHint';
+import {
+    mergeSandboxWorkflowRuns,
+    sandboxTickTranscriptSummary,
+} from '../sandbox/sandboxWorkflowRunMerge';
 import { SandboxCellActionModal } from './SandboxCellActionModal';
+import { SandboxItemInspectorSection } from './sandbox/SandboxItemInspectorSection';
 import { useCompactViewport } from '../hooks/useCompactViewport';
 import { InspectorSection } from './workflow-editor/InspectorSection';
 import { WorkflowRunLogsNodeResultsList } from './workflow-editor/WorkflowRunLogsNodeResultsList';
-import { cellHasInspectableContent, getCellOccupants } from '../sandbox/sandboxCellOccupants';
+import { cellHasInspectableContent, getCellOccupants, getCellOccupantsFromSandboxState } from '../sandbox/sandboxCellOccupants';
+import {
+    applyBoardBuilderInteraction,
+    createEmptyBoardDefinition,
+    resizeBoardDefinition,
+    updateBoardItemMetadata,
+    updateBoardCreatureFacing,
+} from '../sandbox/boardBuilderLocalEdits';
 
 const SANDBOX_PANEL_WIDTHS_KEY = 'sandbox_panel_widths';
+
+type MainTab = 'simulation' | 'builder';
 
 function readStoredSandboxPanelWidths(): { left: number; right: number } | null {
     try {
@@ -85,14 +96,26 @@ function nodeIdToLabel(graph: WorkflowDefinition['graph']): Map<string, string> 
     return m;
 }
 
-function formatIntent(intent: Record<string, unknown> | null): string {
-    if (!intent) return '—';
-    const action = intent.action;
-    const status = intent.status;
-    const reason = intent.reason;
-    const parts = [`${String(action ?? '?')}`, `(${String(status ?? '?')})`];
-    if (reason) parts.push(`— ${String(reason)}`);
-    return parts.join(' ');
+function formatRecentAction(
+    creatureId: string,
+    recentActions: SandboxEnvelopeJson['sandbox']['recent_actions'],
+): string {
+    const latest = [...recentActions].reverse().find(a => a.creature_id === creatureId);
+    if (!latest) return '—';
+    return latest.reason ? `${latest.action} — ${latest.reason}` : latest.action;
+}
+
+function collectVisibleErrors(
+    lastErrors: Record<string, string | null> | undefined,
+    selectedCreatureId: string | null,
+): { creatureId: string; message: string }[] {
+    if (!lastErrors) return [];
+    const entries = Object.entries(lastErrors).filter((entry): entry is [string, string] => Boolean(entry[1]));
+    if (selectedCreatureId) {
+        const selected = entries.filter(([id]) => id === selectedCreatureId);
+        if (selected.length > 0) return selected.map(([creatureId, message]) => ({ creatureId, message }));
+    }
+    return entries.map(([creatureId, message]) => ({ creatureId, message }));
 }
 
 export const SandboxView: React.FC = () => {
@@ -100,11 +123,12 @@ export const SandboxView: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const adapterRef = useRef<PhaserSandboxAdapter | null>(null);
     const envelopeRef = useRef<SandboxEnvelopeJson | null>(null);
-    const runTickRef = useRef<(interactions: unknown[]) => Promise<void>>(async () => {});
 
+    const [mainTab, setMainTab] = useState<MainTab>('simulation');
     const [envelope, setEnvelope] = useState<SandboxEnvelopeJson | null>(null);
     const [documentId, setDocumentId] = useState<string | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [catalogLoaded, setCatalogLoaded] = useState(false);
     const [paused, setPaused] = useState(true);
     const [tickRateMs, setTickRateMs] = useState(DEFAULT_TICK_RATE_MS);
     const [gridWidthInput, setGridWidthInput] = useState(SANDBOX_GRID_DEFAULT_WIDTH);
@@ -114,22 +138,22 @@ export const SandboxView: React.FC = () => {
 
     const [workflows, setWorkflows] = useState<WorkflowDefinitionListItem[]>([]);
     const [workflowProjects, setWorkflowProjects] = useState<WorkflowProject[]>([]);
-    const [catalogLoaded, setCatalogLoaded] = useState(false);
-    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-    const [workflowNameFilter, setWorkflowNameFilter] = useState('');
-    const [workflowListSort, setWorkflowListSort] = useState<'updated' | 'name'>('updated');
-    const [isWorkflowsOpen, setIsWorkflowsOpen] = useState(true);
-    const [newProjectNameDraft, setNewProjectNameDraft] = useState('');
-    const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition | null>(null);
-    const [moveProjectPickerFor, setMoveProjectPickerFor] = useState<string | null>(null);
+    const [boards, setBoards] = useState<SandboxBoardJson[]>([]);
+    const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+    const [builderBoardId, setBuilderBoardId] = useState<string | null>(null);
+    const [builderBoardName, setBuilderBoardName] = useState('Untitled Board');
+    const [localBoardDef, setLocalBoardDef] = useState<BoardDefinitionJson>(() =>
+        createEmptyBoardDefinition(SANDBOX_GRID_DEFAULT_WIDTH, SANDBOX_GRID_DEFAULT_HEIGHT),
+    );
+    const [builderDirty, setBuilderDirty] = useState(false);
 
     const [inspectorTab, setInspectorTab] = useState<'explorer' | 'logs'>('explorer');
-    const [lastWorkflowRun, setLastWorkflowRun] = useState<WorkflowRunResult | null>(null);
+    const [lastWorkflowRuns, setLastWorkflowRuns] = useState<Record<string, WorkflowRunResult | null>>({});
+    const [selectedCreatureId, setSelectedCreatureId] = useState<string | null>(null);
+    const [creatureWorkflow, setCreatureWorkflow] = useState<WorkflowDefinition | null>(null);
     const [tickTranscript, setTickTranscript] = useState<string[]>([]);
     const [runMessageToast, setRunMessageToast] = useState<string | null>(null);
     const runMessageToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const wfRowColor = getHandleColor(DEFAULT_PALETTE_COLORS, 'workflow');
 
     const compact = useCompactViewport();
     const [compactPaletteOpen, setCompactPaletteOpen] = useState(false);
@@ -165,6 +189,8 @@ export const SandboxView: React.FC = () => {
     pausedRef.current = paused;
     const cellActionModalOpenRef = useRef(false);
     cellActionModalOpenRef.current = cellActionCell !== null;
+    const mainTabRef = useRef(mainTab);
+    mainTabRef.current = mainTab;
 
     useEffect(() => {
         envelopeRef.current = envelope;
@@ -179,7 +205,7 @@ export const SandboxView: React.FC = () => {
     }, []);
 
     useEffect(() => {
-            const onResize = () => {
+        const onResize = () => {
             const w = window.innerWidth;
             setPanelWidths(prev => clampPanelWidths(w, prev.left, prev.right, true));
         };
@@ -255,21 +281,30 @@ export const SandboxView: React.FC = () => {
         });
     };
 
+    const refreshBoards = useCallback(async () => {
+        const res = await ApiClient.listSandboxBoards();
+        setBoards(res.boards);
+        return res.boards;
+    }, []);
+
     useEffect(() => {
         let cancelled = false;
         void (async () => {
             try {
-                const [wfs, projs, created] = await Promise.all([
+                const [wfs, projs, boardList, created] = await Promise.all([
                     ApiClient.getWorkflows(),
                     ApiClient.getWorkflowProjects().catch(() => [] as WorkflowProject[]),
+                    ApiClient.listSandboxBoards(),
                     ApiClient.createSandboxSession(),
                 ]);
                 if (cancelled) return;
                 setWorkflows(wfs);
                 setWorkflowProjects(projs);
+                setBoards(boardList.boards);
                 setCatalogLoaded(true);
                 setDocumentId(created.document_id);
                 setEnvelope(created.envelope);
+                setSelectedBoardId(created.envelope.board_id ?? null);
             } catch (e) {
                 setLoadError(e instanceof Error ? e.message : String(e));
             }
@@ -280,21 +315,7 @@ export const SandboxView: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (!envelope || workflows.length === 0) return;
-        const wfId = envelope.workflow_id;
-        if (!wfId) return;
-        let cancelled = false;
-        void (async () => {
-            try {
-                const full = await ApiClient.getWorkflow(wfId);
-                if (!cancelled) setSelectedWorkflow(full);
-            } catch { /* workflow may have been deleted */ }
-        })();
-        return () => { cancelled = true; };
-    }, [envelope?.workflow_id, workflows]);
-
-    useEffect(() => {
-        if (!documentId) return;
+        if (!catalogLoaded) return;
         const el = containerRef.current;
         if (!el) return;
         const adapter = new PhaserSandboxAdapter();
@@ -304,24 +325,79 @@ export const SandboxView: React.FC = () => {
             adapter.destroy();
             adapterRef.current = null;
         };
-    }, [documentId]);
+    }, [catalogLoaded]);
 
     useEffect(() => {
-        if (envelope && adapterRef.current) {
-            adapterRef.current.setState(envelope.sandbox);
+        const adapter = adapterRef.current;
+        if (!adapter) return;
+        if (mainTab === 'simulation' && envelope) {
+            adapter.setState(envelope.sandbox, { selectedCreatureId });
+        } else if (mainTab === 'builder') {
+            adapter.setState(sandboxStateFromBoardDefinition(localBoardDef), { selectedCreatureId });
         }
-    }, [envelope]);
+    }, [mainTab, envelope, localBoardDef, selectedCreatureId]);
 
     useEffect(() => {
-        if (!envelope) return;
-        setGridWidthInput(envelope.sandbox.world.grid.width);
-        setGridHeightInput(envelope.sandbox.world.grid.height);
-        setGridResizeError(null);
-    }, [envelope]);
+        if (mainTab === 'simulation' && envelope) {
+            setGridWidthInput(envelope.sandbox.world.grid.width);
+            setGridHeightInput(envelope.sandbox.world.grid.height);
+            setGridResizeError(null);
+        } else if (mainTab === 'builder') {
+            setGridWidthInput(localBoardDef.grid.width);
+            setGridHeightInput(localBoardDef.grid.height);
+            setGridResizeError(null);
+        }
+    }, [mainTab, envelope, localBoardDef.grid.width, localBoardDef.grid.height]);
 
-    const effectiveWorkflowId = selectedWorkflow?.id ?? envelope?.workflow_id ?? null;
+    useEffect(() => {
+        if (!selectedCreatureId || !envelope) {
+            setCreatureWorkflow(null);
+            return;
+        }
+        const creature = envelope.sandbox.creatures.find(c => c.id === selectedCreatureId);
+        if (!creature?.workflow_id) {
+            setCreatureWorkflow(null);
+            return;
+        }
+        let cancelled = false;
+        void (async () => {
+            try {
+                const full = await ApiClient.getWorkflow(creature.workflow_id);
+                if (!cancelled) setCreatureWorkflow(full);
+            } catch {
+                if (!cancelled) setCreatureWorkflow(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedCreatureId, envelope]);
+
+    const sharedProjectId = React.useMemo(
+        () => sharedProjectIdFromProjects(workflowProjects),
+        [workflowProjects],
+    );
+
+    const creatureBrainProjects = React.useMemo(
+        () => projectsWithCreatureBrains(workflowProjects, sharedProjectId, workflows),
+        [workflowProjects, sharedProjectId, workflows],
+    );
+
+    const selectedCreature = React.useMemo(() => {
+        if (!selectedCreatureId || !envelope) return null;
+        return envelope.sandbox.creatures.find(c => c.id === selectedCreatureId) ?? null;
+    }, [selectedCreatureId, envelope]);
+
+    const selectedCreatureRun = selectedCreatureId ? (lastWorkflowRuns[selectedCreatureId] ?? null) : null;
+    const nodeLabels = creatureWorkflow ? nodeIdToLabel(creatureWorkflow.graph) : new Map<string, string>();
 
     const applyGridResize = useCallback(async () => {
+        if (mainTab === 'builder') {
+            setLocalBoardDef(prev => resizeBoardDefinition(prev, gridWidthInput, gridHeightInput));
+            setBuilderDirty(true);
+            setGridResizeError(null);
+            return;
+        }
         const doc = documentId;
         const env = envelopeRef.current;
         if (!doc || !env) return;
@@ -339,7 +415,7 @@ export const SandboxView: React.FC = () => {
         } finally {
             setBusy(false);
         }
-    }, [documentId, gridWidthInput, gridHeightInput]);
+    }, [mainTab, documentId, gridWidthInput, gridHeightInput]);
 
     const runTick = useCallback(
         async (interactions: unknown[]) => {
@@ -351,11 +427,23 @@ export const SandboxView: React.FC = () => {
                 const res = await ApiClient.tickSandbox(doc, {
                     interactions,
                     state_version: env.state_version,
-                    ...(effectiveWorkflowId ? { workflow_id: effectiveWorkflowId } : {}),
                 });
                 setEnvelope(res.envelope);
-                setLastWorkflowRun(res.last_workflow_run);
-                const toastText = collectUserMessagesFromNodeResults(res.last_workflow_run?.node_results);
+                setLastWorkflowRuns(prev =>
+                    mergeSandboxWorkflowRuns(
+                        prev,
+                        res.last_workflow_runs,
+                        res.envelope.sandbox.creatures.map(c => c.id),
+                    ),
+                );
+                const runs = Object.values(res.last_workflow_runs).filter(
+                    (run): run is WorkflowRunResult => run != null,
+                );
+                const toastSource =
+                    selectedCreatureId && res.last_workflow_runs[selectedCreatureId]
+                        ? res.last_workflow_runs[selectedCreatureId]
+                        : runs[0] ?? null;
+                const toastText = collectUserMessagesFromNodeResults(toastSource?.node_results);
                 if (toastText) {
                     if (runMessageToastTimerRef.current) {
                         clearTimeout(runMessageToastTimerRef.current);
@@ -369,10 +457,8 @@ export const SandboxView: React.FC = () => {
                 }
                 setTickTranscript(prev => {
                     const tick = res.envelope.sandbox.tick;
-                    const line = res.last_workflow_run
-                        ? `Tick ${tick}: brain ${res.last_workflow_run.status} (${res.last_workflow_run.node_results.length} nodes)`
-                        : `Tick ${tick}: intent step (no workflow run)`;
-                    return [...prev, line].slice(-120);
+                    const runSummary = sandboxTickTranscriptSummary(res.last_workflow_runs);
+                    return [...prev, `Tick ${tick}: ${runSummary}`].slice(-120);
                 });
             } catch (e) {
                 setLoadError(e instanceof Error ? e.message : String(e));
@@ -380,196 +466,229 @@ export const SandboxView: React.FC = () => {
                 setBusy(false);
             }
         },
-        [documentId, effectiveWorkflowId],
+        [documentId, selectedCreatureId],
     );
 
-    runTickRef.current = runTick;
+    const startSessionFromBoard = useCallback(async (boardId: string) => {
+        setBusy(true);
+        setLoadError(null);
+        try {
+            const created = await ApiClient.createSandboxSession({ board_id: boardId });
+            setDocumentId(created.document_id);
+            setEnvelope(created.envelope);
+            setSelectedBoardId(boardId);
+            setLastWorkflowRuns({});
+            setTickTranscript([]);
+            setSelectedCreatureId(null);
+            setInspectedCell(null);
+            setPaused(true);
+            if (mainTabRef.current !== 'simulation') {
+                setMainTab('simulation');
+            }
+        } catch (e) {
+            setLoadError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }, []);
+
+    const loadBoardIntoBuilder = useCallback(async (boardId: string) => {
+        setBusy(true);
+        setLoadError(null);
+        try {
+            const board = await ApiClient.getSandboxBoard(boardId);
+            setLocalBoardDef(board.definition);
+            setBuilderBoardId(board.id);
+            setBuilderBoardName(board.name);
+            setBuilderDirty(false);
+            setSelectedBoardId(boardId);
+            setSelectedCreatureId(null);
+            setInspectedCell(null);
+            if (mainTabRef.current !== 'builder') {
+                setMainTab('builder');
+            }
+        } catch (e) {
+            setLoadError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }, []);
+
+    const handleBoardListSelect = useCallback(
+        (boardId: string) => {
+            if (mainTabRef.current === 'builder') {
+                void loadBoardIntoBuilder(boardId);
+            } else {
+                void startSessionFromBoard(boardId);
+            }
+        },
+        [loadBoardIntoBuilder, startSessionFromBoard],
+    );
+
+    const handleSaveSessionAsBoard = useCallback(async () => {
+        const doc = documentId;
+        if (!doc) return;
+        const name = window.prompt('Board name', 'My Board');
+        if (!name?.trim()) return;
+        setBusy(true);
+        try {
+            const board = await ApiClient.saveSandboxSessionAsBoard(doc, {
+                mode: 'save_as_new',
+                name: name.trim(),
+            });
+            await refreshBoards();
+            setSelectedBoardId(board.id);
+        } catch (e) {
+            setLoadError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }, [documentId, refreshBoards]);
+
+    const handleUpdateSourceBoard = useCallback(async () => {
+        const doc = documentId;
+        const env = envelopeRef.current;
+        if (!doc || !env?.board_id) return;
+        setBusy(true);
+        try {
+            await ApiClient.saveSandboxSessionAsBoard(doc, { mode: 'update_source' });
+            await refreshBoards();
+        } catch (e) {
+            setLoadError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }, [documentId, refreshBoards]);
+
+    const handleNewBoard = useCallback(() => {
+        setLocalBoardDef(createEmptyBoardDefinition(SANDBOX_GRID_DEFAULT_WIDTH, SANDBOX_GRID_DEFAULT_HEIGHT));
+        setBuilderBoardId(null);
+        setBuilderBoardName('Untitled Board');
+        setBuilderDirty(false);
+        setSelectedCreatureId(null);
+        setInspectedCell(null);
+        setGridWidthInput(SANDBOX_GRID_DEFAULT_WIDTH);
+        setGridHeightInput(SANDBOX_GRID_DEFAULT_HEIGHT);
+    }, []);
+
+    const handleSaveBuilderBoard = useCallback(async () => {
+        setBusy(true);
+        setLoadError(null);
+        try {
+            if (builderBoardId) {
+                await ApiClient.updateSandboxBoard(builderBoardId, {
+                    name: builderBoardName,
+                    definition: localBoardDef as unknown as Record<string, unknown>,
+                });
+            } else {
+                const created = await ApiClient.createSandboxBoard({
+                    name: builderBoardName,
+                    definition: localBoardDef as unknown as Record<string, unknown>,
+                });
+                setBuilderBoardId(created.id);
+                setSelectedBoardId(created.id);
+            }
+            setBuilderDirty(false);
+            await refreshBoards();
+        } catch (e) {
+            setLoadError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }, [builderBoardId, builderBoardName, localBoardDef, refreshBoards]);
 
     const dismissCellActionModal = useCallback(() => {
         setCellActionCell(null);
-        setPaused(restorePausedAfterCellActionRef.current);
-    }, []);
+        if (mainTab === 'simulation') {
+            setPaused(restorePausedAfterCellActionRef.current);
+        }
+    }, [mainTab]);
 
     const completeCellInspect = useCallback(() => {
         const cell = cellActionCell;
         if (!cell) return;
         setCellActionCell(null);
-        setPaused(restorePausedAfterCellActionRef.current);
+        if (mainTab === 'simulation') {
+            setPaused(restorePausedAfterCellActionRef.current);
+        }
         setInspectedCell(cell);
         setInspectorTab('explorer');
-    }, [cellActionCell]);
+        if (mainTab === 'simulation' && envelopeRef.current) {
+            const occupants = getCellOccupants(envelopeRef.current, cell);
+            setSelectedCreatureId(occupants.creatures[0]?.id ?? null);
+        } else {
+            const occupants = getCellOccupantsFromSandboxState(sandboxStateFromBoardDefinition(localBoardDef), cell);
+            setSelectedCreatureId(occupants.creatures[0]?.id ?? null);
+        }
+    }, [cellActionCell, mainTab, localBoardDef]);
 
     const completeCellAction = useCallback(
         async (interaction: SandboxCellInteraction) => {
             setCellActionCell(null);
+            if (mainTab === 'builder') {
+                setLocalBoardDef(prev => applyBoardBuilderInteraction(prev, interaction));
+                setBuilderDirty(true);
+                return;
+            }
             try {
                 await runTick([interaction]);
             } finally {
                 setPaused(restorePausedAfterCellActionRef.current);
             }
         },
-        [runTick],
+        [mainTab, runTick],
     );
 
     useEffect(() => {
-        if (!documentId) return;
+        if (!catalogLoaded) return;
         const adapter = adapterRef.current;
         if (!adapter) return;
         adapter.setOnCellClick(cell => {
             if (busyRef.current || cellActionModalOpenRef.current) return;
             restorePausedAfterCellActionRef.current = pausedRef.current;
-            setPaused(true);
+            if (mainTabRef.current === 'simulation') {
+                setPaused(true);
+            }
             setInspectedCell(null);
             setCellActionNonce(n => n + 1);
             setCellActionCell(cell);
         });
-    }, [documentId]);
+    }, [catalogLoaded]);
 
     useEffect(() => {
-        if (paused || !documentId) return;
+        if (mainTab !== 'simulation' || paused || !documentId) return;
         const id = window.setInterval(() => {
             void runTick([]);
         }, tickRateMs);
         return () => clearInterval(id);
-    }, [paused, tickRateMs, documentId, runTick]);
+    }, [mainTab, paused, tickRateMs, documentId, runTick]);
 
-    useEffect(() => {
-        setMoveProjectPickerFor(null);
-    }, [selectedProjectId]);
-
-    const sharedProjectId = React.useMemo(
-        () => workflowProjects.find(p => p.name === 'Shared')?.id ?? null,
-        [workflowProjects],
+    const builderPreviewState = React.useMemo(
+        () => sandboxStateFromBoardDefinition(localBoardDef),
+        [localBoardDef],
     );
 
-    const displayedProjects = React.useMemo(() => {
-        const list = [...workflowProjects];
-        list.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-        return list;
-    }, [workflowProjects]);
-
-    const workflowsInSelectedProject = React.useMemo(() => {
-        if (!selectedProjectId) return [];
-        if (sharedProjectId && selectedProjectId === sharedProjectId) {
-            return workflows.filter(w => w.project_id === selectedProjectId || w.project_id == null);
+    const cellActionOccupants = React.useMemo(() => {
+        if (!cellActionCell) return null;
+        if (mainTab === 'simulation' && envelope) {
+            return getCellOccupants(envelope, cellActionCell);
         }
-        return workflows.filter(w => w.project_id === selectedProjectId);
-    }, [workflows, selectedProjectId, sharedProjectId]);
+        return getCellOccupantsFromSandboxState(builderPreviewState, cellActionCell);
+    }, [mainTab, envelope, cellActionCell, builderPreviewState]);
 
-    const workflowsInProjectDrillIn = React.useMemo(
-        () => workflowsInSelectedProject.filter(w => !w.expose_as_custom_skill),
-        [workflowsInSelectedProject],
-    );
-
-    const filteredWorkflowsInProject = React.useMemo(() => {
-        let list = filterNamesByPrefix(workflowsInProjectDrillIn, workflowNameFilter);
-        if (workflowListSort === 'name') {
-            list = [...list].sort((a, b) => {
-                const byName = a.name.localeCompare(b.name);
-                if (byName !== 0) return byName;
-                return a.id.localeCompare(b.id);
-            });
-        } else {
-            list = [...list].sort((a, b) => {
-                const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-                const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-                if (tb !== ta) return tb - ta;
-                return a.id.localeCompare(b.id);
-            });
-        }
-        return list;
-    }, [workflowsInProjectDrillIn, workflowNameFilter, workflowListSort]);
-
-    const selectedProject = React.useMemo(
-        () =>
-            selectedProjectId ? workflowProjects.find(p => p.id === selectedProjectId) ?? null : null,
-        [workflowProjects, selectedProjectId],
-    );
-
-    const workflowCountForProject = (p: WorkflowProject) => {
-        const inProject =
-            sharedProjectId && p.id === sharedProjectId
-                ? workflows.filter(w => w.project_id === p.id || w.project_id == null)
-                : workflows.filter(w => w.project_id === p.id);
-        return inProject.filter(w => !w.expose_as_custom_skill).length;
-    };
-
-    const handleCreateProject = async () => {
-        const name = newProjectNameDraft.trim();
-        if (!name) return;
-        try {
-            await ApiClient.createWorkflowProject({ name });
-            setNewProjectNameDraft('');
-            const projs = await ApiClient.getWorkflowProjects().catch(() => [] as WorkflowProject[]);
-            setWorkflowProjects(projs);
-        } catch {
-            /* ignore */
-        }
-    };
-
-    const handleDeleteProject = async () => {
-        if (!selectedProjectId || !selectedProject) return;
-        const inProject = workflowsInProject(selectedProjectId, sharedProjectId, workflows);
-        const workflowCount = inProject.length;
-        try {
-            await ApiClient.deleteWorkflowProject(selectedProjectId, {
-                deleteWorkflows: workflowCount > 0,
-            });
-            if (selectedWorkflow && inProject.some(w => w.id === selectedWorkflow.id)) {
-                setSelectedWorkflow(null);
-            }
-            setSelectedProjectId(null);
-            setWorkflowNameFilter('');
-            const [wfs, projs] = await Promise.all([
-                ApiClient.getWorkflows(),
-                ApiClient.getWorkflowProjects().catch(() => [] as WorkflowProject[]),
-            ]);
-            setWorkflows(wfs);
-            setWorkflowProjects(projs);
-        } catch (err) {
-            console.error('Failed to delete project:', err);
-        }
-    };
-
-    const selectedProjectDeleteWorkflowCount = React.useMemo(() => {
-        if (!selectedProjectId) return 0;
-        return workflowsInProject(selectedProjectId, sharedProjectId, workflows).length;
-    }, [selectedProjectId, sharedProjectId, workflows]);
-
-    const moveWorkflowToProject = async (wfId: string, projectId: string): Promise<boolean> => {
-        try {
-            await ApiClient.updateWorkflow(wfId, { project_id: projectId });
-            const wfs = await ApiClient.getWorkflows();
-            setWorkflows(wfs);
-            if (selectedWorkflow?.id === wfId) {
-                setSelectedWorkflow(prev => prev ? { ...prev, project_id: projectId } : prev);
-            }
-            return true;
-        } catch {
-            return false;
-        }
-    };
-
-    const openSandboxWorkflow = async (wf: WorkflowDefinitionListItem) => {
-        setMoveProjectPickerFor(null);
-        try {
-            const full = await ApiClient.getWorkflow(wf.id);
-            setSelectedWorkflow(full);
-        } catch { /* ignore */ }
-    };
-
-    const nodeLabels = selectedWorkflow ? nodeIdToLabel(selectedWorkflow.graph) : new Map<string, string>();
-
-    const cellActionOccupants = React.useMemo(
-        () => (envelope && cellActionCell ? getCellOccupants(envelope, cellActionCell) : null),
-        [envelope, cellActionCell],
-    );
     const modalCanInspect = cellActionOccupants ? cellHasInspectableContent(cellActionOccupants) : false;
 
-    const inspectedOccupants = React.useMemo(
-        () => (envelope && inspectedCell ? getCellOccupants(envelope, inspectedCell) : null),
-        [envelope, inspectedCell],
-    );
+    const inspectedOccupants = React.useMemo(() => {
+        if (!inspectedCell) return null;
+        if (mainTab === 'simulation' && envelope) {
+            return getCellOccupants(envelope, inspectedCell);
+        }
+        return getCellOccupantsFromSandboxState(builderPreviewState, inspectedCell);
+    }, [mainTab, envelope, inspectedCell, builderPreviewState]);
+
+    const visibleErrors = collectVisibleErrors(envelope?.last_errors, selectedCreatureId);
+    const activeBoardName =
+        boards.find(b => b.id === (mainTab === 'simulation' ? selectedBoardId : builderBoardId))?.name ?? null;
 
     if (loadError) {
         return (
@@ -579,7 +698,7 @@ export const SandboxView: React.FC = () => {
         );
     }
 
-    if (!envelope || !documentId || !catalogLoaded) {
+    if (!catalogLoaded || (mainTab === 'simulation' && (!envelope || !documentId))) {
         return (
             <div className="h-full flex items-center justify-center text-mw-text-secondary gap-2">
                 <Loader2 className="animate-spin" size={24} />
@@ -606,7 +725,7 @@ export const SandboxView: React.FC = () => {
                     onClick={() => setCompactExplorerOpen(false)}
                 />
             )}
-            {/* Left — workflow picker (editor parity: z-10, resize strip on canvas edge) */}
+            {/* Left — board list */}
             <div
                 className={
                     compact
@@ -619,165 +738,53 @@ export const SandboxView: React.FC = () => {
             >
                 <div className="flex-1 min-w-0 border-r border-mw-border bg-mw-sidebar flex flex-col min-h-0 overflow-y-auto">
                     <div className="p-3 border-b border-mw-border shrink-0">
-                        <div className="flex items-center justify-between mb-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsWorkflowsOpen(!isWorkflowsOpen)}
-                                className="flex items-center gap-1 text-xs font-semibold text-mw-text-secondary uppercase tracking-wide hover:text-mw-text-primary transition-colors"
-                            >
-                                {isWorkflowsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Workflows
-                            </button>
-                        </div>
-                        {isWorkflowsOpen && (
-                            <>
-                                {!selectedProjectId ? (
-                                    <>
-                                        <div className="flex gap-1 mb-2">
-                                            <input
-                                                type="text"
-                                                value={newProjectNameDraft}
-                                                onChange={e => setNewProjectNameDraft(e.target.value)}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') void handleCreateProject();
-                                                }}
-                                                placeholder="New project…"
-                                                aria-label="New project name"
-                                                className="min-w-0 flex-1 px-1.5 py-0.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded focus:outline-none focus:ring-1 focus:ring-mw-primary"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleCreateProject()}
-                                                className="shrink-0 p-1 text-mw-primary hover:bg-mw-primary-muted rounded transition-colors"
-                                                title="Create project"
-                                            >
-                                                <FolderPlus size={14} />
-                                            </button>
-                                        </div>
-                                        <div
-                                            className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}
-                                        >
-                                            {displayedProjects.map(p => (
-                                                <button
-                                                    key={p.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSelectedProjectId(p.id);
-                                                        setWorkflowNameFilter('');
-                                                    }}
-                                                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-lg text-left text-mw-text-primary hover:bg-mw-card transition-colors"
-                                                >
-                                                    <span className="truncate font-medium">{p.name}</span>
-                                                    <span className="shrink-0 text-xs text-mw-text-secondary tabular-nums">
-                                                        {workflowCountForProject(p)}
-                                                    </span>
-                                                </button>
-                                            ))}
-                                            {displayedProjects.length === 0 && (
-                                                <div className="text-xs text-mw-text-secondary text-center py-2">
-                                                    No projects yet
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="flex items-center gap-1 mb-2 min-w-0">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setSelectedProjectId(null);
-                                                    setWorkflowNameFilter('');
-                                                }}
-                                                className="shrink-0 p-1 rounded text-mw-text-secondary hover:text-mw-text-primary hover:bg-mw-card"
-                                                title="All projects"
-                                            >
-                                                <ChevronLeft size={16} />
-                                            </button>
-                                            <span
-                                                className="text-xs font-semibold text-mw-text-primary truncate min-w-0 flex-1"
-                                                title={selectedProject?.name ?? ''}
-                                            >
-                                                {selectedProject?.name ?? 'Project'}
+                        <h2 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
+                            Boards
+                        </h2>
+                        <div className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                            {boards.map(board => {
+                                const activeId = mainTab === 'simulation' ? selectedBoardId : builderBoardId;
+                                return (
+                                    <button
+                                        key={board.id}
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void handleBoardListSelect(board.id)}
+                                        className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-lg text-left transition-colors disabled:opacity-50 ${
+                                            activeId === board.id
+                                                ? 'bg-mw-primary-muted text-mw-primary'
+                                                : 'text-mw-text-primary hover:bg-mw-card'
+                                        }`}
+                                    >
+                                        <span className="truncate font-medium">{board.name}</span>
+                                        {board.is_system ? (
+                                            <span className="shrink-0 text-[10px] text-mw-text-secondary uppercase">
+                                                System
                                             </span>
-                                            {selectedProject && (
-                                                <WorkflowProjectDeleteControl
-                                                    projectName={selectedProject.name}
-                                                    workflowCount={selectedProjectDeleteWorkflowCount}
-                                                    disabled={!isDeletableProject(selectedProject)}
-                                                    onConfirmDelete={handleDeleteProject}
-                                                />
-                                            )}
-                                        </div>
-                                        <div
-                                            role="group"
-                                            aria-label="Sort workflows"
-                                            className="flex rounded-lg border border-mw-border bg-mw-card p-0.5 mb-2 gap-0.5"
-                                        >
-                                            {(['updated', 'name'] as const).map(key => (
-                                                <button
-                                                    key={key}
-                                                    type="button"
-                                                    onClick={() => setWorkflowListSort(key)}
-                                                    className={`flex-1 min-w-0 px-1.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
-                                                        workflowListSort === key
-                                                            ? 'bg-mw-primary-muted text-mw-primary'
-                                                            : 'text-mw-text-secondary hover:bg-mw-card hover:text-mw-text-primary'
-                                                    }`}
-                                                >
-                                                    {key === 'name' ? 'Name A–Z' : 'Last updated'}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mb-2">
-                                            <input
-                                                type="search"
-                                                value={workflowNameFilter}
-                                                onChange={e => setWorkflowNameFilter(e.target.value)}
-                                                placeholder="Filter…"
-                                                aria-label="Filter workflows"
-                                                className="min-w-0 flex-1 basis-[8rem] max-w-full px-1.5 py-0.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded focus:outline-none focus:ring-1 focus:ring-mw-primary"
-                                            />
-                                        </div>
-                                        <div
-                                            className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}
-                                        >
-                                            {filteredWorkflowsInProject.map(wf => (
-                                                <WorkflowPaletteWorkflowRow
-                                                    key={wf.id}
-                                                    workflow={wf}
-                                                    wfColor={wfRowColor}
-                                                    activeWorkflowId={selectedWorkflow?.id ?? null}
-                                                    draggable={false}
-                                                    onOpen={openSandboxWorkflow}
-                                                    moveProjectPickerFor={moveProjectPickerFor}
-                                                    onToggleMovePicker={id =>
-                                                        setMoveProjectPickerFor(prev => (prev === id ? null : id))
-                                                    }
-                                                    workflowProjects={workflowProjects}
-                                                    sharedProjectId={sharedProjectId}
-                                                    onMoveToProject={moveWorkflowToProject}
-                                                    onMoveComplete={() => setMoveProjectPickerFor(null)}
-                                                />
-                                            ))}
-                                            {filteredWorkflowsInProject.length === 0 && (
-                                                <div className="text-xs text-mw-text-secondary text-center py-2">
-                                                    No workflows in this project
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-                            </>
-                        )}
+                                        ) : null}
+                                    </button>
+                                );
+                            })}
+                            {boards.length === 0 && (
+                                <div className="text-xs text-mw-text-secondary text-center py-2">No boards yet</div>
+                            )}
+                        </div>
                     </div>
                     <div className="p-3 text-[10px] text-mw-text-secondary leading-relaxed space-y-1.5">
-                        <p>
-                            Select a workflow, then use Play / Step in the toolbar. You can switch workflows while the
-                            session runs—the next tick that runs the brain uses the new graph, and the choice is saved on
-                            this session. If the pet is finishing a move or other intent, the new brain applies on the next{' '}
-                            <span className="whitespace-nowrap">decision</span> tick.
-                        </p>
-                        <p>Create or edit graphs in the Workflow Editor.</p>
+                        {mainTab === 'simulation' ? (
+                            <>
+                                <p>
+                                    Select a board to start a new simulation session. Use Play / Step in the toolbar to
+                                    advance ticks.
+                                </p>
+                                <p>Pause to edit cells, resize the grid, or save the session back to a board.</p>
+                            </>
+                        ) : (
+                            <>
+                                <p>Select a board to edit its layout, or create a new board from the toolbar.</p>
+                                <p>Place walls, food, and creatures with workflow brains, then save.</p>
+                            </>
+                        )}
                     </div>
                 </div>
                 {!compact && (
@@ -799,14 +806,14 @@ export const SandboxView: React.FC = () => {
                 className="relative z-0 flex-1 flex flex-col min-h-0 overflow-hidden"
                 style={{ minWidth: compact ? 0 : CENTER_PANEL_MIN_PX }}
             >
-                <div className="h-12 border-b border-mw-border bg-mw-card flex items-center px-2 sm:px-4 gap-2 sm:gap-3 shrink-0 min-w-0">
+                <div className="h-12 border-b border-mw-border bg-mw-card flex items-center px-2 sm:px-4 gap-2 sm:gap-3 shrink-0 min-w-0 flex-wrap">
                     {compact && (
                         <>
                             <button
                                 type="button"
                                 className="shrink-0 p-2 rounded-lg border border-mw-border bg-mw-card-alt text-mw-text-primary hover:bg-mw-page"
-                                aria-label="Open workflow palette"
-                                title="Palette"
+                                aria-label="Open board list"
+                                title="Boards"
                                 onClick={() => {
                                     setCompactExplorerOpen(false);
                                     setCompactPaletteOpen(true);
@@ -828,32 +835,112 @@ export const SandboxView: React.FC = () => {
                             </button>
                         </>
                     )}
-                    <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => setPaused(p => !p)}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mw-primary text-white text-xs font-medium disabled:opacity-50"
+                    <div
+                        role="tablist"
+                        aria-label="Sandbox mode"
+                        className="flex rounded-lg border border-mw-border bg-mw-page p-0.5 gap-0.5 shrink-0"
                     >
-                        {paused ? <Play size={14} /> : <Pause size={14} />}
-                        {paused ? 'Play' : 'Pause'}
-                    </button>
-                    <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void runTick([])}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs"
-                    >
-                        <StepForward size={14} />
-                        Step
-                    </button>
+                        {(['simulation', 'builder'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                type="button"
+                                role="tab"
+                                aria-selected={mainTab === tab}
+                                onClick={() => setMainTab(tab)}
+                                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                                    mainTab === tab
+                                        ? 'bg-mw-primary-muted text-mw-primary'
+                                        : 'text-mw-text-secondary hover:text-mw-text-primary hover:bg-mw-card'
+                                }`}
+                            >
+                                {tab === 'simulation' ? 'Simulation' : 'Board Builder'}
+                            </button>
+                        ))}
+                    </div>
+                    {mainTab === 'simulation' ? (
+                        <>
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => setPaused(p => !p)}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mw-primary text-white text-xs font-medium disabled:opacity-50"
+                            >
+                                {paused ? <Play size={14} /> : <Pause size={14} />}
+                                {paused ? 'Play' : 'Pause'}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void runTick([])}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs"
+                            >
+                                <StepForward size={14} />
+                                Step
+                            </button>
+                            {paused ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void handleSaveSessionAsBoard()}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs disabled:opacity-50"
+                                    >
+                                        <Save size={14} />
+                                        Save as Board
+                                    </button>
+                                    {envelope?.board_id ? (
+                                        <button
+                                            type="button"
+                                            disabled={busy}
+                                            onClick={() => void handleUpdateSourceBoard()}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs disabled:opacity-50"
+                                        >
+                                            <Save size={14} />
+                                            Update Board
+                                        </button>
+                                    ) : null}
+                                </>
+                            ) : null}
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={handleNewBoard}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs disabled:opacity-50"
+                            >
+                                <Plus size={14} />
+                                New Board
+                            </button>
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void handleSaveBuilderBoard()}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mw-primary text-white text-xs font-medium disabled:opacity-50"
+                            >
+                                <Save size={14} />
+                                Save{builderDirty ? ' *' : ''}
+                            </button>
+                        </>
+                    )}
                     <span className="text-xs text-mw-text-secondary truncate min-w-0 max-w-[12rem] sm:max-w-xs">
-                        {selectedWorkflow?.name ?? 'Default session workflow'}
+                        {mainTab === 'simulation'
+                            ? (activeBoardName ?? 'Simulation session')
+                            : (builderBoardName || 'Untitled Board')}
                     </span>
                 </div>
-                {envelope.last_error && (
+                {mainTab === 'simulation' && visibleErrors.length > 0 && (
                     <div className="px-4 py-2 text-xs text-mw-error bg-mw-error-muted border-b border-mw-border shrink-0 space-y-1">
-                        <div>{envelope.last_error}</div>
-                        {shouldShowSandboxDecisionHint(envelope.last_error) ? (
+                        {visibleErrors.map(({ creatureId, message }) => (
+                            <div key={creatureId}>
+                                {selectedCreatureId && creatureId === selectedCreatureId ? null : (
+                                    <span className="font-mono text-[10px] mr-1">{creatureId.slice(0, 8)}:</span>
+                                )}
+                                {message}
+                            </div>
+                        ))}
+                        {visibleErrors.some(({ message }) => shouldShowSandboxDecisionHint(message)) ? (
                             <div className="text-mw-text-secondary font-normal">{SANDBOX_DECISION_ERROR_HINT}</div>
                         ) : null}
                     </div>
@@ -911,28 +998,30 @@ export const SandboxView: React.FC = () => {
                         >
                             Explorer
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setInspectorTab('logs')}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                                inspectorTab === 'logs'
-                                    ? 'text-mw-primary border-b-2 border-mw-primary bg-mw-card'
-                                    : 'text-mw-text-secondary hover:text-mw-text-primary border-b-2 border-transparent'
-                            }`}
-                        >
-                            Run Logs
-                            {lastWorkflowRun ? (
-                                <span
-                                    className={`w-4 h-4 rounded-full shrink-0 ${
-                                        lastWorkflowRun.status === 'ok'
-                                            ? 'bg-green-500'
-                                            : lastWorkflowRun.status === 'partial'
-                                              ? 'bg-amber-500'
-                                              : 'bg-red-500'
-                                    }`}
-                                />
-                            ) : null}
-                        </button>
+                        {mainTab === 'simulation' ? (
+                            <button
+                                type="button"
+                                onClick={() => setInspectorTab('logs')}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                                    inspectorTab === 'logs'
+                                        ? 'text-mw-primary border-b-2 border-mw-primary bg-mw-card'
+                                        : 'text-mw-text-secondary hover:text-mw-text-primary border-b-2 border-transparent'
+                                }`}
+                            >
+                                Run Logs
+                                {selectedCreatureRun ? (
+                                    <span
+                                        className={`w-4 h-4 rounded-full shrink-0 ${
+                                            selectedCreatureRun.status === 'ok'
+                                                ? 'bg-green-500'
+                                                : selectedCreatureRun.status === 'partial'
+                                                  ? 'bg-amber-500'
+                                                  : 'bg-red-500'
+                                        }`}
+                                    />
+                                ) : null}
+                            </button>
+                        ) : null}
                     </div>
                     <div className="flex-1 min-h-0 overflow-y-auto text-sm">
                         {inspectorTab === 'explorer' ? (
@@ -945,7 +1034,10 @@ export const SandboxView: React.FC = () => {
                                             </h3>
                                             <button
                                                 type="button"
-                                                onClick={() => setInspectedCell(null)}
+                                                onClick={() => {
+                                                    setInspectedCell(null);
+                                                    setSelectedCreatureId(null);
+                                                }}
                                                 className="shrink-0 text-[10px] font-medium text-mw-primary hover:underline"
                                             >
                                                 Clear
@@ -956,7 +1048,10 @@ export const SandboxView: React.FC = () => {
                                                 Nothing is on this cell anymore.{' '}
                                                 <button
                                                     type="button"
-                                                    onClick={() => setInspectedCell(null)}
+                                                    onClick={() => {
+                                                        setInspectedCell(null);
+                                                        setSelectedCreatureId(null);
+                                                    }}
                                                     className="text-mw-primary hover:underline font-medium"
                                                 >
                                                     Clear
@@ -964,79 +1059,179 @@ export const SandboxView: React.FC = () => {
                                             </p>
                                         ) : (
                                             <div className="space-y-3">
-                                                {inspectedOccupants.petHere ? (
-                                                    <InspectorSection title="Pet">
+                                                {inspectedOccupants.creatures.map(creature => (
+                                                    <InspectorSection
+                                                        key={creature.id}
+                                                        title={creature.name ?? `Creature ${creature.id.slice(0, 8)}`}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedCreatureId(creature.id)}
+                                                            className={`mb-2 text-[10px] font-medium ${
+                                                                selectedCreatureId === creature.id
+                                                                    ? 'text-mw-primary'
+                                                                    : 'text-mw-text-secondary hover:text-mw-primary'
+                                                            }`}
+                                                        >
+                                                            {selectedCreatureId === creature.id
+                                                                ? 'Selected'
+                                                                : 'Select creature'}
+                                                        </button>
                                                         <div className="grid grid-cols-2 gap-2 text-xs">
                                                             <div className="text-mw-text-secondary">Position</div>
                                                             <div className="text-mw-text-primary tabular-nums text-right font-mono">
-                                                                ({envelope.sandbox.pet.position.x},{' '}
-                                                                {envelope.sandbox.pet.position.y})
+                                                                ({creature.position.x}, {creature.position.y})
                                                             </div>
-                                                            <div className="text-mw-text-secondary">Hunger</div>
-                                                            <div className="text-mw-text-primary tabular-nums text-right">
-                                                                {envelope.sandbox.pet.hunger}
-                                                            </div>
-                                                            <div className="text-mw-text-secondary">Energy</div>
-                                                            <div className="text-mw-text-primary tabular-nums text-right">
-                                                                {envelope.sandbox.pet.energy}
-                                                            </div>
-                                                            <div className="text-mw-text-secondary">Mood</div>
-                                                            <div className="text-mw-text-primary tabular-nums text-right">
-                                                                {envelope.sandbox.pet.mood}
-                                                            </div>
-                                                            <div className="text-mw-text-secondary col-span-2">
-                                                                Intent
-                                                            </div>
-                                                            <div className="text-mw-text-primary text-[11px] break-words col-span-2">
-                                                                {formatIntent(envelope.sandbox.pet.intent)}
-                                                            </div>
-                                                        </div>
-                                                    </InspectorSection>
-                                                ) : null}
-                                                {inspectedOccupants.items.map(it => (
-                                                    <InspectorSection key={it.id} title={`Item (${it.type})`}>
-                                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                                            <div className="text-mw-text-secondary">Id</div>
-                                                            <div className="text-mw-text-primary text-right font-mono text-[10px] break-all">
-                                                                {it.id}
-                                                            </div>
-                                                            <div className="text-mw-text-secondary">Position</div>
-                                                            <div className="text-mw-text-primary tabular-nums text-right font-mono">
-                                                                ({it.position.x}, {it.position.y})
-                                                            </div>
-                                                            {typeof it.energy === 'number' ? (
+                                                            {mainTab === 'simulation' ? (
                                                                 <>
-                                                                    <div className="text-mw-text-secondary">Energy</div>
-                                                                    <div className="text-mw-text-primary tabular-nums text-right">
-                                                                        {it.energy}
+                                                                    <div className="text-mw-text-secondary">Facing</div>
+                                                                    <div className="text-mw-text-primary tabular-nums text-right font-mono">
+                                                                        {creature.facing ?? 'N'}
+                                                                    </div>
+                                                                    <div className="text-mw-text-secondary col-span-2">
+                                                                        Last action
+                                                                    </div>
+                                                                    <div className="text-mw-text-primary text-[11px] break-words col-span-2">
+                                                                        {formatRecentAction(
+                                                                            creature.id,
+                                                                            envelope?.sandbox.recent_actions ?? [],
+                                                                        )}
                                                                     </div>
                                                                 </>
-                                                            ) : null}
+                                                            ) : (
+                                                                <>
+                                                                    <div className="text-mw-text-secondary">Facing</div>
+                                                                    <div className="col-span-1 flex justify-end gap-1">
+                                                                        {SANDBOX_FACING_VALUES.map(facing => (
+                                                                            <button
+                                                                                key={facing}
+                                                                                type="button"
+                                                                                aria-label={`Face ${facing}`}
+                                                                                onClick={() => {
+                                                                                    setLocalBoardDef(prev =>
+                                                                                        updateBoardCreatureFacing(
+                                                                                            prev,
+                                                                                            creature.id,
+                                                                                            facing,
+                                                                                        ),
+                                                                                    );
+                                                                                    setBuilderDirty(true);
+                                                                                }}
+                                                                                className={`px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                                                                                    (creature.facing ?? 'N') === facing
+                                                                                        ? 'border-mw-primary text-mw-primary'
+                                                                                        : 'border-mw-border text-mw-text-secondary hover:text-mw-primary'
+                                                                                }`}
+                                                                            >
+                                                                                {facing}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="text-mw-text-secondary">Workflow</div>
+                                                                    <div className="text-mw-text-primary text-right font-mono text-[10px] break-all col-span-1">
+                                                                        {creature.workflow_id}
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </InspectorSection>
+                                                ))}
+                                                {inspectedOccupants.items.map(it => (
+                                                    <SandboxItemInspectorSection
+                                                        key={it.id}
+                                                        item={it}
+                                                        readOnly={mainTab !== 'builder'}
+                                                        onItemChange={(itemId, patch) => {
+                                                            setLocalBoardDef(prev =>
+                                                                updateBoardItemMetadata(prev, itemId, patch),
+                                                            );
+                                                            setBuilderDirty(true);
+                                                        }}
+                                                    />
                                                 ))}
                                             </div>
                                         )}
                                     </div>
                                 ) : null}
+                                {mainTab === 'simulation' && envelope ? (
+                                    selectedCreature ? (
+                                        <div>
+                                            <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
+                                                Creature
+                                            </h3>
+                                            <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                                                <div className="text-mw-text-secondary">Name</div>
+                                                <div className="text-mw-text-primary text-right">
+                                                    {selectedCreature.name ?? selectedCreature.id.slice(0, 8)}
+                                                </div>
+                                                <div className="text-mw-text-secondary">Facing</div>
+                                                <div className="text-mw-text-primary tabular-nums text-right font-mono">
+                                                    {selectedCreature.facing}
+                                                </div>
+                                            </div>
+                                            <p className="text-xs text-mw-text-primary break-words">
+                                                {formatRecentAction(
+                                                    selectedCreature.id,
+                                                    envelope.sandbox.recent_actions,
+                                                )}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
+                                                Session
+                                            </h3>
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div className="text-mw-text-secondary">Tick</div>
+                                                <div className="text-mw-text-primary tabular-nums text-right">
+                                                    {envelope.sandbox.tick}
+                                                </div>
+                                                <div className="text-mw-text-secondary">Creatures</div>
+                                                <div className="text-mw-text-primary tabular-nums text-right">
+                                                    {envelope.sandbox.creatures.length}
+                                                </div>
+                                                <div className="text-mw-text-secondary">Board</div>
+                                                <div className="text-mw-text-primary text-right truncate">
+                                                    {activeBoardName ?? envelope.board_id ?? '—'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                ) : null}
                                 <div>
                                     <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
-                                        Simulation
+                                        {mainTab === 'simulation' ? 'Simulation' : 'Board'}
                                     </h3>
-                                    <label className="flex items-center gap-2 text-xs text-mw-text-secondary mb-2">
-                                        Tick ms
-                                        <input
-                                            type="number"
-                                            min={200}
-                                            max={60000}
-                                            step={100}
-                                            value={tickRateMs}
-                                            onChange={e =>
-                                                setTickRateMs(Number(e.target.value) || DEFAULT_TICK_RATE_MS)
-                                            }
-                                            className="w-24 px-2 py-1 rounded border border-mw-border bg-mw-page text-mw-text-primary"
-                                        />
-                                    </label>
+                                    {mainTab === 'builder' ? (
+                                        <label className="flex flex-col gap-1 text-xs text-mw-text-secondary mb-3">
+                                            Board name
+                                            <input
+                                                type="text"
+                                                value={builderBoardName}
+                                                onChange={e => {
+                                                    setBuilderBoardName(e.target.value);
+                                                    setBuilderDirty(true);
+                                                }}
+                                                className="px-2 py-1 rounded border border-mw-border bg-mw-page text-mw-text-primary"
+                                            />
+                                        </label>
+                                    ) : null}
+                                    {mainTab === 'simulation' ? (
+                                        <label className="flex items-center gap-2 text-xs text-mw-text-secondary mb-2">
+                                            Tick ms
+                                            <input
+                                                type="number"
+                                                min={200}
+                                                max={60000}
+                                                step={100}
+                                                value={tickRateMs}
+                                                onChange={e =>
+                                                    setTickRateMs(Number(e.target.value) || DEFAULT_TICK_RATE_MS)
+                                                }
+                                                className="w-24 px-2 py-1 rounded border border-mw-border bg-mw-page text-mw-text-primary"
+                                            />
+                                        </label>
+                                    ) : null}
                                     <div className="flex flex-wrap items-end gap-2 mb-3">
                                         <label className="flex flex-col gap-0.5 text-xs text-mw-text-secondary">
                                             Width
@@ -1045,7 +1240,7 @@ export const SandboxView: React.FC = () => {
                                                 min={SANDBOX_GRID_MIN_SIZE}
                                                 max={SANDBOX_GRID_MAX_SIZE}
                                                 value={gridWidthInput}
-                                                disabled={!paused || busy}
+                                                disabled={mainTab === 'simulation' ? !paused || busy : busy}
                                                 onChange={e =>
                                                     setGridWidthInput(
                                                         Math.min(
@@ -1067,7 +1262,7 @@ export const SandboxView: React.FC = () => {
                                                 min={SANDBOX_GRID_MIN_SIZE}
                                                 max={SANDBOX_GRID_MAX_SIZE}
                                                 value={gridHeightInput}
-                                                disabled={!paused || busy}
+                                                disabled={mainTab === 'simulation' ? !paused || busy : busy}
                                                 onChange={e =>
                                                     setGridHeightInput(
                                                         Math.min(
@@ -1084,7 +1279,7 @@ export const SandboxView: React.FC = () => {
                                         </label>
                                         <button
                                             type="button"
-                                            disabled={!paused || busy}
+                                            disabled={mainTab === 'simulation' ? !paused || busy : busy}
                                             onClick={() => void applyGridResize()}
                                             className="px-2 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs text-mw-text-primary disabled:opacity-50"
                                         >
@@ -1096,60 +1291,81 @@ export const SandboxView: React.FC = () => {
                                             {gridResizeError}
                                         </p>
                                     ) : null}
-                                    {!paused ? (
+                                    {mainTab === 'simulation' && !paused ? (
                                         <p className="text-[10px] text-mw-text-secondary mb-2">
                                             Pause playback to resize the grid.
                                         </p>
                                     ) : null}
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div className="text-mw-text-secondary">Tick</div>
-                                        <div className="text-mw-text-primary tabular-nums text-right">
-                                            {envelope.sandbox.tick}
+                                    {mainTab === 'builder' ? (
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="text-mw-text-secondary">Items</div>
+                                            <div className="text-mw-text-primary tabular-nums text-right">
+                                                {localBoardDef.items.length}
+                                            </div>
+                                            <div className="text-mw-text-secondary">Creatures</div>
+                                            <div className="text-mw-text-primary tabular-nums text-right">
+                                                {localBoardDef.creatures.length}
+                                            </div>
                                         </div>
-                                        <div className="text-mw-text-secondary">Hunger</div>
-                                        <div className="text-mw-text-primary tabular-nums text-right">
-                                            {envelope.sandbox.pet.hunger}
-                                        </div>
-                                        <div className="text-mw-text-secondary">Energy</div>
-                                        <div className="text-mw-text-primary tabular-nums text-right">
-                                            {envelope.sandbox.pet.energy}
-                                        </div>
-                                        <div className="text-mw-text-secondary">Mood</div>
-                                        <div className="text-mw-text-primary tabular-nums text-right">
-                                            {envelope.sandbox.pet.mood}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
-                                        Current action
-                                    </h3>
-                                    <p className="text-xs text-mw-text-primary break-words">
-                                        {formatIntent(envelope.sandbox.pet.intent)}
-                                    </p>
-                                    {envelope.sandbox.recent_actions?.length ? (
-                                        <ul className="mt-2 text-[10px] text-mw-text-secondary space-y-1">
-                                            {[...envelope.sandbox.recent_actions].reverse().slice(0, 5).map((a, i) => (
-                                                <li key={`${a.tick}-${a.action}-${i}`}>
-                                                    t{a.tick}: {a.action}
-                                                    {a.reason ? ` — ${a.reason}` : ''}
-                                                </li>
-                                            ))}
-                                        </ul>
                                     ) : null}
                                 </div>
-                                <div>
-                                    <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
-                                        Workflow
-                                    </h3>
-                                    <p className="text-xs text-mw-text-primary">{selectedWorkflow?.name ?? '—'}</p>
-                                    <p className="text-[10px] text-mw-text-secondary mt-1 break-all">
-                                        Persisted workflow id:{' '}
-                                        <span className="font-mono">{envelope.workflow_id}</span>
-                                    </p>
-                                </div>
+                                {mainTab === 'simulation' && envelope && !selectedCreature ? (
+                                    <div>
+                                        <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
+                                            Creatures
+                                        </h3>
+                                        {envelope.sandbox.creatures.length === 0 ? (
+                                            <p className="text-xs text-mw-text-secondary">No creatures on the board.</p>
+                                        ) : (
+                                            <ul className="space-y-1">
+                                                {envelope.sandbox.creatures.map(creature => (
+                                                    <li key={creature.id}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedCreatureId(creature.id)}
+                                                            className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors ${
+                                                                selectedCreatureId === creature.id
+                                                                    ? 'bg-mw-primary-muted text-mw-primary'
+                                                                    : 'hover:bg-mw-card text-mw-text-primary'
+                                                            }`}
+                                                        >
+                                                            {creature.name ?? creature.id.slice(0, 8)}
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                ) : null}
+                                {mainTab === 'simulation' && envelope && selectedCreature ? (
+                                    <div>
+                                        <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
+                                            Recent actions
+                                        </h3>
+                                        {envelope.sandbox.recent_actions?.length ? (
+                                            <ul className="text-[10px] text-mw-text-secondary space-y-1">
+                                                {[...envelope.sandbox.recent_actions]
+                                                    .reverse()
+                                                    .filter(
+                                                        a =>
+                                                            !a.creature_id ||
+                                                            a.creature_id === selectedCreature.id,
+                                                    )
+                                                    .slice(0, 5)
+                                                    .map((a, i) => (
+                                                        <li key={`${a.tick}-${a.action}-${i}`}>
+                                                            t{a.tick}: {a.action}
+                                                            {a.reason ? ` — ${a.reason}` : ''}
+                                                        </li>
+                                                    ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-xs text-mw-text-secondary">No recent actions.</p>
+                                        )}
+                                    </div>
+                                ) : null}
                             </div>
-                        ) : (
+                        ) : mainTab === 'simulation' ? (
                             <div className="p-4 space-y-4">
                                 {tickTranscript.length > 0 && (
                                     <div>
@@ -1163,39 +1379,41 @@ export const SandboxView: React.FC = () => {
                                         </ul>
                                     </div>
                                 )}
-                                {!lastWorkflowRun && (
+                                {!selectedCreatureId ? (
                                     <div className="text-center text-xs text-mw-text-secondary mt-4">
-                                        Run a tick when the brain executes (Play/Step) to see node logs. Intent-only
-                                        steps do not run the workflow graph.
+                                        Select a creature in Explorer to view its workflow run logs.
                                     </div>
-                                )}
-                                {lastWorkflowRun && (
+                                ) : !selectedCreatureRun ? (
+                                    <div className="text-center text-xs text-mw-text-secondary mt-4">
+                                        Run a tick when this creature&apos;s brain executes (Play/Step) to see node logs.
+                                    </div>
+                                ) : (
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between bg-mw-card-alt px-3 py-2 rounded-lg border border-mw-border">
                                             <span className="text-xs font-semibold text-mw-text-primary">
-                                                Last brain run
+                                                {selectedCreature?.name ?? 'Creature'} brain run
                                             </span>
                                             <span
                                                 className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                                    lastWorkflowRun.status === 'ok'
+                                                    selectedCreatureRun.status === 'ok'
                                                         ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                                        : lastWorkflowRun.status === 'partial'
+                                                        : selectedCreatureRun.status === 'partial'
                                                           ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                                                           : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                                                 }`}
                                             >
-                                                {lastWorkflowRun.status.toUpperCase()}
+                                                {selectedCreatureRun.status.toUpperCase()}
                                             </span>
                                         </div>
                                         <WorkflowRunLogsNodeResultsList
-                                            node_results={lastWorkflowRun.node_results}
+                                            node_results={selectedCreatureRun.node_results}
                                             getNodeLabel={id => nodeLabels.get(id) ?? id}
                                             userSettings={user?.settings as Record<string, unknown> | undefined}
                                         />
                                     </div>
                                 )}
                             </div>
-                        )}
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -1203,7 +1421,12 @@ export const SandboxView: React.FC = () => {
                 <SandboxCellActionModal
                     key={`${cellActionCell.x}-${cellActionCell.y}-${cellActionNonce}`}
                     cell={cellActionCell}
+                    occupants={cellActionOccupants ?? { items: [], creatures: [] }}
                     canInspect={modalCanInspect}
+                    allowCreatureActions
+                    workflowProjects={creatureBrainProjects}
+                    workflows={workflows}
+                    sharedProjectId={sharedProjectId}
                     onDismiss={dismissCellActionModal}
                     onComplete={interaction => {
                         void completeCellAction(interaction);

@@ -837,24 +837,18 @@ const StringValueNodeComp: React.FC<{ data: { label: string; isRunning?: boolean
     );
 };
 
-const DecisionActionPrimitiveNodeComp: React.FC<{
-    data: {
-        label: string;
-        action?: string;
-        isRunning?: boolean;
-        inputHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
+const SandboxTickPrimitiveNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; inputHasValue?: boolean; paletteColors?: Record<string, string> };
 }> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'string', label: 'override', hasValue: data.inputHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'string', label: 'output' }];
+    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'override', hasValue: data.inputHasValue }];
+    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'sandbox_tick' }];
     return (
         <StyledNodeBase
-            typeLabel="Sandbox action"
+            typeLabel="Tick input"
             nodeLabel={data.label}
             inputs={inputs}
             outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'decision_action')}
+            borderColor={getHandleColor(data.paletteColors, 'sandbox_tick')}
             isRunning={data.isRunning}
             isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
             outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
@@ -865,6 +859,83 @@ const DecisionActionPrimitiveNodeComp: React.FC<{
         />
     );
 };
+
+const SandboxTickInputUtilityNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
+    paletteKey: string;
+    outputType: string;
+}> = ({ data, paletteKey, outputType }) => {
+    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
+    const outputs: NodeSlot[] = [{ key: 'output', type: outputType, label: 'output' }];
+    return (
+        <StyledNodeBase
+            typeLabel="Utility"
+            nodeLabel={data.label}
+            inputs={inputs}
+            outputs={outputs}
+            borderColor={getHandleColor(data.paletteColors, paletteKey)}
+            isRunning={data.isRunning}
+            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
+            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
+            minWidth={NODE_MIN_WIDTH.medium}
+            paletteColors={data.paletteColors}
+            triggerInput
+            signalOutput
+        />
+    );
+};
+
+const SandboxGetPositionNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => <SandboxTickInputUtilityNodeComp {...props} paletteKey="sandbox_get_position" outputType="dictionary" />;
+
+const SandboxGetFacingNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => <SandboxTickInputUtilityNodeComp {...props} paletteKey="sandbox_get_facing" outputType="string" />;
+
+const SandboxGetNearbyNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => <SandboxTickInputUtilityNodeComp {...props} paletteKey="sandbox_get_nearby" outputType="list" />;
+
+const SandboxNavigationActionNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; reasonHasValue?: boolean; paletteColors?: Record<string, string> };
+    paletteKey: string;
+}> = ({ data, paletteKey }) => {
+    const inputs: NodeSlot[] = [{ key: 'reason', type: 'string', label: 'reason', hasValue: data.reasonHasValue }];
+    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
+    return (
+        <StyledNodeBase
+            typeLabel="Utility"
+            nodeLabel={data.label}
+            inputs={inputs}
+            outputs={outputs}
+            borderColor={getHandleColor(data.paletteColors, paletteKey)}
+            isRunning={data.isRunning}
+            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
+            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
+            minWidth={NODE_MIN_WIDTH.medium}
+            paletteColors={data.paletteColors}
+            triggerInput
+            signalOutput
+        />
+    );
+};
+
+const SandboxMoveForwardNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; reasonHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => <SandboxNavigationActionNodeComp {...props} paletteKey="sandbox_move_forward" />;
+
+const SandboxTurnLeftNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; reasonHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => <SandboxNavigationActionNodeComp {...props} paletteKey="sandbox_turn_left" />;
+
+const SandboxTurnRightNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; reasonHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => <SandboxNavigationActionNodeComp {...props} paletteKey="sandbox_turn_right" />;
+
+const SandboxIdleNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; reasonHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => <SandboxNavigationActionNodeComp {...props} paletteKey="sandbox_idle" />;
 
 const StructureValueNodeComp: React.FC<{ data: { label: string; structureName?: string; isRunning?: boolean; paletteColors?: Record<string, string> } }> = ({ data }) => {
     const outputs: NodeSlot[] = [{ key: 'output', type: 'structure', label: 'output' }];
@@ -951,50 +1022,6 @@ const GmailPrimitiveNodeComp: React.FC<{
             inputs={inputs}
             outputs={outputs}
             borderColor={getHandleColor(data.paletteColors, 'gmail')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.small}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxTickPrimitiveNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; inputHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'override', hasValue: data.inputHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'sandbox_tick' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Sandbox tick"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_tick')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.small}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxBehaviorNodeComp: React.FC<{ data: { label: string; isRunning?: boolean; inputHasValue?: boolean; paletteColors?: Record<string, string> } }> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.inputHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Sandbox behavior"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_behavior')}
             isRunning={data.isRunning}
             isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
             outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
@@ -1814,438 +1841,6 @@ const ListItemByIndexNodeComp: React.FC<{ data: { label: string; isRunning?: boo
     );
 };
 
-const SandboxTickItemsNodeComp: React.FC<{
-    data: {
-        label: string;
-        item_type?: 'all' | 'food';
-        isRunning?: boolean;
-        tickHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'list', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_tick_items')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxAvailableCellsNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'list', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_available_cells')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxWorldGridNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_world_grid')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxTickPetNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_tick_pet')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxNearestItemByTypeNodeComp: React.FC<{
-    data: {
-        label: string;
-        isRunning?: boolean;
-        sandboxTickHasValue?: boolean;
-        itemTypeHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [
-        { key: 'sandbox_tick', type: 'dictionary', label: 'sandbox_tick', hasValue: data.sandboxTickHasValue },
-        { key: 'item_type', type: 'string', label: 'item_type', hasValue: data.itemTypeHasValue },
-    ];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_nearest_item_by_type')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxClosestItemNodeComp: React.FC<{
-    data: {
-        label: string;
-        isRunning?: boolean;
-        sandboxTickHasValue?: boolean;
-        itemTypeHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [
-        { key: 'sandbox_tick', type: 'dictionary', label: 'sandbox_tick', hasValue: data.sandboxTickHasValue },
-        { key: 'item_type', type: 'string', label: 'item_type', hasValue: data.itemTypeHasValue },
-    ];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_closest_item')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxDecisionMoveToNodeComp: React.FC<{
-    data: {
-        label: string;
-        isRunning?: boolean;
-        targetItemIdHasValue?: boolean;
-        targetCellHasValue?: boolean;
-        reasonHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [
-        { key: 'target_item_id', type: 'string', label: 'target_item_id', hasValue: data.targetItemIdHasValue },
-        { key: 'target_cell', type: 'dictionary', label: 'target_cell', hasValue: data.targetCellHasValue },
-        { key: 'reason', type: 'string', label: 'reason', hasValue: data.reasonHasValue },
-    ];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_decision_move_to')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxFilterItemsByTypeNodeComp: React.FC<{
-    data: {
-        label: string;
-        isRunning?: boolean;
-        itemsHasValue?: boolean;
-        itemTypeHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [
-        { key: 'items', type: 'list', label: 'items', hasValue: data.itemsHasValue },
-        { key: 'item_type', type: 'string', label: 'item_type', hasValue: data.itemTypeHasValue },
-    ];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'list', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_filter_items_by_type')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxDecisionIntentNodeComp: React.FC<{
-    data: {
-        label: string;
-        isRunning?: boolean;
-        actionHasValue?: boolean;
-        targetItemIdHasValue?: boolean;
-        targetCellHasValue?: boolean;
-        reasonHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [
-        { key: 'action', type: 'string', label: 'action', hasValue: data.actionHasValue },
-        { key: 'target_item_id', type: 'string', label: 'target_item_id', hasValue: data.targetItemIdHasValue },
-        { key: 'target_cell', type: 'dictionary', label: 'target_cell', hasValue: data.targetCellHasValue },
-        { key: 'reason', type: 'string', label: 'reason', hasValue: data.reasonHasValue },
-    ];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_decision_intent')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxStarterDecisionNodeComp: React.FC<{ data: { label: string; isRunning?: boolean; inputHasValue?: boolean; paletteColors?: Record<string, string> } }> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.inputHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_starter_decision')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.small}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxPetHungerNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'int', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_pet_hunger')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxPetEnergyNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'int', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_pet_energy')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxPetCellNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_pet_cell')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxIsNearby8NodeComp: React.FC<{
-    data: {
-        label: string;
-        isRunning?: boolean;
-        cellAHasValue?: boolean;
-        cellBHasValue?: boolean;
-        paletteColors?: Record<string, string>;
-    };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [
-        { key: 'cell_a', type: 'dictionary', label: 'cell_a', hasValue: data.cellAHasValue },
-        { key: 'cell_b', type: 'dictionary', label: 'cell_b', hasValue: data.cellBHasValue },
-    ];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'boolean', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_is_nearby8')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxFirstNearbyFoodNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'list', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_first_nearby_food')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
-const SandboxFirstFoodWorldOrderNodeComp: React.FC<{
-    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
-}> = ({ data }) => {
-    const inputs: NodeSlot[] = [{ key: 'input', type: 'dictionary', label: 'sandbox_tick', hasValue: data.tickHasValue }];
-    const outputs: NodeSlot[] = [{ key: 'output', type: 'list', label: 'output' }];
-    return (
-        <StyledNodeBase
-            typeLabel="Utility"
-            nodeLabel={data.label}
-            inputs={inputs}
-            outputs={outputs}
-            borderColor={getHandleColor(data.paletteColors, 'sandbox_first_food_world_order')}
-            isRunning={data.isRunning}
-            isCanvasSelected={Boolean((data as { isCanvasSelected?: boolean }).isCanvasSelected)}
-            outputOverrideActive={Boolean((data as { outputOverrideActive?: boolean }).outputOverrideActive)}
-            minWidth={NODE_MIN_WIDTH.medium}
-            paletteColors={data.paletteColors}
-            triggerInput
-            signalOutput
-        />
-    );
-};
-
 const AddToListNodeComp: React.FC<{
     data: {
         label: string;
@@ -2714,22 +2309,13 @@ export const nodeTypes = {
     randomItemFromList: RandomItemFromListNodeComp,
     intToString: IntToStringNodeComp,
     listItemByIndex: ListItemByIndexNodeComp,
-    sandboxTickItems: SandboxTickItemsNodeComp,
-    sandboxAvailableCells: SandboxAvailableCellsNodeComp,
-    sandboxWorldGrid: SandboxWorldGridNodeComp,
-    sandboxTickPet: SandboxTickPetNodeComp,
-    sandboxNearestItemByType: SandboxNearestItemByTypeNodeComp,
-    sandboxClosestItem: SandboxClosestItemNodeComp,
-    sandboxDecisionMoveTo: SandboxDecisionMoveToNodeComp,
-    sandboxFilterItemsByType: SandboxFilterItemsByTypeNodeComp,
-    sandboxDecisionIntent: SandboxDecisionIntentNodeComp,
-    sandboxStarterDecision: SandboxStarterDecisionNodeComp,
-    sandboxPetHunger: SandboxPetHungerNodeComp,
-    sandboxPetEnergy: SandboxPetEnergyNodeComp,
-    sandboxPetCell: SandboxPetCellNodeComp,
-    sandboxIsNearby8: SandboxIsNearby8NodeComp,
-    sandboxFirstNearbyFood: SandboxFirstNearbyFoodNodeComp,
-    sandboxFirstFoodWorldOrder: SandboxFirstFoodWorldOrderNodeComp,
+    sandboxGetPosition: SandboxGetPositionNodeComp,
+    sandboxGetFacing: SandboxGetFacingNodeComp,
+    sandboxGetNearby: SandboxGetNearbyNodeComp,
+    sandboxMoveForward: SandboxMoveForwardNodeComp,
+    sandboxTurnLeft: SandboxTurnLeftNodeComp,
+    sandboxTurnRight: SandboxTurnRightNodeComp,
+    sandboxIdle: SandboxIdleNodeComp,
     dictionaryValueByKey: DictionaryValueByKeyNodeComp,
     dictionarySetValueByKey: DictionarySetValueByKeyNodeComp,
     readDocumentProperty: ReadDocumentPropertyNodeComp,
@@ -2765,7 +2351,6 @@ export const nodeTypes = {
     forLoopControl: ForLoopControlComp,
     forLoopEndControl: ForLoopEndControlComp,
     stringPrimitive: StringValueNodeComp,
-    decisionActionPrimitive: DecisionActionPrimitiveNodeComp,
     sandboxTickPrimitive: SandboxTickPrimitiveNodeComp,
     listPrimitive: ListValueNodeComp,
     dictionaryPrimitive: DictionaryValueNodeComp,
@@ -2776,7 +2361,6 @@ export const nodeTypes = {
     documentPrimitive: DocumentValueNodeComp,
     imagePrimitive: ImagePrimitiveNodeComp,
     gmailPrimitive: GmailPrimitiveNodeComp,
-    sandboxBehaviorPrimitive: SandboxBehaviorNodeComp,
     start: StartNodeComp,
     stop: StopNodeComp,
     invalidStep: InvalidStepNodeComp,

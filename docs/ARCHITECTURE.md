@@ -128,9 +128,9 @@ Persisted node output still uses the wire field **`markdown`** for the document 
 
 Adding another resource-backed primitive later (e.g. **Persona** on the canvas) should follow the same checklist: **manifest** row in [`shared/workflow_graph_step_kinds.json`](../shared/workflow_graph_step_kinds.json) → Pydantic node model + output type + parsing + executor + **`inputs.py`** wiring → TypeScript types, palette keys, editor node + inspector + converters → backend/frontend parity tests and CRUD smoke.
 
-## Sandbox (workflow-driven simulation)
+## Sandbox (board-driven multi-creature simulation)
 
-**Sandbox** is a **server-owned** tick engine with **document-backed** session state and **workflow-driven** decisions (`SandboxTickInput` → `DecisionIntent`). The SPA **runtime adapter** (default Phaser) only renders `SandboxState` and emits interaction events — it must not own simulation truth or drive tick logic. Types mirror [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json). Built-in starter behavior is shipped as a **system** `WorkflowDefinition` (`is_system`, `builtin_slug`) using the **`sandbox_behavior`** primitive so `claim_orphan_if_needed` does not steal the row on first run. Full layering, APIs, flags, and placeholder visuals: [SANDBOX.md](SANDBOX.md). Author-facing **inventory** of composable `sandbox_*` workflow utilities (and editor palette layout) lives there rather than duplicating the full list in this architecture doc. **Changing the active workflow mid-session** is supported: each tick may send **`workflow_id`**, which updates the persisted envelope—see **Changing the brain workflow during a session** in [SANDBOX.md](SANDBOX.md).
+**Sandbox V2.1** is a **server-owned** tick engine with **board templates** (`sandbox_boards`), **document-backed** sessions, and **per-creature workflow brains**. Each tick runs every creature's workflow once and applies **one atomic navigation action** (`move_forward`, `turn_left`, `turn_right`, `idle`). Types: [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) (`schema_version: 2.1.0`, `creatures[]` with `facing`). Full API, utilities, and UI tabs: [SANDBOX.md](SANDBOX.md), [BOARDS.md](BOARDS.md).
 
 ## Database configuration (SQLite)
 

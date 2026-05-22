@@ -254,7 +254,6 @@ export function enrichNodesForCanvasFlow(
             }
             if (
                 n.type === 'stringPrimitive' ||
-                n.type === 'decisionActionPrimitive' ||
                 n.type === 'sandboxTickPrimitive' ||
                 n.type === 'listPrimitive' ||
                 n.type === 'dictionaryPrimitive' ||
@@ -322,129 +321,29 @@ export function enrichNodesForCanvasFlow(
                     edges.some(e => e.target === n.id && e.targetHandle === 'list') || (listVal != null && Array.isArray(listVal));
                 return { ...n, data: { ...baseData, indexHasValue, listHasValue } };
             }
-            if (n.type === 'sandboxTickItems') {
-                const tickHasValue = edges.some(
-                    e => e.target === n.id && (e.targetHandle === 'input' || e.targetHandle == null),
-                );
-                return { ...n, data: { ...baseData, tickHasValue } };
-            }
-            if (n.type === 'sandboxWorldGrid' || n.type === 'sandboxAvailableCells' || n.type === 'sandboxTickPet') {
-                const tickHasValue = edges.some(
-                    e => e.target === n.id && (e.targetHandle === 'input' || e.targetHandle == null),
-                );
-                return { ...n, data: { ...baseData, tickHasValue } };
-            }
-            if (n.type === 'sandboxNearestItemByType') {
-                const d = n.data as any;
-                const req = d?.required_inputs ?? [];
-                const tickVal = req.find((r: { key?: string }) => r?.key === 'sandbox_tick')?.value;
-                const typeVal = req.find((r: { key?: string }) => r?.key === 'item_type')?.value;
-                const sandboxTickHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'sandbox_tick') ||
-                    (tickVal != null && typeof tickVal === 'object');
-                const itemTypeHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'item_type') ||
-                    (typeVal != null && String(typeVal).trim() !== '');
-                return { ...n, data: { ...baseData, sandboxTickHasValue, itemTypeHasValue } };
-            }
-            if (n.type === 'sandboxClosestItem') {
-                const d = n.data as any;
-                const req = d?.required_inputs ?? [];
-                const tickVal = req.find((r: { key?: string }) => r?.key === 'sandbox_tick')?.value;
-                const typeVal = req.find((r: { key?: string }) => r?.key === 'item_type')?.value;
-                const sandboxTickHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'sandbox_tick') ||
-                    (tickVal != null && typeof tickVal === 'object');
-                const itemTypeHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'item_type') ||
-                    (typeVal != null && String(typeVal).trim() !== '');
-                return { ...n, data: { ...baseData, sandboxTickHasValue, itemTypeHasValue } };
-            }
-            if (n.type === 'sandboxDecisionMoveTo') {
-                const d = n.data as any;
-                const req = d?.required_inputs ?? [];
-                const tid = req.find((r: { key?: string }) => r?.key === 'target_item_id')?.value;
-                const tc = req.find((r: { key?: string }) => r?.key === 'target_cell')?.value;
-                const rsn = req.find((r: { key?: string }) => r?.key === 'reason')?.value;
-                const targetItemIdHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'target_item_id') ||
-                    (tid != null && String(tid).trim() !== '');
-                const targetCellHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'target_cell') ||
-                    (tc != null && typeof tc === 'object');
-                const reasonHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'reason') ||
-                    (rsn != null && String(rsn).trim() !== '');
-                return {
-                    ...n,
-                    data: { ...baseData, targetItemIdHasValue, targetCellHasValue, reasonHasValue },
-                };
-            }
-            if (n.type === 'sandboxStarterDecision') {
-                const inputHasValue = edges.some(
-                    e => e.target === n.id && (e.targetHandle === 'input' || e.targetHandle == null),
-                );
-                return { ...n, data: { ...baseData, inputHasValue } };
-            }
             if (
-                n.type === 'sandboxPetHunger' ||
-                n.type === 'sandboxPetEnergy' ||
-                n.type === 'sandboxPetCell' ||
-                n.type === 'sandboxFirstNearbyFood' ||
-                n.type === 'sandboxFirstFoodWorldOrder'
+                n.type === 'sandboxGetPosition' ||
+                n.type === 'sandboxGetFacing' ||
+                n.type === 'sandboxGetNearby'
             ) {
                 const tickHasValue = edges.some(
                     e => e.target === n.id && (e.targetHandle === 'input' || e.targetHandle == null),
                 );
                 return { ...n, data: { ...baseData, tickHasValue } };
             }
-            if (n.type === 'sandboxIsNearby8') {
+            if (
+                n.type === 'sandboxMoveForward' ||
+                n.type === 'sandboxTurnLeft' ||
+                n.type === 'sandboxTurnRight' ||
+                n.type === 'sandboxIdle'
+            ) {
                 const d = n.data as any;
                 const req = d?.required_inputs ?? [];
-                const cellA = req.find((r: { key?: string }) => r?.key === 'cell_a')?.value;
-                const cellB = req.find((r: { key?: string }) => r?.key === 'cell_b')?.value;
-                const cellAHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'cell_a') ||
-                    (cellA != null && typeof cellA === 'object');
-                const cellBHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'cell_b') ||
-                    (cellB != null && typeof cellB === 'object');
-                return { ...n, data: { ...baseData, cellAHasValue, cellBHasValue } };
-            }
-            if (n.type === 'sandboxFilterItemsByType') {
-                const d = n.data as any;
-                const req = d?.required_inputs ?? [];
-                const itemsVal = req.find((r: { key?: string }) => r?.key === 'items')?.value;
-                const typeVal = req.find((r: { key?: string }) => r?.key === 'item_type')?.value;
-                const itemsHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'items') || (itemsVal != null && Array.isArray(itemsVal));
-                const itemTypeHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'item_type') ||
-                    (typeVal != null && String(typeVal).trim() !== '');
-                return { ...n, data: { ...baseData, itemsHasValue, itemTypeHasValue } };
-            }
-            if (n.type === 'sandboxDecisionIntent') {
-                const d = n.data as any;
-                const req = d?.required_inputs ?? [];
-                const a = req.find((r: { key?: string }) => r?.key === 'action')?.value;
-                const tid = req.find((r: { key?: string }) => r?.key === 'target_item_id')?.value;
-                const tc = req.find((r: { key?: string }) => r?.key === 'target_cell')?.value;
                 const rsn = req.find((r: { key?: string }) => r?.key === 'reason')?.value;
-                const actionHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'action') || (a != null && String(a).trim() !== '');
-                const targetItemIdHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'target_item_id') ||
-                    (tid != null && String(tid).trim() !== '');
-                const targetCellHasValue =
-                    edges.some(e => e.target === n.id && e.targetHandle === 'target_cell') ||
-                    (tc != null && typeof tc === 'object');
                 const reasonHasValue =
                     edges.some(e => e.target === n.id && e.targetHandle === 'reason') ||
                     (rsn != null && String(rsn).trim() !== '');
-                return {
-                    ...n,
-                    data: { ...baseData, actionHasValue, targetItemIdHasValue, targetCellHasValue, reasonHasValue },
-                };
+                return { ...n, data: { ...baseData, reasonHasValue } };
             }
             if (n.type === 'dictionaryValueByKey') {
                 const d = n.data as any;

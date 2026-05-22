@@ -16,7 +16,6 @@ from app.domain.schemas import (
     GoogleDocsParseDocumentUtilityNode,
     CaptureUrlSnapshotSkillNode,
     DateTimePrimitiveNode,
-    DecisionActionPrimitiveNode,
     DictionaryPrimitiveNode,
     DictionarySetValueByKeyUtilityNode,
     DictionaryValueByKeyUtilityNode,
@@ -54,24 +53,14 @@ from app.domain.schemas import (
     PrependTextUtilityNode,
     RandomItemFromListUtilityNode,
     ReadDocumentPropertyUtilityNode,
-    SandboxAvailableCellsUtilityNode,
-    SandboxBehaviorPrimitiveNode,
-    SandboxClosestItemUtilityNode,
-    SandboxDecisionIntentUtilityNode,
-    SandboxDecisionMoveToUtilityNode,
-    SandboxFilterItemsByTypeUtilityNode,
-    SandboxFirstFoodWorldOrderUtilityNode,
-    SandboxFirstNearbyFoodUtilityNode,
-    SandboxIsNearby8UtilityNode,
-    SandboxNearestItemByTypeUtilityNode,
-    SandboxPetCellUtilityNode,
-    SandboxPetEnergyUtilityNode,
-    SandboxPetHungerUtilityNode,
-    SandboxStarterDecisionUtilityNode,
-    SandboxTickItemsUtilityNode,
-    SandboxTickPetUtilityNode,
+    SandboxGetFacingUtilityNode,
+    SandboxGetNearbyUtilityNode,
+    SandboxGetPositionUtilityNode,
+    SandboxIdleUtilityNode,
+    SandboxMoveForwardUtilityNode,
+    SandboxTurnLeftUtilityNode,
+    SandboxTurnRightUtilityNode,
     SandboxTickPrimitiveNode,
-    SandboxWorldGridUtilityNode,
     SimpleLLMCallSkillNode,
     StartGraphNode,
     StopGraphNode,
@@ -161,10 +150,6 @@ def _parse_node(raw: Dict[str, Any]):
             return ImagePrimitiveNode(**raw)
         if ptype == "gmail":
             return GmailPrimitiveNode(**raw)
-        if ptype == "sandbox_behavior":
-            return SandboxBehaviorPrimitiveNode(**raw)
-        if ptype == "decision_action":
-            return DecisionActionPrimitiveNode(**raw)
         if ptype == "sandbox_tick":
             return SandboxTickPrimitiveNode(**raw)
     if kind == "utility" and raw.get("utility_type") == "simple_llm_call":
@@ -219,38 +204,20 @@ def _parse_node(raw: Dict[str, Any]):
             return LenFromListUtilityNode(**raw)
         if utype == "random_item_from_list":
             return RandomItemFromListUtilityNode(**raw)
-        if utype == "sandbox_tick_items":
-            return SandboxTickItemsUtilityNode(**raw)
-        if utype == "sandbox_world_grid":
-            return SandboxWorldGridUtilityNode(**raw)
-        if utype == "sandbox_available_cells":
-            return SandboxAvailableCellsUtilityNode(**raw)
-        if utype == "sandbox_tick_pet":
-            return SandboxTickPetUtilityNode(**raw)
-        if utype == "sandbox_filter_items_by_type":
-            return SandboxFilterItemsByTypeUtilityNode(**raw)
-        if utype == "sandbox_nearest_item_by_type":
-            return SandboxNearestItemByTypeUtilityNode(**raw)
-        if utype == "sandbox_closest_item":
-            return SandboxClosestItemUtilityNode(**raw)
-        if utype == "sandbox_decision_intent":
-            return SandboxDecisionIntentUtilityNode(**raw)
-        if utype == "sandbox_decision_move_to":
-            return SandboxDecisionMoveToUtilityNode(**raw)
-        if utype == "sandbox_starter_decision":
-            return SandboxStarterDecisionUtilityNode(**raw)
-        if utype == "sandbox_pet_hunger":
-            return SandboxPetHungerUtilityNode(**raw)
-        if utype == "sandbox_pet_energy":
-            return SandboxPetEnergyUtilityNode(**raw)
-        if utype == "sandbox_pet_cell":
-            return SandboxPetCellUtilityNode(**raw)
-        if utype == "sandbox_is_nearby8":
-            return SandboxIsNearby8UtilityNode(**raw)
-        if utype == "sandbox_first_nearby_food":
-            return SandboxFirstNearbyFoodUtilityNode(**raw)
-        if utype == "sandbox_first_food_world_order":
-            return SandboxFirstFoodWorldOrderUtilityNode(**raw)
+        if utype == "sandbox_get_position":
+            return SandboxGetPositionUtilityNode(**raw)
+        if utype == "sandbox_get_facing":
+            return SandboxGetFacingUtilityNode(**raw)
+        if utype == "sandbox_get_nearby":
+            return SandboxGetNearbyUtilityNode(**raw)
+        if utype == "sandbox_move_forward":
+            return SandboxMoveForwardUtilityNode(**raw)
+        if utype == "sandbox_turn_left":
+            return SandboxTurnLeftUtilityNode(**raw)
+        if utype == "sandbox_turn_right":
+            return SandboxTurnRightUtilityNode(**raw)
+        if utype == "sandbox_idle":
+            return SandboxIdleUtilityNode(**raw)
         if utype == "int_to_string":
             return IntToStringUtilityNode(**raw)
         if utype == "list_item_by_index":

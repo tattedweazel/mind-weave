@@ -240,195 +240,78 @@ class RandomItemFromListUtilityNode(BaseModel):
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxTickItemsUtilityNode(BaseModel):
-    """Return serialized ``world.items`` from a wired ``SandboxTickInput`` (get items).
-
-    Optional ``data.item_type``: ``all`` (default) or a supported ``ItemType`` (V1: ``food``) to filter.
-    """
+class SandboxGetPositionUtilityNode(BaseModel):
+    """Focused creature ``position`` as ``{x, y}`` from a wired ``SandboxTickInput`` dictionary."""
 
     id: str
     kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_tick_items"] = "sandbox_tick_items"
+    utility_type: Literal["sandbox_get_position"] = "sandbox_get_position"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxWorldGridUtilityNode(BaseModel):
-    """Expose ``world.grid`` width and height from a wired ``SandboxTickInput`` dictionary."""
+class SandboxGetFacingUtilityNode(BaseModel):
+    """Focused creature ``facing`` (``N`` | ``E`` | ``S`` | ``W``) from a wired tick dictionary."""
 
     id: str
     kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_world_grid"] = "sandbox_world_grid"
+    utility_type: Literal["sandbox_get_facing"] = "sandbox_get_facing"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxAvailableCellsUtilityNode(BaseModel):
-    """List ``{x, y}`` cells inside ``world.grid`` not occupied by the pet or any item (row-major order)."""
+class SandboxGetNearbyUtilityNode(BaseModel):
+    """Eight neighbors clockwise from facing; each entry is ``{x, y, kind}``."""
 
     id: str
     kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_available_cells"] = "sandbox_available_cells"
+    utility_type: Literal["sandbox_get_nearby"] = "sandbox_get_nearby"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxTickPetUtilityNode(BaseModel):
-    """Validated ``pet`` subtree from a wired ``SandboxTickInput`` dictionary."""
+class SandboxMoveForwardUtilityNode(BaseModel):
+    """Emit a validated ``move_forward`` ``DecisionIntent`` dictionary for Stop."""
 
     id: str
     kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_tick_pet"] = "sandbox_tick_pet"
+    utility_type: Literal["sandbox_move_forward"] = "sandbox_move_forward"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxFilterItemsByTypeUtilityNode(BaseModel):
-    """Filter a list of serialized sandbox items by ``type`` (V1: ``food``)."""
+class SandboxTurnLeftUtilityNode(BaseModel):
+    """Emit a validated ``turn_left`` ``DecisionIntent`` dictionary for Stop."""
 
     id: str
     kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_filter_items_by_type"] = "sandbox_filter_items_by_type"
-    label: str
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-    )  # required_inputs: items (list), item_type (string)
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxNearestItemByTypeUtilityNode(BaseModel):
-    """Nearest item to the pet by Manhattan distance for a given ``type``; ties: first in ``world.items`` order.
-
-    Output is a single serialized item dictionary, or ``{}`` when no matching item exists (same geometry as ``sandbox_closest_item``).
-    """
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_nearest_item_by_type"] = "sandbox_nearest_item_by_type"
-    label: str
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-    )  # required_inputs: sandbox_tick, item_type
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxClosestItemUtilityNode(BaseModel):
-    """Same nearest-item selection as ``sandbox_nearest_item_by_type``, output as a single dictionary or ``{}``."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_closest_item"] = "sandbox_closest_item"
-    label: str
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-    )  # required_inputs: sandbox_tick, item_type
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxDecisionIntentUtilityNode(BaseModel):
-    """Build and validate a ``DecisionIntent`` dictionary for Stop (dictionary output)."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_decision_intent"] = "sandbox_decision_intent"
-    label: str
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-    )  # required_inputs: action, target_item_id, target_cell, reason
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxDecisionMoveToUtilityNode(BaseModel):
-    """Build a validated ``move_to`` decision dictionary (same output shape as ``sandbox_decision_intent``)."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_decision_move_to"] = "sandbox_decision_move_to"
-    label: str
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-    )  # required_inputs: target_item_id, target_cell, reason
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxStarterDecisionUtilityNode(BaseModel):
-    """Deterministic starter pet policy: same semantics as legacy ``sandbox_behavior`` primitive."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_starter_decision"] = "sandbox_starter_decision"
+    utility_type: Literal["sandbox_turn_left"] = "sandbox_turn_left"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxPetHungerUtilityNode(BaseModel):
-    """``pet.hunger`` from a wired ``SandboxTickInput`` dictionary."""
+class SandboxTurnRightUtilityNode(BaseModel):
+    """Emit a validated ``turn_right`` ``DecisionIntent`` dictionary for Stop."""
 
     id: str
     kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_pet_hunger"] = "sandbox_pet_hunger"
+    utility_type: Literal["sandbox_turn_right"] = "sandbox_turn_right"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxPetEnergyUtilityNode(BaseModel):
-    """``pet.energy`` from a wired ``SandboxTickInput`` dictionary."""
+class SandboxIdleUtilityNode(BaseModel):
+    """Emit a validated ``idle`` ``DecisionIntent`` dictionary for Stop."""
 
     id: str
     kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_pet_energy"] = "sandbox_pet_energy"
-    label: str
-    data: Dict[str, Any] = Field(default_factory=dict)
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxPetCellUtilityNode(BaseModel):
-    """``pet.position`` as ``GridCell`` JSON (``x``, ``y``) from a wired ``SandboxTickInput`` dictionary."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_pet_cell"] = "sandbox_pet_cell"
-    label: str
-    data: Dict[str, Any] = Field(default_factory=dict)
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxIsNearby8UtilityNode(BaseModel):
-    """True when two grid cells are 8-neighbors (including diagonals), excluding identity."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_is_nearby8"] = "sandbox_is_nearby8"
-    label: str
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-    )  # required_inputs: cell_a, cell_b (dictionary with x, y)
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxFirstNearbyFoodUtilityNode(BaseModel):
-    """First food item in ``world.items`` order adjacent to the pet (starter eat-nearby)."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_first_nearby_food"] = "sandbox_first_nearby_food"
-    label: str
-    data: Dict[str, Any] = Field(default_factory=dict)
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class SandboxFirstFoodWorldOrderUtilityNode(BaseModel):
-    """First food item in ``world.items`` iteration order (starter seek)."""
-
-    id: str
-    kind: Literal["utility"] = "utility"
-    utility_type: Literal["sandbox_first_food_world_order"] = "sandbox_first_food_world_order"
+    utility_type: Literal["sandbox_idle"] = "sandbox_idle"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
@@ -820,28 +703,6 @@ class GmailPrimitiveNode(BaseModel):
     position: Dict[str, float] = Field(default_factory=dict)
 
 
-class SandboxBehaviorPrimitiveNode(BaseModel):
-    """Deterministic sandbox tick brain: maps ``SandboxTickInput`` (from Start) to ``DecisionIntent`` dict."""
-
-    id: str
-    kind: Literal["primitive"] = "primitive"
-    primitive_type: Literal["sandbox_behavior"] = "sandbox_behavior"
-    label: str
-    data: Dict[str, Any] = Field(default_factory=dict)
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
-class DecisionActionPrimitiveNode(BaseModel):
-    """Emits one of the sandbox ``DecisionAction`` strings (for wiring into ``sandbox_decision_intent.action``)."""
-
-    id: str
-    kind: Literal["primitive"] = "primitive"
-    primitive_type: Literal["decision_action"] = "decision_action"
-    label: str
-    data: Dict[str, Any] = Field(default_factory=dict)  # {"action": "wander", ...}
-    position: Dict[str, float] = Field(default_factory=dict)
-
-
 class SandboxTickPrimitiveNode(BaseModel):
     """Emits the current ``SandboxTickInput`` as a dictionary (fan-out from run overrides or wired Start/tick)."""
 
@@ -1070,8 +931,6 @@ GraphNode = Union[
     DocumentPrimitiveNode,
     ImagePrimitiveNode,
     GmailPrimitiveNode,
-    SandboxBehaviorPrimitiveNode,
-    DecisionActionPrimitiveNode,
     SandboxTickPrimitiveNode,
     SimpleLLMCallSkillNode,
     MultimodalLLMCallSkillNode,
@@ -1091,22 +950,13 @@ GraphNode = Union[
     MessageUtilityNode,
     LenFromListUtilityNode,
     RandomItemFromListUtilityNode,
-    SandboxTickItemsUtilityNode,
-    SandboxWorldGridUtilityNode,
-    SandboxAvailableCellsUtilityNode,
-    SandboxTickPetUtilityNode,
-    SandboxFilterItemsByTypeUtilityNode,
-    SandboxNearestItemByTypeUtilityNode,
-    SandboxClosestItemUtilityNode,
-    SandboxDecisionIntentUtilityNode,
-    SandboxDecisionMoveToUtilityNode,
-    SandboxStarterDecisionUtilityNode,
-    SandboxPetHungerUtilityNode,
-    SandboxPetEnergyUtilityNode,
-    SandboxPetCellUtilityNode,
-    SandboxIsNearby8UtilityNode,
-    SandboxFirstNearbyFoodUtilityNode,
-    SandboxFirstFoodWorldOrderUtilityNode,
+    SandboxGetPositionUtilityNode,
+    SandboxGetFacingUtilityNode,
+    SandboxGetNearbyUtilityNode,
+    SandboxMoveForwardUtilityNode,
+    SandboxTurnLeftUtilityNode,
+    SandboxTurnRightUtilityNode,
+    SandboxIdleUtilityNode,
     IntToStringUtilityNode,
     ListItemByIndexUtilityNode,
     DictionaryValueByKeyUtilityNode,

@@ -20,6 +20,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
 from app.api.deps import get_current_user
+from app.domain.sandbox.empty_board_seed import ensure_empty_sandbox_board
 from app.domain.sandbox.starter_workflow_seed import ensure_starter_sandbox_workflow
 from app.domain.services.palette_service import PaletteService
 from app.domain.services.persona_service import PersonaService
@@ -62,6 +63,7 @@ def client_fixture():
         PaletteService(session).initialize_default_palette()
         SystemPaletteService(session).initialize_builtin_system_palettes()
         ensure_starter_sandbox_workflow(session)
+        ensure_empty_sandbox_board(session)
 
         # Create test user
         test_user = User(id=uuid.uuid4(), username="testuser", password_hash="fakehash", is_admin=False)
@@ -110,6 +112,7 @@ def client_anonymous_fixture():
         PaletteService(session).initialize_default_palette()
         SystemPaletteService(session).initialize_builtin_system_palettes()
         ensure_starter_sandbox_workflow(session)
+        ensure_empty_sandbox_board(session)
     app.dependency_overrides.pop(get_current_user, None)
     try:
         with TestClient(app) as client:

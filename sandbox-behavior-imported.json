@@ -1,15 +1,11 @@
 {
-  "kind": "mind_weave_workflow_export",
-  "schema_version": 1,
-  "exported_at": "2026-03-25T03:48:34.037Z",
-  "source_definition_id": "0b138527-e67b-48af-b924-f2dba678a3fc",
   "definition": {
-    "name": "Sandbox Behavior (imported)",
-    "description": "Built-in deterministic pet brain (sandbox_starter_decision utility; legacy sandbox_behavior primitive remains available).",
+    "name": "Starter Sandbox Navigation",
+    "description": "Built-in left-hand wall follower: Get nearby \u2192 if forward cell is empty, Move forward, else Turn left (walls, canvas edge, creatures, food).",
     "graph": {
       "nodes": [
         {
-          "id": "sandbox_start",
+          "id": "start",
           "kind": "start",
           "label": "Start",
           "data": {
@@ -27,10 +23,10 @@
           }
         },
         {
-          "id": "sandbox_brain",
+          "id": "nearby",
           "kind": "utility",
-          "utility_type": "sandbox_starter_decision",
-          "label": "Starter sandbox decision",
+          "utility_type": "sandbox_get_nearby",
+          "label": "Get nearby",
           "data": {},
           "position": {
             "x": 220,
@@ -38,7 +34,115 @@
           }
         },
         {
-          "id": "sandbox_stop",
+          "id": "forward_cell",
+          "kind": "utility",
+          "utility_type": "list_item_by_index",
+          "label": "Forward cell",
+          "data": {
+            "required_inputs": [
+              {
+                "key": "index",
+                "type": "int",
+                "value": 0
+              },
+              {
+                "key": "list",
+                "type": "list",
+                "value": null
+              }
+            ]
+          },
+          "position": {
+            "x": 460,
+            "y": 0
+          }
+        },
+        {
+          "id": "forward_kind",
+          "kind": "utility",
+          "utility_type": "dictionary_value_by_key",
+          "label": "Forward kind",
+          "data": {
+            "output_value_type": "string",
+            "required_inputs": [
+              {
+                "key": "dictionary",
+                "type": "dictionary",
+                "value": null
+              },
+              {
+                "key": "key",
+                "type": "string",
+                "value": "kind"
+              }
+            ]
+          },
+          "position": {
+            "x": 700,
+            "y": 0
+          }
+        },
+        {
+          "id": "empty_label",
+          "kind": "primitive",
+          "primitive_type": "string",
+          "label": "empty",
+          "data": {
+            "text": "empty"
+          },
+          "position": {
+            "x": 700,
+            "y": 120
+          }
+        },
+        {
+          "id": "is_empty",
+          "kind": "control",
+          "control_type": "is",
+          "label": "Is empty?",
+          "data": {
+            "required_inputs": [
+              {
+                "key": "input_a",
+                "type": "string",
+                "value": null
+              },
+              {
+                "key": "input_b",
+                "type": "string",
+                "value": null
+              }
+            ]
+          },
+          "position": {
+            "x": 940,
+            "y": 0
+          }
+        },
+        {
+          "id": "turn_left",
+          "kind": "utility",
+          "utility_type": "sandbox_turn_left",
+          "label": "Turn left",
+          "data": {},
+          "position": {
+            "x": 1180,
+            "y": -80
+          }
+        },
+        {
+          "id": "move_forward",
+          "kind": "utility",
+          "utility_type": "sandbox_move_forward",
+          "label": "Move forward",
+          "data": {},
+          "position": {
+            "x": 1180,
+            "y": 80
+          }
+        },
+        {
+          "id": "stop",
           "kind": "stop",
           "label": "Stop",
           "data": {
@@ -50,38 +154,103 @@
             ]
           },
           "position": {
-            "x": 480,
+            "x": 1420,
             "y": 0
           }
         }
       ],
       "edges": [
         {
-          "source": "sandbox_start",
-          "target": "sandbox_brain",
+          "source": "start",
+          "target": "nearby",
           "source_handle": "signal_out",
           "target_handle": "trigger"
         },
         {
-          "source": "sandbox_start",
-          "target": "sandbox_brain",
+          "source": "start",
+          "target": "nearby",
           "source_handle": "sandbox_tick",
           "target_handle": "input"
         },
         {
-          "source": "sandbox_brain",
-          "target": "sandbox_stop",
+          "source": "nearby",
+          "target": "forward_cell",
           "source_handle": "signal_out",
           "target_handle": "trigger"
         },
         {
-          "source": "sandbox_brain",
-          "target": "sandbox_stop",
+          "source": "nearby",
+          "target": "forward_cell",
+          "source_handle": "output",
+          "target_handle": "list"
+        },
+        {
+          "source": "forward_cell",
+          "target": "forward_kind",
+          "source_handle": "signal_out",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "forward_cell",
+          "target": "forward_kind",
+          "source_handle": "output",
+          "target_handle": "dictionary"
+        },
+        {
+          "source": "forward_kind",
+          "target": "is_empty",
+          "source_handle": "signal_out",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "forward_kind",
+          "target": "is_empty",
+          "source_handle": "output",
+          "target_handle": "input_a"
+        },
+        {
+          "source": "empty_label",
+          "target": "is_empty",
+          "source_handle": "output",
+          "target_handle": "input_b"
+        },
+        {
+          "source": "is_empty",
+          "target": "move_forward",
+          "source_handle": "true",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "is_empty",
+          "target": "turn_left",
+          "source_handle": "false",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "turn_left",
+          "target": "stop",
+          "source_handle": "signal_out",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "turn_left",
+          "target": "stop",
+          "source_handle": "output",
+          "target_handle": "output"
+        },
+        {
+          "source": "move_forward",
+          "target": "stop",
+          "source_handle": "signal_out",
+          "target_handle": "trigger"
+        },
+        {
+          "source": "move_forward",
+          "target": "stop",
           "source_handle": "output",
           "target_handle": "output"
         }
       ]
-    },
-    "palette_id": null
+    }
   }
 }

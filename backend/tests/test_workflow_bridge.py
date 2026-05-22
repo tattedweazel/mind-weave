@@ -31,12 +31,7 @@ def test_decision_intent_from_workflow_rejects_empty_stop_dictionary():
 def test_decision_intent_from_workflow_accepts_valid_intent_dict():
     stop_id = "stop1"
     graph_nodes = [{"id": stop_id, "kind": "stop"}]
-    data = DecisionIntent(
-        action="wander",
-        target_item_id=None,
-        target_cell=None,
-        reason=None,
-    ).model_dump(mode="json")
+    data = DecisionIntent(action="move_forward", reason=None).model_dump(mode="json")
     result = WorkflowRunResult(
         workflow_id=uuid.uuid4(),
         status="ok",
@@ -51,11 +46,10 @@ def test_decision_intent_from_workflow_accepts_valid_intent_dict():
     dec, err = decision_intent_from_workflow_result(result, graph_nodes)
     assert err is None
     assert dec is not None
-    assert dec.action == "wander"
+    assert dec.action == "move_forward"
 
 
 def test_decision_intent_picks_higher_stop_priority_when_multiple_stops_succeed():
-    """Sandbox uses the Stop with the highest data.stop_priority when several succeed."""
     low = "stop_low"
     high = "stop_high"
     graph_nodes = [
@@ -70,18 +64,8 @@ def test_decision_intent_picks_higher_stop_priority_when_multiple_stops_succeed(
             "data": {"stop_priority": 10, "required_outputs": [{"key": "output", "type": "dictionary"}]},
         },
     ]
-    low_data = DecisionIntent(
-        action="idle",
-        target_item_id=None,
-        target_cell=None,
-        reason="low",
-    ).model_dump(mode="json")
-    high_data = DecisionIntent(
-        action="wander",
-        target_item_id=None,
-        target_cell=None,
-        reason="high",
-    ).model_dump(mode="json")
+    low_data = DecisionIntent(action="idle", reason="low").model_dump(mode="json")
+    high_data = DecisionIntent(action="turn_left", reason="high").model_dump(mode="json")
     result = WorkflowRunResult(
         workflow_id=uuid.uuid4(),
         status="ok",
@@ -103,30 +87,19 @@ def test_decision_intent_picks_higher_stop_priority_when_multiple_stops_succeed(
     dec, err = decision_intent_from_workflow_result(result, graph_nodes)
     assert err is None
     assert dec is not None
-    assert dec.action == "wander"
+    assert dec.action == "turn_left"
     assert dec.reason == "high"
 
 
 def test_decision_intent_tie_breaks_equal_priority_by_step_number():
-    """Same stop_priority: later step_number wins."""
     a = "stop_a"
     b = "stop_b"
     graph_nodes = [
         {"id": a, "kind": "stop", "data": {"stop_priority": 0}},
         {"id": b, "kind": "stop", "data": {"stop_priority": 0}},
     ]
-    da = DecisionIntent(
-        action="idle",
-        target_item_id=None,
-        target_cell=None,
-        reason="a",
-    ).model_dump(mode="json")
-    db = DecisionIntent(
-        action="wander",
-        target_item_id=None,
-        target_cell=None,
-        reason="b",
-    ).model_dump(mode="json")
+    da = DecisionIntent(action="idle", reason="a").model_dump(mode="json")
+    db = DecisionIntent(action="turn_right", reason="b").model_dump(mode="json")
     result = WorkflowRunResult(
         workflow_id=uuid.uuid4(),
         status="ok",

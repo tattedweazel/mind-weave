@@ -1,4 +1,10 @@
-/** JSON shapes returned by `/api/v1/sandbox/*` (mirror backend `SandboxDocumentEnvelope`). */
+/** JSON shapes returned by `/api/v1/sandbox/*` (mirror backend schemas). */
+
+export type SandboxFacing = 'N' | 'E' | 'S' | 'W';
+
+export const SANDBOX_FACING_VALUES: readonly SandboxFacing[] = ['N', 'E', 'S', 'W'];
+
+export const DEFAULT_SANDBOX_FACING: SandboxFacing = 'N';
 
 export interface SandboxGridCellJson {
     x: number;
@@ -12,12 +18,12 @@ export interface SandboxItemJson {
     energy?: number;
 }
 
-export interface SandboxPetJson {
-    hunger: number;
-    energy: number;
-    mood: number;
+export interface SandboxCreatureJson {
+    id: string;
+    workflow_id: string;
+    name?: string | null;
     position: SandboxGridCellJson;
-    intent: Record<string, unknown> | null;
+    facing: SandboxFacing;
 }
 
 export interface SandboxWorldJson {
@@ -25,18 +31,66 @@ export interface SandboxWorldJson {
     items: SandboxItemJson[];
 }
 
+export interface SandboxRecentActionJson {
+    tick: number;
+    creature_id?: string | null;
+    action: string;
+    reason: string | null;
+}
+
 export interface SandboxSandboxStateJson {
     tick: number;
-    pet: SandboxPetJson;
+    creatures: SandboxCreatureJson[];
     world: SandboxWorldJson;
-    recent_actions: { tick: number; action: string; reason: string | null }[];
+    recent_actions: SandboxRecentActionJson[];
 }
 
 export interface SandboxEnvelopeJson {
     schema_version: string;
-    workflow_id: string;
+    board_id?: string | null;
     sandbox: SandboxSandboxStateJson;
     playback: { paused?: boolean; tick_rate_ms?: number };
     state_version: number;
-    last_error?: string | null;
+    last_errors?: Record<string, string | null>;
+}
+
+export interface BoardCreaturePlacementJson {
+    id: string;
+    workflow_id: string;
+    name?: string | null;
+    position: SandboxGridCellJson;
+    facing?: SandboxFacing;
+}
+
+export interface BoardDefinitionJson {
+    schema_version?: string;
+    grid: { width: number; height: number };
+    items: SandboxItemJson[];
+    creatures: BoardCreaturePlacementJson[];
+}
+
+export interface SandboxBoardJson {
+    id: string;
+    name: string;
+    description: string;
+    is_system: boolean;
+    definition: BoardDefinitionJson;
+    created_at: string;
+    updated_at: string;
+}
+
+/** Convert board definition to sandbox state shape for Phaser preview (builder tab). */
+export function sandboxStateFromBoardDefinition(def: BoardDefinitionJson): SandboxSandboxStateJson {
+    return {
+        tick: 0,
+        creatures: def.creatures.map(c => ({
+            id: c.id,
+            workflow_id: c.workflow_id,
+            name: c.name ?? null,
+            position: c.position,
+            facing: c.facing ?? DEFAULT_SANDBOX_FACING,
+        })),
+        world: { grid: def.grid, items: def.items ?? [] },
+        recent_actions: [],
+    };
 }

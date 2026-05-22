@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mind-weave.dev/schemas/sandbox_canonical.schema.json",
-  "title": "Mind Weave Sandbox V1",
-  "schema_version": "1.0.0",
+  "title": "Mind Weave Sandbox V2",
+  "schema_version": "2.1.0",
   "$defs": {
     "GridCell": {
       "type": "object",
@@ -13,17 +13,31 @@
         "y": { "type": "integer", "minimum": 0 }
       }
     },
+    "Facing": {
+      "type": "string",
+      "enum": ["N", "E", "S", "W"]
+    },
     "DecisionAction": {
       "type": "string",
-      "enum": ["move_to", "wander", "eat_nearby", "sleep", "idle"]
+      "enum": ["move_forward", "turn_left", "turn_right", "idle"]
     },
-    "IntentStatus": {
+    "NearbyCellKind": {
       "type": "string",
-      "enum": ["in_progress", "complete", "failed"]
+      "enum": ["empty", "wall", "food", "creature", "out_of_bounds"]
+    },
+    "NearbyCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "kind"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "kind": { "$ref": "#/$defs/NearbyCellKind" }
+      }
     },
     "ItemType": {
       "type": "string",
-      "enum": ["food"]
+      "enum": ["food", "wall"]
     },
     "SandboxItem": {
       "type": "object",
@@ -33,64 +47,19 @@
         "id": { "type": "string", "minLength": 1 },
         "type": { "$ref": "#/$defs/ItemType" },
         "position": { "$ref": "#/$defs/GridCell" },
-        "energy": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Used by food in V1. Item is removed when energy reaches 0."
-        }
+        "energy": { "type": "integer", "minimum": 0 }
       }
     },
-    "DecisionIntent": {
+    "CreatureState": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["action", "target_item_id", "target_cell", "reason"],
+      "required": ["id", "workflow_id", "position", "facing"],
       "properties": {
-        "action": { "$ref": "#/$defs/DecisionAction" },
-        "target_item_id": {
-          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
-        },
-        "target_cell": {
-          "anyOf": [{ "$ref": "#/$defs/GridCell" }, { "type": "null" }]
-        },
-        "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
-      }
-    },
-    "PetIntent": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "action",
-        "status",
-        "target_item_id",
-        "target_cell",
-        "reason",
-        "retry_count"
-      ],
-      "properties": {
-        "action": { "$ref": "#/$defs/DecisionAction" },
-        "status": { "$ref": "#/$defs/IntentStatus" },
-        "target_item_id": {
-          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
-        },
-        "target_cell": {
-          "anyOf": [{ "$ref": "#/$defs/GridCell" }, { "type": "null" }]
-        },
-        "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
-        "retry_count": { "type": "integer", "minimum": 0, "maximum": 3 }
-      }
-    },
-    "PetState": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["hunger", "energy", "mood", "position", "intent"],
-      "properties": {
-        "hunger": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "energy": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "mood": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "id": { "type": "string", "minLength": 1 },
+        "workflow_id": { "type": "string", "minLength": 1 },
+        "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "position": { "$ref": "#/$defs/GridCell" },
-        "intent": {
-          "anyOf": [{ "$ref": "#/$defs/PetIntent" }, { "type": "null" }]
-        }
+        "facing": { "$ref": "#/$defs/Facing" }
       }
     },
     "WorldGrid": {
@@ -108,10 +77,7 @@
       "required": ["grid", "items"],
       "properties": {
         "grid": { "$ref": "#/$defs/WorldGrid" },
-        "items": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/SandboxItem" }
-        }
+        "items": { "type": "array", "items": { "$ref": "#/$defs/SandboxItem" } }
       }
     },
     "RecentAction": {
@@ -120,6 +86,7 @@
       "required": ["tick", "action", "reason"],
       "properties": {
         "tick": { "type": "integer", "minimum": 0 },
+        "creature_id": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "action": { "$ref": "#/$defs/DecisionAction" },
         "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
       }
@@ -127,57 +94,63 @@
     "SandboxState": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tick", "pet", "world", "recent_actions"],
+      "required": ["tick", "creatures", "world", "recent_actions"],
       "properties": {
         "tick": { "type": "integer", "minimum": 0 },
-        "pet": { "$ref": "#/$defs/PetState" },
+        "creatures": { "type": "array", "items": { "$ref": "#/$defs/CreatureState" } },
         "world": { "$ref": "#/$defs/WorldState" },
-        "recent_actions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/RecentAction" },
-          "maxItems": 10
-        }
+        "recent_actions": { "type": "array", "items": { "$ref": "#/$defs/RecentAction" }, "maxItems": 10 }
       }
     },
     "SandboxTickInput": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tick", "pet", "world", "recent_actions"],
+      "required": ["tick", "creature", "creatures", "world", "recent_actions"],
       "properties": {
         "tick": { "type": "integer", "minimum": 0 },
-        "pet": { "$ref": "#/$defs/PetState" },
+        "creature": { "$ref": "#/$defs/CreatureState" },
+        "creatures": { "type": "array", "items": { "$ref": "#/$defs/CreatureState" } },
         "world": { "$ref": "#/$defs/WorldState" },
-        "recent_actions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/RecentAction" },
-          "maxItems": 10
-        }
+        "recent_actions": { "type": "array", "items": { "$ref": "#/$defs/RecentAction" }, "maxItems": 10 }
+      }
+    },
+    "BoardCreaturePlacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "workflow_id", "position"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "workflow_id": { "type": "string", "minLength": 1 },
+        "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "position": { "$ref": "#/$defs/GridCell" },
+        "facing": { "$ref": "#/$defs/Facing" }
+      }
+    },
+    "BoardDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grid", "items", "creatures"],
+      "properties": {
+        "schema_version": { "type": "string" },
+        "grid": { "$ref": "#/$defs/WorldGrid" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/SandboxItem" } },
+        "creatures": { "type": "array", "items": { "$ref": "#/$defs/BoardCreaturePlacement" } }
+      }
+    },
+    "DecisionIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action"],
+      "properties": {
+        "action": { "$ref": "#/$defs/DecisionAction" },
+        "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
       }
     },
     "SandboxInteractionEvent": {
       "oneOf": [
         {
           "type": "object",
-          "additionalProperties": false,
           "required": ["type", "cell"],
-          "properties": {
-            "type": { "const": "cell_click" },
-            "cell": { "$ref": "#/$defs/GridCell" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "item_id"],
-          "properties": {
-            "type": { "const": "item_click" },
-            "item_id": { "type": "string", "minLength": 1 }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "cell", "item_type"],
           "properties": {
             "type": { "const": "place_item" },
             "cell": { "$ref": "#/$defs/GridCell" },
@@ -186,10 +159,27 @@
         },
         {
           "type": "object",
-          "additionalProperties": false,
           "required": ["type", "cell"],
           "properties": {
             "type": { "const": "remove_item" },
+            "cell": { "$ref": "#/$defs/GridCell" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "cell", "workflow_id"],
+          "properties": {
+            "type": { "const": "place_creature" },
+            "cell": { "$ref": "#/$defs/GridCell" },
+            "workflow_id": { "type": "string", "minLength": 1 },
+            "name": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "cell"],
+          "properties": {
+            "type": { "const": "remove_creature" },
             "cell": { "$ref": "#/$defs/GridCell" }
           }
         }

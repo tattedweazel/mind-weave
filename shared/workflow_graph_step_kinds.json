@@ -83,27 +83,67 @@
     },
     {
       "kind": "primitive",
-      "primitive_type": "sandbox_behavior",
-      "react_flow_type": "sandboxBehaviorPrimitive",
-      "pydantic_model": "SandboxBehaviorPrimitiveNode",
-      "palette_handle": "sandbox_behavior",
-      "editor_label": "Sandbox behavior"
-    },
-    {
-      "kind": "primitive",
-      "primitive_type": "decision_action",
-      "react_flow_type": "decisionActionPrimitive",
-      "pydantic_model": "DecisionActionPrimitiveNode",
-      "palette_handle": "decision_action",
-      "editor_label": "Decision action"
-    },
-    {
-      "kind": "primitive",
       "primitive_type": "sandbox_tick",
       "react_flow_type": "sandboxTickPrimitive",
       "pydantic_model": "SandboxTickPrimitiveNode",
       "palette_handle": "sandbox_tick",
       "editor_label": "Sandbox tick"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_get_position",
+      "react_flow_type": "sandboxGetPosition",
+      "pydantic_model": "SandboxGetPositionUtilityNode",
+      "palette_handle": "sandbox_get_position",
+      "editor_label": "Get position"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_get_facing",
+      "react_flow_type": "sandboxGetFacing",
+      "pydantic_model": "SandboxGetFacingUtilityNode",
+      "palette_handle": "sandbox_get_facing",
+      "editor_label": "Get facing"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_get_nearby",
+      "react_flow_type": "sandboxGetNearby",
+      "pydantic_model": "SandboxGetNearbyUtilityNode",
+      "palette_handle": "sandbox_get_nearby",
+      "editor_label": "Get nearby"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_move_forward",
+      "react_flow_type": "sandboxMoveForward",
+      "pydantic_model": "SandboxMoveForwardUtilityNode",
+      "palette_handle": "sandbox_move_forward",
+      "editor_label": "Move forward"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_turn_left",
+      "react_flow_type": "sandboxTurnLeft",
+      "pydantic_model": "SandboxTurnLeftUtilityNode",
+      "palette_handle": "sandbox_turn_left",
+      "editor_label": "Turn left"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_turn_right",
+      "react_flow_type": "sandboxTurnRight",
+      "pydantic_model": "SandboxTurnRightUtilityNode",
+      "palette_handle": "sandbox_turn_right",
+      "editor_label": "Turn right"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_idle",
+      "react_flow_type": "sandboxIdle",
+      "pydantic_model": "SandboxIdleUtilityNode",
+      "palette_handle": "sandbox_idle",
+      "editor_label": "Idle"
     },
     {
       "kind": "skill",
@@ -232,134 +272,6 @@
       "pydantic_model": "MessageUtilityNode",
       "palette_handle": "message",
       "editor_label": "Message"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_tick_items",
-      "react_flow_type": "sandboxTickItems",
-      "pydantic_model": "SandboxTickItemsUtilityNode",
-      "palette_handle": "sandbox_tick_items",
-      "editor_label": "Sandbox get items"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_world_grid",
-      "react_flow_type": "sandboxWorldGrid",
-      "pydantic_model": "SandboxWorldGridUtilityNode",
-      "palette_handle": "sandbox_world_grid",
-      "editor_label": "Sandbox world grid"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_available_cells",
-      "react_flow_type": "sandboxAvailableCells",
-      "pydantic_model": "SandboxAvailableCellsUtilityNode",
-      "palette_handle": "sandbox_available_cells",
-      "editor_label": "Sandbox available cells"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_tick_pet",
-      "react_flow_type": "sandboxTickPet",
-      "pydantic_model": "SandboxTickPetUtilityNode",
-      "palette_handle": "sandbox_tick_pet",
-      "editor_label": "Sandbox tick pet"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_filter_items_by_type",
-      "react_flow_type": "sandboxFilterItemsByType",
-      "pydantic_model": "SandboxFilterItemsByTypeUtilityNode",
-      "palette_handle": "sandbox_filter_items_by_type",
-      "editor_label": "Sandbox filter items by type"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_nearest_item_by_type",
-      "react_flow_type": "sandboxNearestItemByType",
-      "pydantic_model": "SandboxNearestItemByTypeUtilityNode",
-      "palette_handle": "sandbox_nearest_item_by_type",
-      "editor_label": "Sandbox nearest item by type"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_closest_item",
-      "react_flow_type": "sandboxClosestItem",
-      "pydantic_model": "SandboxClosestItemUtilityNode",
-      "palette_handle": "sandbox_closest_item",
-      "editor_label": "Get Closest Item"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_decision_intent",
-      "react_flow_type": "sandboxDecisionIntent",
-      "pydantic_model": "SandboxDecisionIntentUtilityNode",
-      "palette_handle": "sandbox_decision_intent",
-      "editor_label": "Sandbox decision intent"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_decision_move_to",
-      "react_flow_type": "sandboxDecisionMoveTo",
-      "pydantic_model": "SandboxDecisionMoveToUtilityNode",
-      "palette_handle": "sandbox_decision_move_to",
-      "editor_label": "Sandbox decision move_to"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_starter_decision",
-      "react_flow_type": "sandboxStarterDecision",
-      "pydantic_model": "SandboxStarterDecisionUtilityNode",
-      "palette_handle": "sandbox_starter_decision",
-      "editor_label": "Starter sandbox decision"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_pet_hunger",
-      "react_flow_type": "sandboxPetHunger",
-      "pydantic_model": "SandboxPetHungerUtilityNode",
-      "palette_handle": "sandbox_pet_hunger",
-      "editor_label": "Sandbox pet hunger"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_pet_energy",
-      "react_flow_type": "sandboxPetEnergy",
-      "pydantic_model": "SandboxPetEnergyUtilityNode",
-      "palette_handle": "sandbox_pet_energy",
-      "editor_label": "Sandbox pet energy"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_pet_cell",
-      "react_flow_type": "sandboxPetCell",
-      "pydantic_model": "SandboxPetCellUtilityNode",
-      "palette_handle": "sandbox_pet_cell",
-      "editor_label": "Sandbox pet cell"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_is_nearby8",
-      "react_flow_type": "sandboxIsNearby8",
-      "pydantic_model": "SandboxIsNearby8UtilityNode",
-      "palette_handle": "sandbox_is_nearby8",
-      "editor_label": "Sandbox is nearby8"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_first_nearby_food",
-      "react_flow_type": "sandboxFirstNearbyFood",
-      "pydantic_model": "SandboxFirstNearbyFoodUtilityNode",
-      "palette_handle": "sandbox_first_nearby_food",
-      "editor_label": "Sandbox first nearby food"
-    },
-    {
-      "kind": "utility",
-      "utility_type": "sandbox_first_food_world_order",
-      "react_flow_type": "sandboxFirstFoodWorldOrder",
-      "pydantic_model": "SandboxFirstFoodWorldOrderUtilityNode",
-      "palette_handle": "sandbox_first_food_world_order",
-      "editor_label": "Sandbox first food (world order)"
     },
     {
       "kind": "utility",

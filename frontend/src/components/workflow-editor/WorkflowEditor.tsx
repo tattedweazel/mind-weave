@@ -140,7 +140,6 @@ import {
     resolveWorkflowPaletteColor,
     sortWorkflowPalettesForDisplay,
 } from '../../domain/paletteDefaults';
-import { DEFAULT_SANDBOX_DECISION_ACTION, SANDBOX_DECISION_ACTIONS } from '../../domain/sandbox/decisionActions';
 import { getHandleColor } from './constants';
 import {
     FitViewOnWorkflowCanvasKey,
@@ -334,6 +333,13 @@ export const WorkflowEditor: React.FC<Props> = ({
         () => workflows.filter(w => Boolean(w.expose_as_custom_skill)),
         [workflows],
     );
+    const isSystemWorkflow = Boolean(activeWf?.is_system);
+    const canEditSystemWorkflow = !isSystemWorkflow || Boolean(user?.is_admin);
+    const systemWorkflowBadge = isSystemWorkflow
+        ? user?.is_admin
+            ? 'System workflow (admin editable)'
+            : 'System workflow (read-only)'
+        : null;
     const [personas, setPersonas] = useState<PersonaListItem[]>([]);
     const [palettes, setPalettes] = useState<Palette[]>([]);
     /** Server `GET /palettes/resolve` for workflow + user; defensive fallback when null/unavailable. */
@@ -1913,137 +1919,54 @@ export const WorkflowEditor: React.FC<Props> = ({
                     },
                 },
             ]);
-        } else if (type === 'sandboxBehaviorPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'sandboxBehaviorPrimitive', position, data: { label: 'Sandbox behavior' } }]);
-        } else if (type === 'decisionActionPrimitive') {
-            setNodes(ns => [
-                ...ns,
-                {
-                    id,
-                    type: 'decisionActionPrimitive',
-                    position,
-                    data: { label: extra.label ?? 'Decision action', action: DEFAULT_SANDBOX_DECISION_ACTION },
-                },
-            ]);
         } else if (type === 'sandboxTickPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'sandboxTickPrimitive', position, data: { label: extra.label ?? 'Sandbox tick' } }]);
-        } else if (type === 'stringPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'stringPrimitive', position, data: { label: 'String', text: '' } }]);
-        } else if (type === 'listPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'listPrimitive', position, data: { label: 'List', data: [] } }]);
-        } else if (type === 'dictionaryPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'dictionaryPrimitive', position, data: { label: 'Dictionary', data: {} } }]);
-        } else if (type === 'booleanPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'booleanPrimitive', position, data: { label: 'Boolean', value: false } }]);
-        } else if (type === 'dateTimePrimitive') {
-            setNodes(ns => [...ns, { id, type: 'dateTimePrimitive', position, data: { label: 'DateTime', iso: null, use_now: false } }]);
-        } else if (type === 'intPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'intPrimitive', position, data: { label: 'Int', value: 0 } }]);
-        } else if (type === 'lenFromList') {
-            setNodes(ns => [...ns, { id, type: 'lenFromList', position, data: { label: extra.label ?? 'Len from List' } }]);
-        } else if (type === 'randomItemFromList') {
-            setNodes(ns => [...ns, { id, type: 'randomItemFromList', position, data: { label: extra.label ?? 'Random item from list' } }]);
-        } else if (type === 'sandboxTickItems') {
-            setNodes(ns => [...ns, { id, type: 'sandboxTickItems', position, data: { label: extra.label ?? 'Sandbox get items', item_type: 'all' } }]);
-        } else if (type === 'sandboxWorldGrid') {
-            setNodes(ns => [...ns, { id, type: 'sandboxWorldGrid', position, data: { label: extra.label ?? 'Sandbox world grid' } }]);
-        } else if (type === 'sandboxAvailableCells') {
-            setNodes(ns => [...ns, { id, type: 'sandboxAvailableCells', position, data: { label: extra.label ?? 'Sandbox available cells' } }]);
-        } else if (type === 'sandboxTickPet') {
-            setNodes(ns => [...ns, { id, type: 'sandboxTickPet', position, data: { label: extra.label ?? 'Sandbox tick pet' } }]);
-        } else if (type === 'sandboxNearestItemByType') {
+            setNodes(ns => [...ns, { id, type: 'sandboxTickPrimitive', position, data: { label: extra.label ?? 'Tick input' } }]);
+        } else if (type === 'sandboxGetPosition') {
+            setNodes(ns => [...ns, { id, type: 'sandboxGetPosition', position, data: { label: extra.label ?? 'Get position' } }]);
+        } else if (type === 'sandboxGetFacing') {
+            setNodes(ns => [...ns, { id, type: 'sandboxGetFacing', position, data: { label: extra.label ?? 'Get facing' } }]);
+        } else if (type === 'sandboxGetNearby') {
+            setNodes(ns => [...ns, { id, type: 'sandboxGetNearby', position, data: { label: extra.label ?? 'Get nearby' } }]);
+        } else if (type === 'sandboxMoveForward') {
             setNodes(ns => [...ns, {
                 id,
-                type: 'sandboxNearestItemByType',
+                type: 'sandboxMoveForward',
                 position,
                 data: {
-                    label: extra.label ?? 'Sandbox nearest item by type',
-                    required_inputs: [
-                        { key: 'sandbox_tick', type: 'dictionary', value: null },
-                        { key: 'item_type', type: 'string', value: 'food' },
-                    ],
+                    label: extra.label ?? 'Move forward',
+                    required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
-        } else if (type === 'sandboxClosestItem') {
+        } else if (type === 'sandboxTurnLeft') {
             setNodes(ns => [...ns, {
                 id,
-                type: 'sandboxClosestItem',
+                type: 'sandboxTurnLeft',
                 position,
                 data: {
-                    label: extra.label ?? 'Get Closest Item',
-                    required_inputs: [
-                        { key: 'sandbox_tick', type: 'dictionary', value: null },
-                        { key: 'item_type', type: 'string', value: 'food' },
-                    ],
+                    label: extra.label ?? 'Turn left',
+                    required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
-        } else if (type === 'sandboxDecisionMoveTo') {
+        } else if (type === 'sandboxTurnRight') {
             setNodes(ns => [...ns, {
                 id,
-                type: 'sandboxDecisionMoveTo',
+                type: 'sandboxTurnRight',
                 position,
                 data: {
-                    label: extra.label ?? 'Sandbox decision move_to',
-                    required_inputs: [
-                        { key: 'target_item_id', type: 'string', value: null },
-                        { key: 'target_cell', type: 'dictionary', value: null },
-                        { key: 'reason', type: 'string', value: null },
-                    ],
+                    label: extra.label ?? 'Turn right',
+                    required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
-        } else if (type === 'sandboxStarterDecision') {
-            setNodes(ns => [...ns, { id, type: 'sandboxStarterDecision', position, data: { label: extra.label ?? 'Starter sandbox decision' } }]);
-        } else if (type === 'sandboxFilterItemsByType') {
+        } else if (type === 'sandboxIdle') {
             setNodes(ns => [...ns, {
                 id,
-                type: 'sandboxFilterItemsByType',
+                type: 'sandboxIdle',
                 position,
                 data: {
-                    label: extra.label ?? 'Sandbox filter items by type',
-                    required_inputs: [
-                        { key: 'items', type: 'list', value: null },
-                        { key: 'item_type', type: 'string', value: 'food' },
-                    ],
+                    label: extra.label ?? 'Idle',
+                    required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
-        } else if (type === 'sandboxDecisionIntent') {
-            setNodes(ns => [...ns, {
-                id,
-                type: 'sandboxDecisionIntent',
-                position,
-                data: {
-                    label: extra.label ?? 'Sandbox decision intent',
-                    required_inputs: [
-                        { key: 'action', type: 'string', value: 'wander' },
-                        { key: 'target_item_id', type: 'string', value: null },
-                        { key: 'target_cell', type: 'dictionary', value: null },
-                        { key: 'reason', type: 'string', value: null },
-                    ],
-                },
-            }]);
-        } else if (type === 'sandboxPetHunger') {
-            setNodes(ns => [...ns, { id, type: 'sandboxPetHunger', position, data: { label: extra.label ?? 'Sandbox pet hunger' } }]);
-        } else if (type === 'sandboxPetEnergy') {
-            setNodes(ns => [...ns, { id, type: 'sandboxPetEnergy', position, data: { label: extra.label ?? 'Sandbox pet energy' } }]);
-        } else if (type === 'sandboxPetCell') {
-            setNodes(ns => [...ns, { id, type: 'sandboxPetCell', position, data: { label: extra.label ?? 'Sandbox pet cell' } }]);
-        } else if (type === 'sandboxIsNearby8') {
-            setNodes(ns => [...ns, {
-                id,
-                type: 'sandboxIsNearby8',
-                position,
-                data: {
-                    label: extra.label ?? 'Sandbox is nearby8',
-                    required_inputs: [
-                        { key: 'cell_a', type: 'dictionary', value: null },
-                        { key: 'cell_b', type: 'dictionary', value: null },
-                    ],
-                },
-            }]);
-        } else if (type === 'sandboxFirstNearbyFood') {
-            setNodes(ns => [...ns, { id, type: 'sandboxFirstNearbyFood', position, data: { label: extra.label ?? 'Sandbox first nearby food' } }]);
-        } else if (type === 'sandboxFirstFoodWorldOrder') {
-            setNodes(ns => [...ns, { id, type: 'sandboxFirstFoodWorldOrder', position, data: { label: extra.label ?? 'Sandbox first food (world order)' } }]);
         } else if (type === 'intToString') {
             setNodes(ns => [...ns, { id, type: 'intToString', position, data: { label: extra.label ?? 'Int to String' } }]);
         } else if (type === 'listItemByIndex') {
@@ -2465,6 +2388,10 @@ export const WorkflowEditor: React.FC<Props> = ({
     // Save
     const handleSave = async () => {
         if (!activeWf) return;
+        if (!canEditSystemWorkflow) {
+            setSaveError('System workflows are read-only');
+            return;
+        }
         setIsSaving(true);
         setSaveError(null);
         try {
@@ -3600,6 +3527,14 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 placeholder="Workflow Name"
                                 className="text-sm font-semibold text-mw-text-primary truncate flex-1 min-w-0 bg-transparent border border-transparent hover:border-mw-border focus:border-mw-primary rounded px-2 py-1 transition-colors focus:outline-none focus:ring-1 focus:ring-mw-primary" 
                             />
+                            {systemWorkflowBadge ? (
+                                <span
+                                    className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border border-mw-border bg-mw-card-alt text-mw-text-secondary"
+                                    title={canEditSystemWorkflow ? 'Admins may save changes to this built-in workflow' : 'Built-in workflow; duplicate to customize'}
+                                >
+                                    {systemWorkflowBadge}
+                                </span>
+                            ) : null}
                             <select
                                 value={toolbarPaletteSelectValue}
                                 onChange={e =>
@@ -3613,7 +3548,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                                     <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
                             </select>
-                            {deletingWfId === activeWf.id ? (
+                            {!activeWf.is_system && (deletingWfId === activeWf.id ? (
                                 <div className="flex items-center gap-1.5 ml-2">
                                     <span className="text-xs font-medium text-red-500">Delete?</span>
                                     <button onClick={handleDeleteWf} className="px-2 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded shadow-sm transition-colors">Yes</button>
@@ -3623,12 +3558,13 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 <button onClick={() => setDeletingWfId(activeWf.id)} className="p-1.5 text-mw-text-secondary hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Delete Workflow">
                                     <Trash2 size={14} />
                                 </button>
-                            )}
+                            ))}
 
                             <button
                                 onClick={() => void handleSave()}
-                                disabled={isSaving}
+                                disabled={isSaving || !canEditSystemWorkflow}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-mw-text-primary border border-mw-border hover:bg-mw-card-alt rounded-lg transition-colors disabled:opacity-50 ml-2"
+                                title={canEditSystemWorkflow ? undefined : 'System workflows are read-only'}
                             >
                                 <Save size={13} /> {isSaving ? 'Saving…' : 'Save'}
                             </button>
@@ -5498,625 +5434,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                             );
                         })()}
 
-                        {selectedNode.type === 'calendarListEvents' && (() => {
-                            const d = selectedNode.data as any;
-                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
-                            requiredInputs = requiredInputs.filter(
-                                (i: RequiredInput) => i.key === 'time_min' || i.key === 'time_max',
-                            );
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'time_min')) {
-                                requiredInputs.push({ key: 'time_min', type: 'datetime', value: null });
-                            }
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'time_max')) {
-                                requiredInputs.push({ key: 'time_max', type: 'datetime', value: null });
-                            }
-                            const updateInput = (idx: number, patch: Partial<RequiredInput>) => {
-                                const next = [...requiredInputs];
-                                next[idx] = { ...next[idx], ...patch };
-                                updateSelectedNodeData({ required_inputs: next });
-                            };
-                            const tminIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'time_min');
-                            const tmaxIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'time_max');
-                            return (
-                                <>
-                                    <InspectorSection
-                                        title="About"
-                                        description="Lists calendar events in a time window (read-only). Use date and time below—stored as RFC3339 for the Calendar API—using your My Profile workflow time zone, or wire time_min / time_max from upstream."
-                                    />
-                                    <InspectorSection title="Calendar">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Calendar ID</label>
-                                            <input
-                                                value={d?.calendar_id ?? 'primary'}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({
-                                                        calendar_id: e.target.value.trim() || 'primary',
-                                                    })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            />
-                                            <p className="text-[10px] text-mw-text-secondary mt-0.5">Use primary or a calendar email address.</p>
-                                        </div>
-                                    </InspectorSection>
-                                    <InspectorSection title="Time & limits">
-                                        <CalendarWindowDateTimeFields
-                                            timeMinValue={requiredInputs[tminIdx]?.value as string | null | undefined}
-                                            timeMaxValue={requiredInputs[tmaxIdx]?.value as string | null | undefined}
-                                            timeZone={resolveWorkflowTimeZone(user?.settings as Record<string, unknown> | undefined)}
-                                            onTimeMinChange={v => {
-                                                if (tminIdx >= 0) {
-                                                    updateInput(tminIdx, { value: v });
-                                                }
-                                            }}
-                                            onTimeMaxChange={v => {
-                                                if (tmaxIdx >= 0) {
-                                                    updateInput(tmaxIdx, { value: v });
-                                                }
-                                            }}
-                                        />
-                                    </InspectorSection>
-                                </>
-                            );
-                        })()}
-
-                        {selectedNode.type === 'fetchUrl' && (() => {
-                            const d = selectedNode.data as any;
-                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
-                            requiredInputs = requiredInputs.filter((i: RequiredInput) => i.key === 'url');
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'url')) {
-                                requiredInputs.push({ key: 'url', type: 'string', value: null });
-                            }
-                            const urlIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'url');
-                            const urlFromInput = requiredInputs[urlIdx]?.value;
-                            const displayUrl =
-                                (typeof urlFromInput === 'string' && urlFromInput.trim() !== '' ? urlFromInput : null) ??
-                                (typeof d?.url === 'string' ? d.url : '') ??
-                                '';
-                            const pol = d?.cache_policy;
-                            const cachePolicy: 'default' | 'refresh' | 'bypass' =
-                                pol === 'refresh' || pol === 'bypass' ? pol : 'default';
-                            const hdrs =
-                                d?.headers && typeof d.headers === 'object' && !Array.isArray(d.headers)
-                                    ? (d.headers as Record<string, string>)
-                                    : undefined;
-                            return (
-                                <>
-                                    <InspectorSection
-                                        title="About"
-                                        description="Fetches a URL on the API server and returns status, final URL, headers, and text body. Non-2xx responses still succeed the step (see status_code). Use cache policy to reuse prior successful responses. Requests run in the API process—do not use for untrusted targets without understanding operator risk."
-                                    />
-                                    <InspectorSection title="Request">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">URL</label>
-                                            <input
-                                                value={displayUrl}
-                                                onFocus={recordGraphBeforeMutation}
-                                                onChange={e => {
-                                                    const v = e.target.value;
-                                                    const next = [...requiredInputs];
-                                                    if (urlIdx >= 0) next[urlIdx] = { ...next[urlIdx], value: v || null };
-                                                    patchSelectedNodeData({ required_inputs: next, url: v });
-                                                }}
-                                                placeholder="https://…"
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Method</label>
-                                            <select
-                                                value={String(d?.method ?? 'GET').toUpperCase()}
-                                                onChange={e => updateSelectedNodeData({ method: e.target.value })}
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            >
-                                                {['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD'].map(m => (
-                                                    <option key={m} value={m}>
-                                                        {m}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Headers (JSON object)</label>
-                                            <FetchUrlHeadersTextarea
-                                                key={selectedNode.id}
-                                                headers={hdrs}
-                                                onFocusBeforeEdit={recordGraphBeforeMutation}
-                                                onCommit={flat => updateSelectedNodeData({ headers: flat })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Timeout (ms, optional)</label>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                value={d?.timeout_ms != null && d.timeout_ms !== '' ? String(d.timeout_ms) : ''}
-                                                onChange={e => {
-                                                    const t = e.target.value.trim();
-                                                    if (t === '') {
-                                                        updateSelectedNodeData({ timeout_ms: null });
-                                                        return;
-                                                    }
-                                                    const n = parseInt(t, 10);
-                                                    updateSelectedNodeData({ timeout_ms: Number.isFinite(n) && n > 0 ? n : null });
-                                                }}
-                                                placeholder="(server default)"
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            />
-                                        </div>
-                                    </InspectorSection>
-                                    <InspectorSection title="Cache">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Policy</label>
-                                            <select
-                                                value={cachePolicy}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({
-                                                        cache_policy: e.target.value as 'default' | 'refresh' | 'bypass',
-                                                    })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            >
-                                                <option value="default">default (use cache if present)</option>
-                                                <option value="refresh">refresh (fetch and update cache)</option>
-                                                <option value="bypass">bypass (always fetch, do not store)</option>
-                                            </select>
-                                        </div>
-                                    </InspectorSection>
-                                </>
-                            );
-                        })()}
-
-                        {selectedNode.type === 'captureUrlSnapshot' && (() => {
-                            const d = selectedNode.data as any;
-                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
-                            requiredInputs = requiredInputs.filter((i: RequiredInput) => i.key === 'url');
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'url')) {
-                                requiredInputs.push({ key: 'url', type: 'string', value: null });
-                            }
-                            const urlIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'url');
-                            const urlFromInput = requiredInputs[urlIdx]?.value;
-                            const displayUrl =
-                                (typeof urlFromInput === 'string' && urlFromInput.trim() !== '' ? urlFromInput : null) ??
-                                (typeof d?.url === 'string' ? d.url : '') ??
-                                '';
-                            const pol = d?.cache_policy;
-                            const cachePolicy: 'default' | 'refresh' | 'bypass' =
-                                pol === 'refresh' || pol === 'bypass' ? pol : 'default';
-                            const wu = d?.wait_until;
-                            const waitUntil: 'load' | 'domcontentloaded' | 'networkidle' =
-                                wu === 'domcontentloaded' || wu === 'networkidle' ? wu : 'load';
-                            const fullPage = d?.full_page === undefined || d?.full_page === null ? true : Boolean(d.full_page);
-                            return (
-                                <>
-                                    <InspectorSection
-                                        title="About"
-                                        description="Renders the URL in headless Chromium and stores a PNG artifact (image reference + metadata). Does not interpret page content. Security: same trust model as Fetch URL (API can reach internal URLs)."
-                                    />
-                                    <InspectorSection title="Page">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">URL</label>
-                                            <input
-                                                value={displayUrl}
-                                                onFocus={recordGraphBeforeMutation}
-                                                onChange={e => {
-                                                    const v = e.target.value;
-                                                    const next = [...requiredInputs];
-                                                    if (urlIdx >= 0) next[urlIdx] = { ...next[urlIdx], value: v || null };
-                                                    patchSelectedNodeData({ required_inputs: next, url: v });
-                                                }}
-                                                placeholder="https://…"
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            />
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-2">
-                                            <input
-                                                id="cap-fullpage"
-                                                type="checkbox"
-                                                checked={fullPage}
-                                                onChange={e => updateSelectedNodeData({ full_page: e.target.checked })}
-                                            />
-                                            <label htmlFor="cap-fullpage" className="text-xs text-mw-text-secondary">
-                                                Full page screenshot
-                                            </label>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2 mt-2">
-                                            <div>
-                                                <label className="text-xs font-medium text-mw-text-secondary block mb-1">Viewport W</label>
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={d?.viewport_width != null && d.viewport_width !== '' ? String(d.viewport_width) : ''}
-                                                    onChange={e => {
-                                                        const t = e.target.value.trim();
-                                                        if (t === '') {
-                                                            updateSelectedNodeData({ viewport_width: null });
-                                                            return;
-                                                        }
-                                                        const n = parseInt(t, 10);
-                                                        updateSelectedNodeData({ viewport_width: Number.isFinite(n) && n > 0 ? n : null });
-                                                    }}
-                                                    placeholder="default"
-                                                    className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-medium text-mw-text-secondary block mb-1">Viewport H</label>
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={d?.viewport_height != null && d.viewport_height !== '' ? String(d.viewport_height) : ''}
-                                                    onChange={e => {
-                                                        const t = e.target.value.trim();
-                                                        if (t === '') {
-                                                            updateSelectedNodeData({ viewport_height: null });
-                                                            return;
-                                                        }
-                                                        const n = parseInt(t, 10);
-                                                        updateSelectedNodeData({ viewport_height: Number.isFinite(n) && n > 0 ? n : null });
-                                                    }}
-                                                    placeholder="default"
-                                                    className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Wait until</label>
-                                            <select
-                                                value={waitUntil}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({
-                                                        wait_until: e.target.value as 'load' | 'domcontentloaded' | 'networkidle',
-                                                    })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            >
-                                                <option value="load">load</option>
-                                                <option value="domcontentloaded">domcontentloaded</option>
-                                                <option value="networkidle">networkidle</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Timeout (ms, optional)</label>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                value={d?.timeout_ms != null && d.timeout_ms !== '' ? String(d.timeout_ms) : ''}
-                                                onChange={e => {
-                                                    const t = e.target.value.trim();
-                                                    if (t === '') {
-                                                        updateSelectedNodeData({ timeout_ms: null });
-                                                        return;
-                                                    }
-                                                    const n = parseInt(t, 10);
-                                                    updateSelectedNodeData({ timeout_ms: Number.isFinite(n) && n > 0 ? n : null });
-                                                }}
-                                                placeholder="(server default)"
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            />
-                                        </div>
-                                    </InspectorSection>
-                                    <InspectorSection title="Cache">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">Policy</label>
-                                            <select
-                                                value={cachePolicy}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({
-                                                        cache_policy: e.target.value as 'default' | 'refresh' | 'bypass',
-                                                    })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card rounded-lg"
-                                            >
-                                                <option value="default">default (use cache if present)</option>
-                                                <option value="refresh">refresh (capture and update cache)</option>
-                                                <option value="bypass">bypass (capture, do not store cache)</option>
-                                            </select>
-                                        </div>
-                                    </InspectorSection>
-                                </>
-                            );
-                        })()}
-
-                        {/* List to String utility nodes */}
-                        {selectedNode.type === 'listToString' && (() => {
-                            const d = selectedNode.data as {
-                                use_text_join?: boolean;
-                                add_line_breaks_between_items?: boolean;
-                            };
-                            const useJson = d?.use_text_join !== true;
-                            const lineBreaksOn = d?.add_line_breaks_between_items !== false;
-                            return (
-                                <>
-                                    <InspectorSection
-                                        title="About"
-                                        description="Converts list input to a single string for prompts (joined lines or spaces), or to a pretty-printed JSON array for pairing with String to List. Wire a List primitive or Start list slot to the input handle."
-                                    />
-                                    <InspectorSection title="Output format">
-                                        <div className="flex flex-col gap-2">
-                                            <label className="flex items-center gap-2 text-xs text-mw-text-primary cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={useJson}
-                                                    onChange={e =>
-                                                        updateSelectedNodeData({
-                                                            use_text_join: e.target.checked ? false : true,
-                                                            ...(e.target.checked ? {} : { add_line_breaks_between_items: true }),
-                                                        })
-                                                    }
-                                                    className="rounded border-mw-border"
-                                                />
-                                                <span>Output as JSON array</span>
-                                            </label>
-                                            <p className="text-[10px] text-mw-text-secondary">
-                                                Use JSON when feeding <strong className="font-medium text-mw-text-primary">String to List</strong> for a round-trip. Otherwise leave off for plain joined text.
-                                            </p>
-                                            <label
-                                                className={`flex items-center gap-2 text-xs cursor-pointer ${
-                                                    useJson ? 'text-mw-text-muted pointer-events-none opacity-60' : 'text-mw-text-primary'
-                                                }`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={lineBreaksOn}
-                                                    disabled={useJson}
-                                                    onChange={e => updateSelectedNodeData({ add_line_breaks_between_items: e.target.checked })}
-                                                    className="rounded border-mw-border"
-                                                />
-                                                <span>Add line breaks between items</span>
-                                            </label>
-                                        </div>
-                                    </InspectorSection>
-                                </>
-                            );
-                        })()}
-
-                        {selectedNode.type === 'stringToList' && (
-                            <InspectorSection
-                                title="About"
-                                description="Parses a JSON array string into a list. Wire a String primitive, LLM output, or Start string slot to the input. For a round-trip with List to String, set that node to Output as JSON array."
-                            />
-                        )}
-
-                        {/* Len from List utility nodes */}
-                        {selectedNode.type === 'lenFromList' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns the length of the list. Wire a List primitive or Start list slot to the list input."
-                            />
-                        )}
-                        {selectedNode.type === 'randomItemFromList' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns one uniformly random element from the wired list (output type follows the picked element: string, list, dictionary, int, or boolean). Empty lists fail the step. Uses a cryptographic index choice per run."
-                            />
-                        )}
-
-                        {selectedNode.type === 'sandboxTickItems' && (() => {
-                            const d = selectedNode.data as { item_type?: 'all' | 'food' };
-                            const itemType = d?.item_type === 'food' ? 'food' : 'all';
-                            return (
-                                <>
-                                    <InspectorSection
-                                        title="About"
-                                        description="Returns world.items as a list of serialized item dicts from a wired SandboxTickInput (Start sandbox_tick or a tick-shaped dictionary). Optionally filter by item type."
-                                    />
-                                    <InspectorSection title="Item type">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">item_type</label>
-                                            <select
-                                                value={itemType}
-                                                onChange={e =>
-                                                    updateSelectedNodeData({
-                                                        item_type: e.target.value as 'all' | 'food',
-                                                    })
-                                                }
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
-                                            >
-                                                <option value="all">All</option>
-                                                <option value="food">Food</option>
-                                            </select>
-                                        </div>
-                                    </InspectorSection>
-                                </>
-                            );
-                        })()}
-                        {selectedNode.type === 'sandboxWorldGrid' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns board size as { width, height } from a wired SandboxTickInput (same tick wiring as other sandbox tick utilities)."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxAvailableCells' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns a list of { x, y } cell dicts for every grid cell not occupied by the pet or any item (row-major order), from a wired SandboxTickInput."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxTickPet' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns the validated pet subtree (hunger, energy, mood, position, intent) as a dictionary—use for reliable wiring instead of ad-hoc tick slicing."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxNearestItemByType' && (() => {
-                            const d = selectedNode.data as { required_inputs?: RequiredInput[] };
-                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'sandbox_tick')) {
-                                requiredInputs = [
-                                    ...requiredInputs,
-                                    { key: 'sandbox_tick', type: 'dictionary', value: null },
-                                ];
-                            }
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'item_type')) {
-                                requiredInputs = [
-                                    ...requiredInputs,
-                                    { key: 'item_type', type: 'string', value: 'food' },
-                                ];
-                            }
-                            const itemIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'item_type');
-                            const rawVal = requiredInputs[itemIdx]?.value;
-                            const itemType =
-                                typeof rawVal === 'string' && rawVal.trim().toLowerCase() === 'all'
-                                    ? 'all'
-                                    : 'food';
-                            const updateInput = (idx: number, patch: Partial<RequiredInput>) => {
-                                const next = [...requiredInputs];
-                                next[idx] = { ...next[idx], ...patch };
-                                updateSelectedNodeData({ required_inputs: next });
-                            };
-                            return (
-                                <>
-                                    <InspectorSection
-                                        title="About"
-                                        description="Returns one serialized item dict as dictionary output, or an empty object {} when no item matches. Minimum Manhattan distance from the pet to items matching item_type; ties break by world.items order. Unlike sandbox_filter_items_by_type, this picks a single nearest item (same geometry as Get Closest Item)."
-                                    />
-                                    <InspectorSection title="Item type">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
-                                                item_type
-                                            </label>
-                                            <select
-                                                value={itemType}
-                                                onChange={e => {
-                                                    const v = e.target.value as 'all' | 'food';
-                                                    const idx = requiredInputs.findIndex(
-                                                        (i: RequiredInput) => i.key === 'item_type',
-                                                    );
-                                                    if (idx >= 0) updateInput(idx, { value: v });
-                                                }}
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
-                                            >
-                                                <option value="all">All</option>
-                                                <option value="food">Food</option>
-                                            </select>
-                                            <p className="text-[10px] text-mw-text-secondary mt-0.5">
-                                                Or wire the item_type input handle.
-                                            </p>
-                                        </div>
-                                    </InspectorSection>
-                                </>
-                            );
-                        })()}
-                        {selectedNode.type === 'sandboxClosestItem' && (() => {
-                            const d = selectedNode.data as { required_inputs?: RequiredInput[] };
-                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'sandbox_tick')) {
-                                requiredInputs = [
-                                    ...requiredInputs,
-                                    { key: 'sandbox_tick', type: 'dictionary', value: null },
-                                ];
-                            }
-                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'item_type')) {
-                                requiredInputs = [
-                                    ...requiredInputs,
-                                    { key: 'item_type', type: 'string', value: 'food' },
-                                ];
-                            }
-                            const itemIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'item_type');
-                            const rawVal = requiredInputs[itemIdx]?.value;
-                            const itemType =
-                                typeof rawVal === 'string' && rawVal.trim().toLowerCase() === 'all'
-                                    ? 'all'
-                                    : 'food';
-                            const updateInput = (idx: number, patch: Partial<RequiredInput>) => {
-                                const next = [...requiredInputs];
-                                next[idx] = { ...next[idx], ...patch };
-                                updateSelectedNodeData({ required_inputs: next });
-                            };
-                            return (
-                                <>
-                                    <InspectorSection
-                                        title="About"
-                                        description="Same output as Sandbox nearest item by type: one serialized item dict, or {} when no item matches. Use whichever palette label you prefer."
-                                    />
-                                    <InspectorSection title="Item type">
-                                        <div>
-                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
-                                                item_type
-                                            </label>
-                                            <select
-                                                value={itemType}
-                                                onChange={e => {
-                                                    const v = e.target.value as 'all' | 'food';
-                                                    const idx = requiredInputs.findIndex(
-                                                        (i: RequiredInput) => i.key === 'item_type',
-                                                    );
-                                                    if (idx >= 0) updateInput(idx, { value: v });
-                                                }}
-                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
-                                            >
-                                                <option value="all">All</option>
-                                                <option value="food">Food</option>
-                                            </select>
-                                            <p className="text-[10px] text-mw-text-secondary mt-0.5">
-                                                Or wire the item_type input handle.
-                                            </p>
-                                        </div>
-                                    </InspectorSection>
-                                </>
-                            );
-                        })()}
-                        {selectedNode.type === 'sandboxDecisionMoveTo' && (
-                            <InspectorSection
-                                title="About"
-                                description="Builds a DecisionIntent with action move_to. Wire exactly one of target_item_id or target_cell (same rules as sandbox_decision_intent)."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxFilterItemsByType' && (
-                            <InspectorSection
-                                title="About"
-                                description="Filters a list of serialized sandbox items by type (V1: food). Wire items and optional item_type, or set item_type inline."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxDecisionIntent' && (
-                            <InspectorSection
-                                title="About"
-                                description="Builds and validates a DecisionIntent dictionary for Stop. Wire action and optional targets, or set defaults inline."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxStarterDecision' && (
-                            <InspectorSection
-                                title="About"
-                                description="Runs the built-in starter deterministic policy (same priorities as the legacy Sandbox behavior primitive)."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxPetHunger' && (
-                            <InspectorSection
-                                title="About"
-                                description="Reads pet.hunger from a wired SandboxTickInput (Start sandbox_tick or a tick-shaped dictionary)."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxPetEnergy' && (
-                            <InspectorSection
-                                title="About"
-                                description="Reads pet.energy from a wired SandboxTickInput (Start sandbox_tick or a tick-shaped dictionary)."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxPetCell' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns pet.position as a dictionary { x, y } for wiring into Sandbox is nearby8 (cell_a / cell_b) or other cell-aware steps—same tick wiring as pet hunger/energy."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxIsNearby8' && (
-                            <InspectorSection
-                                title="About"
-                                description="True when two grid cells are 8-neighbors (including diagonals), excluding the same cell. Each input expects a JSON object with integer x and y."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxFirstNearbyFood' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns at most one food item: the first in world.items order that is adjacent to the pet (starter eat-nearby ordering)."
-                            />
-                        )}
-                        {selectedNode.type === 'sandboxFirstFoodWorldOrder' && (
-                            <InspectorSection
-                                title="About"
-                                description="Returns at most one food item: the first food in world.items iteration order (starter seek / foods[0])."
-                            />
-                        )}
-
+                        
                         {selectedNode.type === 'intToString' && (
                             <InspectorSection
                                 title="About"
@@ -7534,57 +6852,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                             </InspectorSection>
                         )}
 
-                        {selectedNode.type === 'dateTimePrimitive' && (
-                            <InspectorSection title="Value">
-                                <div className="space-y-2">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={Boolean((selectedNode.data as any).use_now)}
-                                            onChange={e => updateSelectedNodeData({ use_now: e.target.checked })}
-                                            className="rounded border-mw-border"
-                                        />
-                                        <span className="text-xs text-mw-text-primary">Use current time when run (UTC)</span>
-                                    </label>
-                                    <p className="text-[10px] text-mw-text-secondary">
-                                        When enabled and the node has no incoming wire, the run uses the server instant. An upstream datetime still
-                                        overrides this.
-                                    </p>
-                                    <div className={(selectedNode.data as any).use_now ? 'opacity-50 pointer-events-none' : ''}>
-                                        <SingleDateTimeField
-                                            label="Instant (RFC3339)"
-                                            value={(selectedNode.data as any).iso ?? null}
-                                            timeZone={resolveWorkflowTimeZone(user?.settings as Record<string, unknown> | undefined)}
-                                            onChange={v => updateSelectedNodeData({ iso: v })}
-                                        />
-                                    </div>
-                                </div>
-                            </InspectorSection>
-                        )}
-
-                        {selectedNode.type === 'decisionActionPrimitive' && (
-                            <InspectorSection title="Action">
-                                <div>
-                                    <label className="text-xs font-medium text-mw-text-secondary block mb-1">Decision action</label>
-                                    <select
-                                        value={(selectedNode.data as any).action ?? DEFAULT_SANDBOX_DECISION_ACTION}
-                                        onChange={e => updateSelectedNodeData({ action: e.target.value })}
-                                        className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                    >
-                                        {SANDBOX_DECISION_ACTIONS.map(a => (
-                                            <option key={a} value={a}>
-                                                {a}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p className="text-[10px] text-mw-text-secondary mt-0.5">
-                                        Output is a string for <strong>sandbox_decision_intent</strong> <code>action</code>. Optional string wire to
-                                        <strong> override</strong> must still be one of these values.
-                                    </p>
-                                </div>
-                            </InspectorSection>
-                        )}
-
+                        
                         {selectedNode.type === 'sandboxTickPrimitive' && (
                             <InspectorSection title="Sandbox tick">
                                 <p className="text-xs text-mw-text-secondary">

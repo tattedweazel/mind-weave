@@ -3760,49 +3760,21 @@ def _message_utility_node(node_id: str, message: str | None = None, label: str =
     }
 
 
-def test_decision_action_primitive_emits_string(client: TestClient):
-    """Decision action primitive outputs validated DecisionAction as string (for sandbox_decision_intent)."""
-    da_id = "n_da_001"
-    workflow_res = client.post(
-        "/api/v1/workflow-definitions/",
-        json={
-            "name": "Decision Action Primitive",
-            "graph": {
-                "nodes": [
-                    {
-                        "id": da_id,
-                        "kind": "primitive",
-                        "primitive_type": "decision_action",
-                        "label": "Action",
-                        "data": {"action": "sleep"},
-                        "position": {"x": 100, "y": 100},
-                    }
-                ],
-                "edges": [],
-            },
-        },
-    )
-    assert workflow_res.status_code == 201
-    workflow_id = workflow_res.json()["id"]
-    run_res = client.post(f"/api/v1/workflow-definitions/{workflow_id}/run")
-    assert run_res.status_code == 200
-    result = run_res.json()
-    assert result["status"] == "ok"
-    step = next((r for r in result["node_results"] if r["node_id"] == da_id), None)
-    assert step is not None
-    assert step["status"] == "ok"
-    out = step.get("output") or {}
-    assert out.get("kind") == "string"
-    assert out.get("text") == "sleep"
-
-
 def test_sandbox_tick_primitive_emits_dictionary_from_overrides(client: TestClient):
     """sandbox_tick primitive outputs validated SandboxTickInput as dictionary (fan-out tick in graphs)."""
     from app.domain.sandbox.engine import initial_sandbox_state_clean
-    from app.domain.schemas.sandbox import SandboxTickInput
+    from app.domain.schemas.sandbox import CreatureState, GridCell, SandboxTickInput
 
     st = initial_sandbox_state_clean()
-    tick = SandboxTickInput(tick=1, pet=st.pet, world=st.world, recent_actions=[]).model_dump(mode="json")
+    c = CreatureState(
+        id="c1",
+        workflow_id="00000000-0000-0000-0000-000000000001",
+        position=GridCell(x=1, y=1),
+        facing="N",
+    )
+    tick = SandboxTickInput(tick=1, creature=c, creatures=[c], world=st.world, recent_actions=[]).model_dump(
+        mode="json"
+    )
     node_id = "n_sandbox_tick_001"
     workflow_res = client.post(
         "/api/v1/workflow-definitions/",

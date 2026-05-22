@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { WorkflowDefinition } from '../../api/types';
-import { WorkflowPaletteStepSections } from './WorkflowPaletteStepSections';
+import { WorkflowPaletteStepSections, paletteStepIcon } from './WorkflowPaletteStepSections';
 import { DEFAULT_PALETTE_COLORS } from '../../domain/paletteDefaults';
 
 const noop = () => {};
@@ -34,7 +34,8 @@ describe('WorkflowPaletteStepSections', () => {
     it('renders Sandbox Utilities section with a sandbox tile', () => {
         render(<WorkflowPaletteStepSections {...baseProps} mode="edit" />);
         expect(screen.getByText('Sandbox Utilities')).toBeInTheDocument();
-        expect(screen.getByText('Sandbox get items')).toBeInTheDocument();
+        expect(screen.getByText('Tick input')).toBeInTheDocument();
+        expect(screen.getByText('Move forward')).toBeInTheDocument();
     });
 
     it('renders Flow section with Stop tile', () => {
@@ -115,5 +116,24 @@ describe('WorkflowPaletteStepSections', () => {
         );
         const nameBtn = screen.getByText('Active Skill').closest('[draggable]');
         expect(nameBtn).toHaveAttribute('draggable', 'false');
+    });
+
+    it('renders icons for sandbox navigation utility palette types', () => {
+        const sandboxTypes = [
+            'sandboxTickPrimitive',
+            'sandboxGetPosition',
+            'sandboxGetFacing',
+            'sandboxGetNearby',
+            'sandboxMoveForward',
+            'sandboxTurnLeft',
+            'sandboxTurnRight',
+            'sandboxIdle',
+        ] as const;
+        for (const type of sandboxTypes) {
+            const icon = paletteStepIcon(type);
+            expect(icon).not.toBeNull();
+            const { container } = render(<>{icon}</>);
+            expect(container.querySelector('svg')).not.toBeNull();
+        }
     });
 });
