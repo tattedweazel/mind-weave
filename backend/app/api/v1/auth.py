@@ -45,6 +45,7 @@ from app.domain.execution_limits import (
 from app.domain.user_settings import (
     MAX_CONCURRENT_LM_STUDIO_CALLS_MAX,
     MAX_CONCURRENT_LM_STUDIO_CALLS_MIN,
+    normalize_sandbox_favorite_colors,
 )
 from app.integrations.gmail_query import GMAIL_EXCLUDABLE_CATEGORY_SLUGS, GMAIL_INBOX_FOCUS_MODES
 from app.persistence.db import get_session
@@ -122,6 +123,7 @@ _ALLOWED_SETTINGS_KEYS = frozenset(
         "auto_play_tts_on_node_end",
         "tts_playback_when",
         "workflow_execution_limits_prefs",
+        "sandbox_favorite_colors",
     }
 )
 _ALLOWED_THEME_MODES = frozenset({"light", "dark", "system"})
@@ -268,6 +270,8 @@ class UserUpdate(BaseModel):
                 }
                 if not v["workflow_execution_limits_prefs"]:
                     del v["workflow_execution_limits_prefs"]
+        if "sandbox_favorite_colors" in v and v["sandbox_favorite_colors"] is not None:
+            v["sandbox_favorite_colors"] = normalize_sandbox_favorite_colors(v["sandbox_favorite_colors"])
         raw = json.dumps(v)
         if len(raw.encode("utf-8")) > _MAX_SETTINGS_BYTES:
             raise ValueError("settings payload too large")

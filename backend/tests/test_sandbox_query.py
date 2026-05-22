@@ -85,3 +85,15 @@ def test_parse_tick_validates_creature_facing():
     raw = _minimal_tick(creature_pos={"x": 1, "y": 1}, facing="W")
     tick = parse_tick(raw)
     assert tick.creature.facing == "W"
+
+
+def test_nearby_ignores_region_only_cell():
+    world = WorldState(
+        grid=WorldGrid(width=5, height=5),
+        items=[
+            SandboxItem(id="r1", type="region", position=GridCell(x=3, y=1), color="#3B82F6"),
+        ],
+    )
+    creature = CreatureState(id="c1", workflow_id="wf", position=GridCell(x=3, y=2), facing="N")
+    cells = nearby_cells_clockwise("N", creature.position, 5, 5, world, [creature], exclude_creature_id="c1")
+    assert cells[0].kind == "empty"

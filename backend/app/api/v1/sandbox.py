@@ -29,6 +29,11 @@ class SandboxTickBody(BaseModel):
     state_version: int = Field(ge=0)
 
 
+class SandboxApplyInteractionsBody(BaseModel):
+    interactions: List[dict[str, Any]] = Field(default_factory=list)
+    state_version: int = Field(ge=0)
+
+
 class SandboxResizeGridBody(BaseModel):
     width: int
     height: int
@@ -246,6 +251,31 @@ async def save_sandbox_session_as_board(
             raise HTTPException(status_code=404, detail=msg) from exc
         raise HTTPException(status_code=422, detail=msg) from exc
     return _board_to_json(row)
+
+
+@router.post("/sessions/{document_id}/interactions", response_model=dict[str, Any])
+async def apply_sandbox_interactions(
+    document_id: uuid.UUID,
+    body: SandboxApplyInteractionsBody,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_sandbox_enabled()
+    svc = SandboxService(session, current_user.id)
+    try:
+        env, ok = svc.apply_interactions(
+            document_id,
+            interactions=body.interactions,
+            client_version=body.state_version,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "not found" in msg:
+            raise HTTPException(status_code=404, detail=msg) from exc
+        raise HTTPException(status_code=422, detail=msg) from exc
+    if not ok:
+        raise HTTPException(status_code=409, detail="state_version mismatch")
+    return {"envelope": env.model_dump(mode="json")}
 
 
 @router.post("/sessions/{document_id}/tick", response_model=dict[str, Any])

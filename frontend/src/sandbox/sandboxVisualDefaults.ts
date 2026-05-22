@@ -9,6 +9,20 @@ export const CREATURE_FILL = '#38bdf8';
 export const CREATURE_SELECTED_FILL = '#fbbf24';
 export const FOOD_FILL = '#f472b6';
 export const WALL_FILL = '#64748b';
+export const REGION_UNDERLAY_ALPHA = 0.35;
+export const DEFAULT_REGION_COLOR = '#3B82F6';
+
+export const REGION_PRESET_COLORS = [
+    '#3B82F6',
+    '#EF4444',
+    '#22C55E',
+    '#EAB308',
+    '#A855F7',
+    '#F97316',
+    '#06B6D4',
+    '#EC4899',
+];
+
 /** @deprecated use CREATURE_FILL */
 export const PET_FILL = CREATURE_FILL;
 export const DEFAULT_TICK_RATE_MS = 1000;

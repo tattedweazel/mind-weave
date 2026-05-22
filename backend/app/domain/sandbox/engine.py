@@ -23,12 +23,16 @@ from app.domain.schemas.sandbox import (
     Facing,
     GridCell,
     RecentAction,
+    REGION_ITEM_TYPE,
     SOLID_ITEM_TYPES,
+    BLOCKING_ITEM_TYPES,
     SandboxItem,
     SandboxState,
     SandboxTickInput,
     WorldGrid,
     WorldState,
+    default_region_trigger,
+    normalize_hex_color,
 )
 from app.domain.schemas.workflow_run import WorkflowRunResult
 
@@ -65,10 +69,30 @@ def _creature_at_cell(state: SandboxState, g: GridCell) -> CreatureState | None:
     return None
 
 
-def _cell_occupied(state: SandboxState, g: GridCell) -> bool:
+def _blocking_item_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
+    for it in state.world.items:
+        if it.position.x == g.x and it.position.y == g.y and it.type in BLOCKING_ITEM_TYPES:
+            return it
+    return None
+
+
+def _region_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
+    for it in state.world.items:
+        if it.position.x == g.x and it.position.y == g.y and it.type == REGION_ITEM_TYPE:
+            return it
+    return None
+
+
+def _cell_blocked_for_item_placement(state: SandboxState, g: GridCell) -> bool:
     if _creature_at_cell(state, g) is not None:
         return True
-    return any(it.position.x == g.x and it.position.y == g.y for it in state.world.items)
+    return _blocking_item_at_cell(state, g) is not None
+
+
+def _cell_blocked_for_creature_placement(state: SandboxState, g: GridCell) -> bool:
+    if _creature_at_cell(state, g) is not None:
+        return True
+    return _blocking_item_at_cell(state, g) is not None
 
 
 def _item_blocks_movement(world: WorldState, cell: GridCell) -> bool:
@@ -87,9 +111,19 @@ def _creature_blocks_cell(state: SandboxState, cell: GridCell, exclude_id: str |
     return False
 
 
-def _remove_items_at_cell(state: SandboxState, g: GridCell) -> None:
+def _remove_blocking_items_at_cell(state: SandboxState, g: GridCell) -> None:
     state.world.items = [
-        it for it in state.world.items if not (it.position.x == g.x and it.position.y == g.y)
+        it
+        for it in state.world.items
+        if not (it.position.x == g.x and it.position.y == g.y and it.type in BLOCKING_ITEM_TYPES)
+    ]
+
+
+def _remove_region_at_cell(state: SandboxState, g: GridCell) -> None:
+    state.world.items = [
+        it
+        for it in state.world.items
+        if not (it.position.x == g.x and it.position.y == g.y and it.type == REGION_ITEM_TYPE)
     ]
 
 
@@ -98,7 +132,7 @@ def _remove_creature_at_cell(state: SandboxState, g: GridCell) -> None:
 
 
 def _place_item_at_cell(state: SandboxState, g: GridCell, item_type: str) -> None:
-    if _cell_occupied(state, g):
+    if _cell_blocked_for_item_placement(state, g):
         return
     if item_type == "food":
         state.world.items.append(
@@ -120,22 +154,45 @@ def _place_item_at_cell(state: SandboxState, g: GridCell, item_type: str) -> Non
         )
 
 
+def _place_region_at_cell(state: SandboxState, g: GridCell, color: str) -> None:
+    normalized = normalize_hex_color(color)
+    _remove_region_at_cell(state, g)
+    state.world.items.append(
+        SandboxItem(
+            id=str(uuid.uuid4()),
+            type="region",
+            position=g,
+            color=normalized,
+            trigger=default_region_trigger(),
+        )
+    )
+
+
+def _parse_creature_facing(raw: Any) -> Facing:
+    if raw in ("N", "E", "S", "W"):
+        return raw  # type: ignore[return-value]
+    return DEFAULT_CREATURE_FACING  # type: ignore[return-value]
+
+
 def _place_creature_at_cell(
     state: SandboxState,
     g: GridCell,
     workflow_id: str,
     name: str | None = None,
+    *,
+    facing: Facing | None = None,
 ) -> None:
-    if _cell_occupied(state, g):
+    if _cell_blocked_for_creature_placement(state, g):
         return
     creature_num = len(state.creatures) + 1
+    resolved_facing = facing if facing is not None else DEFAULT_CREATURE_FACING
     state.creatures.append(
         CreatureState(
             id=str(uuid.uuid4()),
             workflow_id=workflow_id,
             name=name or f"Creature {creature_num}",
             position=g,
-            facing=DEFAULT_CREATURE_FACING,  # type: ignore[arg-type]
+            facing=resolved_facing,
         )
     )
 
@@ -252,7 +309,25 @@ class SandboxEngine:
                 g = _parse_interaction_cell(ev, w, h)
                 if g is None:
                     continue
-                _remove_items_at_cell(state, g)
+                _remove_blocking_items_at_cell(state, g)
+                continue
+            if et == "place_region":
+                g = _parse_interaction_cell(ev, w, h)
+                if g is None:
+                    continue
+                raw_color = ev.get("color")
+                if not raw_color or not str(raw_color).strip():
+                    continue
+                try:
+                    _place_region_at_cell(state, g, str(raw_color))
+                except ValueError:
+                    continue
+                continue
+            if et == "remove_region":
+                g = _parse_interaction_cell(ev, w, h)
+                if g is None:
+                    continue
+                _remove_region_at_cell(state, g)
                 continue
             if et == "place_creature":
                 g = _parse_interaction_cell(ev, w, h)
@@ -261,7 +336,13 @@ class SandboxEngine:
                 wf_id = ev.get("workflow_id")
                 if not wf_id or not str(wf_id).strip():
                     continue
-                _place_creature_at_cell(state, g, str(wf_id), ev.get("name"))
+                _place_creature_at_cell(
+                    state,
+                    g,
+                    str(wf_id),
+                    ev.get("name"),
+                    facing=_parse_creature_facing(ev.get("facing")),
+                )
                 continue
             if et == "remove_creature":
                 g = _parse_interaction_cell(ev, w, h)
@@ -273,7 +354,7 @@ class SandboxEngine:
                 g = _parse_interaction_cell(ev, w, h)
                 if g is None:
                     continue
-                _remove_items_at_cell(state, g)
+                _remove_blocking_items_at_cell(state, g)
                 _place_item_at_cell(state, g, "food")
 
     def advance_tick_counter(self, state: SandboxState) -> None:

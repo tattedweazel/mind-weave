@@ -6,6 +6,22 @@ export const SANDBOX_FACING_VALUES: readonly SandboxFacing[] = ['N', 'E', 'S', '
 
 export const DEFAULT_SANDBOX_FACING: SandboxFacing = 'N';
 
+export type RegionTriggerMode = 'enter' | 'exit' | 'while_inside' | 'on_enter_once';
+
+export interface RegionTriggerConfigJson {
+    enabled: boolean;
+    mode: RegionTriggerMode | null;
+    workflow_id: string | null;
+    inputs: Record<string, unknown>;
+}
+
+export const DEFAULT_REGION_TRIGGER: RegionTriggerConfigJson = {
+    enabled: false,
+    mode: null,
+    workflow_id: null,
+    inputs: {},
+};
+
 export interface SandboxGridCellJson {
     x: number;
     y: number;
@@ -16,6 +32,8 @@ export interface SandboxItemJson {
     type: string;
     position: SandboxGridCellJson;
     energy?: number;
+    color?: string;
+    trigger?: RegionTriggerConfigJson;
 }
 
 export interface SandboxCreatureJson {

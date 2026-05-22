@@ -531,6 +531,23 @@ def test_update_me_rejects_invalid_theme_mode(client: TestClient):
     assert r.status_code == 422
 
 
+def test_update_me_settings_sandbox_favorite_colors(client: TestClient):
+    r = client.put(
+        "/api/v1/auth/me",
+        json={"settings": {"sandbox_favorite_colors": ["#3b82f6", "#f00"]}},
+    )
+    assert r.status_code == 200
+    assert r.json()["settings"]["sandbox_favorite_colors"] == ["#3B82F6", "#FF0000"]
+
+
+def test_update_me_rejects_invalid_sandbox_favorite_colors(client: TestClient):
+    r = client.put(
+        "/api/v1/auth/me",
+        json={"settings": {"sandbox_favorite_colors": ["not-a-color"]}},
+    )
+    assert r.status_code == 422
+
+
 def test_update_me_settings_workflow_editor_remember_panel_widths(client: TestClient):
     r = client.put(
         "/api/v1/auth/me",

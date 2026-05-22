@@ -11,6 +11,7 @@ from app.domain.schemas.sandbox import (
     GridCell,
     NearbyCell,
     NearbyCellKind,
+    REGION_ITEM_TYPE,
     SandboxTickInput,
     SOLID_ITEM_TYPES,
     WorldState,
@@ -95,6 +96,8 @@ def _cell_kind(
             return "creature"
     for it in world.items:
         if it.position.x == x and it.position.y == y:
+            if it.type == REGION_ITEM_TYPE:
+                continue
             if it.type in SOLID_ITEM_TYPES:
                 return "wall"
             if it.type == "food":

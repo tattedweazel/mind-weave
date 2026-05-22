@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
@@ -9,7 +10,8 @@ from pydantic import BaseModel, Field, model_validator
 DecisionAction = Literal["move_forward", "turn_left", "turn_right", "idle"]
 Facing = Literal["N", "E", "S", "W"]
 NearbyCellKind = Literal["empty", "wall", "food", "creature", "out_of_bounds"]
-ItemType = Literal["food", "wall"]
+ItemType = Literal["food", "wall", "region"]
+RegionTriggerMode = Literal["enter", "exit", "while_inside", "on_enter_once"]
 InteractionType = Literal[
     "cell_click",
     "item_click",
@@ -17,10 +19,33 @@ InteractionType = Literal[
     "remove_item",
     "place_creature",
     "remove_creature",
+    "place_region",
+    "remove_region",
 ]
 
 SOLID_ITEM_TYPES = frozenset({"wall"})
+BLOCKING_ITEM_TYPES = frozenset({"food", "wall"})
+REGION_ITEM_TYPE = "region"
 DEFAULT_FACING: Facing = "N"
+DEFAULT_REGION_COLOR = "#3B82F6"
+_HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def normalize_hex_color(raw: str) -> str:
+    """Normalize #RGB or #RRGGBB to uppercase #RRGGBB."""
+    s = raw.strip()
+    if not s.startswith("#"):
+        raise ValueError("color must be a hex string starting with #")
+    if len(s) == 4:
+        r, g, b = s[1], s[2], s[3]
+        s = f"#{r}{r}{g}{g}{b}{b}"
+    if not _HEX_COLOR_RE.match(s):
+        raise ValueError("color must be #RRGGBB hex")
+    return s.upper()
+
+
+def default_region_trigger() -> RegionTriggerConfig:
+    return RegionTriggerConfig()
 
 
 class GridCell(BaseModel):
@@ -34,11 +59,32 @@ class NearbyCell(BaseModel):
     kind: NearbyCellKind
 
 
+class RegionTriggerConfig(BaseModel):
+    enabled: bool = False
+    mode: Optional[RegionTriggerMode] = None
+    workflow_id: Optional[str] = None
+    inputs: dict[str, Any] = Field(default_factory=dict)
+
+
 class SandboxItem(BaseModel):
     id: str = Field(min_length=1)
     type: ItemType
     position: GridCell
     energy: Optional[int] = Field(default=None, ge=0)
+    color: Optional[str] = None
+    trigger: Optional[RegionTriggerConfig] = None
+
+    @model_validator(mode="after")
+    def _validate_region_fields(self) -> SandboxItem:
+        if self.type == REGION_ITEM_TYPE:
+            if not self.color:
+                raise ValueError("region items require color")
+            self.color = normalize_hex_color(self.color)
+            if self.trigger is None:
+                self.trigger = default_region_trigger()
+        elif self.color is not None or self.trigger is not None:
+            raise ValueError("color and trigger are only valid for region items")
+        return self
 
 
 class DecisionIntent(BaseModel):
@@ -103,7 +149,7 @@ class BoardCreaturePlacement(BaseModel):
 class BoardDefinition(BaseModel):
     """Persisted JSON inside SandboxBoard.body."""
 
-    schema_version: str = "2.1.0"
+    schema_version: str = "2.2.0"
     grid: WorldGrid
     items: list[SandboxItem] = Field(default_factory=list)
     creatures: list[BoardCreaturePlacement] = Field(default_factory=list)
@@ -135,10 +181,27 @@ class PlaceCreatureEvent(BaseModel):
     cell: GridCell
     workflow_id: str = Field(min_length=1)
     name: Optional[str] = None
+    facing: Facing = DEFAULT_FACING
 
 
 class RemoveCreatureEvent(BaseModel):
     type: Literal["remove_creature"] = "remove_creature"
+    cell: GridCell
+
+
+class PlaceRegionEvent(BaseModel):
+    type: Literal["place_region"] = "place_region"
+    cell: GridCell
+    color: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _normalize_color(self) -> PlaceRegionEvent:
+        self.color = normalize_hex_color(self.color)
+        return self
+
+
+class RemoveRegionEvent(BaseModel):
+    type: Literal["remove_region"] = "remove_region"
     cell: GridCell
 
 
@@ -149,13 +212,15 @@ SandboxInteractionEvent = Union[
     RemoveItemEvent,
     PlaceCreatureEvent,
     RemoveCreatureEvent,
+    PlaceRegionEvent,
+    RemoveRegionEvent,
 ]
 
 
 class SandboxDocumentEnvelope(BaseModel):
     """Persisted JSON inside Document.body for a sandbox session."""
 
-    schema_version: str = "2.1.0"
+    schema_version: str = "2.2.0"
     board_id: Optional[str] = None
     sandbox: SandboxState
     playback: dict[str, Any] = Field(default_factory=dict)

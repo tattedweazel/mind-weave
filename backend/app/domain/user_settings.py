@@ -13,7 +13,46 @@ MAX_CONCURRENT_LM_STUDIO_CALLS_MIN = 1
 MAX_CONCURRENT_LM_STUDIO_CALLS_MAX = 32
 MAX_CONCURRENT_LM_STUDIO_CALLS_DEFAULT = 3
 
+MAX_SANDBOX_FAVORITE_COLORS = 16
+
 _TTS_PLAYBACK_WHEN_VALUES = frozenset({"inline", "manual", "after_workflow"})
+
+
+def normalize_sandbox_favorite_colors(raw: Any) -> list[str]:
+    """Validate and normalize user favorite hex colors for Sandbox regions."""
+    from app.domain.schemas.sandbox import normalize_hex_color
+
+    if not isinstance(raw, list):
+        raise ValueError("settings.sandbox_favorite_colors must be a list")
+    if len(raw) > MAX_SANDBOX_FAVORITE_COLORS:
+        raise ValueError(
+            f"settings.sandbox_favorite_colors must have at most {MAX_SANDBOX_FAVORITE_COLORS} entries",
+        )
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, str):
+            raise ValueError("settings.sandbox_favorite_colors must be a list of strings")
+        try:
+            normalized = normalize_hex_color(item)
+        except ValueError as exc:
+            raise ValueError(f"settings.sandbox_favorite_colors invalid color: {item!r}") from exc
+        if normalized not in seen:
+            seen.add(normalized)
+            out.append(normalized)
+    return out
+
+
+def resolve_sandbox_favorite_colors(settings: Any) -> list[str]:
+    if not isinstance(settings, dict):
+        return []
+    raw = settings.get("sandbox_favorite_colors")
+    if not isinstance(raw, list):
+        return []
+    try:
+        return normalize_sandbox_favorite_colors(raw)
+    except ValueError:
+        return []
 
 
 def resolve_tts_playback_when(settings: Any) -> str:

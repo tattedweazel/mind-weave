@@ -48,6 +48,9 @@ import {
 } from '../sandbox/sandboxWorkflowRunMerge';
 import { SandboxCellActionModal } from './SandboxCellActionModal';
 import { SandboxItemInspectorSection } from './sandbox/SandboxItemInspectorSection';
+import { SandboxRegionInspectorSection } from './sandbox/SandboxRegionInspectorSection';
+import { parseSandboxFavoriteColors } from '../sandbox/sandboxFavoriteColors';
+import { isRegionItem } from '../sandbox/sandboxCellOccupants';
 import { useCompactViewport } from '../hooks/useCompactViewport';
 import { InspectorSection } from './workflow-editor/InspectorSection';
 import { WorkflowRunLogsNodeResultsList } from './workflow-editor/WorkflowRunLogsNodeResultsList';
@@ -59,6 +62,12 @@ import {
     updateBoardItemMetadata,
     updateBoardCreatureFacing,
 } from '../sandbox/boardBuilderLocalEdits';
+import { normalizeBoardName, shouldCommitBoardRename } from '../sandbox/sandboxBoardRename';
+import {
+    isSandboxStateVersionMismatchError,
+    parseTickRateMsInput,
+    tickRateMsFromPlayback,
+} from '../sandbox/sandboxTickRate';
 
 const SANDBOX_PANEL_WIDTHS_KEY = 'sandbox_panel_widths';
 
@@ -120,6 +129,10 @@ function collectVisibleErrors(
 
 export const SandboxView: React.FC = () => {
     const { user } = useAuth();
+    const sandboxFavoriteColors = React.useMemo(
+        () => parseSandboxFavoriteColors(user?.settings as Record<string, unknown> | undefined),
+        [user?.settings],
+    );
     const containerRef = useRef<HTMLDivElement>(null);
     const adapterRef = useRef<PhaserSandboxAdapter | null>(null);
     const envelopeRef = useRef<SandboxEnvelopeJson | null>(null);
@@ -131,6 +144,7 @@ export const SandboxView: React.FC = () => {
     const [catalogLoaded, setCatalogLoaded] = useState(false);
     const [paused, setPaused] = useState(true);
     const [tickRateMs, setTickRateMs] = useState(DEFAULT_TICK_RATE_MS);
+    const [tickRateMsInput, setTickRateMsInput] = useState(DEFAULT_TICK_RATE_MS);
     const [gridWidthInput, setGridWidthInput] = useState(SANDBOX_GRID_DEFAULT_WIDTH);
     const [gridHeightInput, setGridHeightInput] = useState(SANDBOX_GRID_DEFAULT_HEIGHT);
     const [gridResizeError, setGridResizeError] = useState<string | null>(null);
@@ -146,6 +160,7 @@ export const SandboxView: React.FC = () => {
         createEmptyBoardDefinition(SANDBOX_GRID_DEFAULT_WIDTH, SANDBOX_GRID_DEFAULT_HEIGHT),
     );
     const [builderDirty, setBuilderDirty] = useState(false);
+    const [simulationBoardNameDraft, setSimulationBoardNameDraft] = useState('');
 
     const [inspectorTab, setInspectorTab] = useState<'explorer' | 'logs'>('explorer');
     const [lastWorkflowRuns, setLastWorkflowRuns] = useState<Record<string, WorkflowRunResult | null>>({});
@@ -304,6 +319,9 @@ export const SandboxView: React.FC = () => {
                 setCatalogLoaded(true);
                 setDocumentId(created.document_id);
                 setEnvelope(created.envelope);
+                const initialTickRate = tickRateMsFromPlayback(created.envelope.playback);
+                setTickRateMs(initialTickRate);
+                setTickRateMsInput(initialTickRate);
                 setSelectedBoardId(created.envelope.board_id ?? null);
             } catch (e) {
                 setLoadError(e instanceof Error ? e.message : String(e));
@@ -461,7 +479,16 @@ export const SandboxView: React.FC = () => {
                     return [...prev, `Tick ${tick}: ${runSummary}`].slice(-120);
                 });
             } catch (e) {
-                setLoadError(e instanceof Error ? e.message : String(e));
+                if (isSandboxStateVersionMismatchError(e)) {
+                    try {
+                        const refreshed = await ApiClient.getSandboxSession(doc);
+                        setEnvelope(refreshed.envelope);
+                    } catch (refreshError) {
+                        setLoadError(refreshError instanceof Error ? refreshError.message : String(refreshError));
+                    }
+                } else {
+                    setLoadError(e instanceof Error ? e.message : String(e));
+                }
             } finally {
                 setBusy(false);
             }
@@ -476,6 +503,9 @@ export const SandboxView: React.FC = () => {
             const created = await ApiClient.createSandboxSession({ board_id: boardId });
             setDocumentId(created.document_id);
             setEnvelope(created.envelope);
+            const sessionTickRate = tickRateMsFromPlayback(created.envelope.playback);
+            setTickRateMs(sessionTickRate);
+            setTickRateMsInput(sessionTickRate);
             setSelectedBoardId(boardId);
             setLastWorkflowRuns({});
             setTickTranscript([]);
@@ -513,6 +543,20 @@ export const SandboxView: React.FC = () => {
             setBusy(false);
         }
     }, []);
+
+    const commitTickRateMsInput = useCallback(() => {
+        const parsed = parseTickRateMsInput(String(tickRateMsInput), tickRateMs);
+        if (parsed === null) {
+            setTickRateMsInput(tickRateMs);
+            return;
+        }
+        setTickRateMs(parsed);
+        setTickRateMsInput(parsed);
+    }, [tickRateMsInput, tickRateMs]);
+
+    const revertTickRateMsInput = useCallback(() => {
+        setTickRateMsInput(tickRateMs);
+    }, [tickRateMs]);
 
     const handleBoardListSelect = useCallback(
         (boardId: string) => {
@@ -597,6 +641,90 @@ export const SandboxView: React.FC = () => {
         }
     }, [builderBoardId, builderBoardName, localBoardDef, refreshBoards]);
 
+    const activeBoardId = mainTab === 'simulation' ? selectedBoardId : builderBoardId;
+    const activeBoard = boards.find(b => b.id === activeBoardId) ?? null;
+    const isActiveSystemBoard = activeBoard?.is_system ?? false;
+    const canEditToolbarBoardName =
+        mainTab === 'builder' ? !isActiveSystemBoard : Boolean(selectedBoardId && !isActiveSystemBoard);
+    const toolbarBoardNameValue = mainTab === 'builder' ? builderBoardName : simulationBoardNameDraft;
+    const toolbarBoardNameDisplay =
+        mainTab === 'simulation'
+            ? activeBoard?.name ?? 'Simulation session'
+            : builderBoardName || 'Untitled Board';
+
+    useEffect(() => {
+        if (mainTab !== 'simulation') return;
+        setSimulationBoardNameDraft(activeBoard?.name ?? '');
+    }, [mainTab, selectedBoardId, activeBoard?.name]);
+
+    const revertToolbarBoardName = useCallback(() => {
+        if (mainTab === 'builder') {
+            setBuilderBoardName(activeBoard?.name ?? 'Untitled Board');
+            return;
+        }
+        setSimulationBoardNameDraft(activeBoard?.name ?? '');
+    }, [mainTab, activeBoard?.name]);
+
+    const handleToolbarBoardNameChange = useCallback(
+        (value: string) => {
+            if (mainTab === 'builder') {
+                setBuilderBoardName(value);
+                setBuilderDirty(true);
+                return;
+            }
+            setSimulationBoardNameDraft(value);
+        },
+        [mainTab],
+    );
+
+    const handleToolbarBoardNameCommit = useCallback(async () => {
+        if (mainTab === 'builder') {
+            const fallback = activeBoard?.name ?? 'Untitled Board';
+            const normalized = normalizeBoardName(toolbarBoardNameValue, fallback);
+            if (normalized !== builderBoardName) {
+                setBuilderBoardName(normalized);
+                setBuilderDirty(true);
+            }
+            return;
+        }
+
+        if (!selectedBoardId || isActiveSystemBoard) return;
+        const currentName = activeBoard?.name ?? '';
+        if (
+            !shouldCommitBoardRename({
+                currentName,
+                draftName: simulationBoardNameDraft,
+                isSystem: isActiveSystemBoard,
+            })
+        ) {
+            setSimulationBoardNameDraft(currentName);
+            return;
+        }
+
+        const normalized = normalizeBoardName(simulationBoardNameDraft, currentName);
+        setBusy(true);
+        setLoadError(null);
+        try {
+            await ApiClient.updateSandboxBoard(selectedBoardId, { name: normalized });
+            setSimulationBoardNameDraft(normalized);
+            await refreshBoards();
+        } catch (e) {
+            setSimulationBoardNameDraft(currentName);
+            setLoadError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }, [
+        mainTab,
+        activeBoard?.name,
+        builderBoardName,
+        isActiveSystemBoard,
+        refreshBoards,
+        selectedBoardId,
+        simulationBoardNameDraft,
+        toolbarBoardNameValue,
+    ]);
+
     const dismissCellActionModal = useCallback(() => {
         setCellActionCell(null);
         if (mainTab === 'simulation') {
@@ -630,13 +758,25 @@ export const SandboxView: React.FC = () => {
                 setBuilderDirty(true);
                 return;
             }
+            const doc = documentId;
+            const env = envelopeRef.current;
+            if (!doc || !env) return;
+            setBusy(true);
+            setLoadError(null);
             try {
-                await runTick([interaction]);
+                const res = await ApiClient.applySandboxInteractions(doc, {
+                    interactions: [interaction],
+                    state_version: env.state_version,
+                });
+                setEnvelope(res.envelope);
+            } catch (e) {
+                setLoadError(e instanceof Error ? e.message : String(e));
             } finally {
+                setBusy(false);
                 setPaused(restorePausedAfterCellActionRef.current);
             }
         },
-        [mainTab, runTick],
+        [mainTab, documentId],
     );
 
     useEffect(() => {
@@ -658,6 +798,7 @@ export const SandboxView: React.FC = () => {
     useEffect(() => {
         if (mainTab !== 'simulation' || paused || !documentId) return;
         const id = window.setInterval(() => {
+            if (busyRef.current) return;
             void runTick([]);
         }, tickRateMs);
         return () => clearInterval(id);
@@ -915,20 +1056,44 @@ export const SandboxView: React.FC = () => {
                             </button>
                             <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || (builderBoardId !== null && isActiveSystemBoard)}
                                 onClick={() => void handleSaveBuilderBoard()}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mw-primary text-white text-xs font-medium disabled:opacity-50"
+                                title={
+                                    builderBoardId !== null && isActiveSystemBoard
+                                        ? 'System boards cannot be saved'
+                                        : undefined
+                                }
                             >
                                 <Save size={14} />
                                 Save{builderDirty ? ' *' : ''}
                             </button>
                         </>
                     )}
-                    <span className="text-xs text-mw-text-secondary truncate min-w-0 max-w-[12rem] sm:max-w-xs">
-                        {mainTab === 'simulation'
-                            ? (activeBoardName ?? 'Simulation session')
-                            : (builderBoardName || 'Untitled Board')}
-                    </span>
+                    {canEditToolbarBoardName ? (
+                        <input
+                            type="text"
+                            value={toolbarBoardNameValue}
+                            disabled={busy}
+                            onChange={e => handleToolbarBoardNameChange(e.target.value)}
+                            onBlur={() => void handleToolbarBoardNameCommit()}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    e.currentTarget.blur();
+                                } else if (e.key === 'Escape') {
+                                    revertToolbarBoardName();
+                                    e.currentTarget.blur();
+                                }
+                            }}
+                            placeholder={mainTab === 'builder' ? 'Board name' : 'Board name'}
+                            aria-label="Board name"
+                            className="text-xs font-medium text-mw-text-primary truncate min-w-0 max-w-[12rem] sm:max-w-xs flex-1 bg-transparent border border-transparent hover:border-mw-border focus:border-mw-primary rounded px-2 py-1 transition-colors focus:outline-none focus:ring-1 focus:ring-mw-primary disabled:opacity-50"
+                        />
+                    ) : (
+                        <span className="text-xs text-mw-text-secondary truncate min-w-0 max-w-[12rem] sm:max-w-xs">
+                            {toolbarBoardNameDisplay}
+                        </span>
+                    )}
                 </div>
                 {mainTab === 'simulation' && visibleErrors.length > 0 && (
                     <div className="px-4 py-2 text-xs text-mw-error bg-mw-error-muted border-b border-mw-border shrink-0 space-y-1">
@@ -1136,19 +1301,35 @@ export const SandboxView: React.FC = () => {
                                                         </div>
                                                     </InspectorSection>
                                                 ))}
-                                                {inspectedOccupants.items.map(it => (
-                                                    <SandboxItemInspectorSection
-                                                        key={it.id}
-                                                        item={it}
-                                                        readOnly={mainTab !== 'builder'}
-                                                        onItemChange={(itemId, patch) => {
-                                                            setLocalBoardDef(prev =>
-                                                                updateBoardItemMetadata(prev, itemId, patch),
-                                                            );
-                                                            setBuilderDirty(true);
-                                                        }}
-                                                    />
-                                                ))}
+                                                {inspectedOccupants.items.map(it =>
+                                                    isRegionItem(it) ? (
+                                                        <SandboxRegionInspectorSection
+                                                            key={it.id}
+                                                            item={it}
+                                                            readOnly={mainTab !== 'builder'}
+                                                            favoriteColors={sandboxFavoriteColors}
+                                                            workflows={workflows}
+                                                            onItemChange={(itemId, patch) => {
+                                                                setLocalBoardDef(prev =>
+                                                                    updateBoardItemMetadata(prev, itemId, patch),
+                                                                );
+                                                                setBuilderDirty(true);
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <SandboxItemInspectorSection
+                                                            key={it.id}
+                                                            item={it}
+                                                            readOnly={mainTab !== 'builder'}
+                                                            onItemChange={(itemId, patch) => {
+                                                                setLocalBoardDef(prev =>
+                                                                    updateBoardItemMetadata(prev, itemId, patch),
+                                                                );
+                                                                setBuilderDirty(true);
+                                                            }}
+                                                        />
+                                                    ),
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -1208,11 +1389,12 @@ export const SandboxView: React.FC = () => {
                                             <input
                                                 type="text"
                                                 value={builderBoardName}
+                                                disabled={busy || isActiveSystemBoard}
                                                 onChange={e => {
                                                     setBuilderBoardName(e.target.value);
                                                     setBuilderDirty(true);
                                                 }}
-                                                className="px-2 py-1 rounded border border-mw-border bg-mw-page text-mw-text-primary"
+                                                className="px-2 py-1 rounded border border-mw-border bg-mw-page text-mw-text-primary disabled:opacity-50"
                                             />
                                         </label>
                                     ) : null}
@@ -1224,10 +1406,24 @@ export const SandboxView: React.FC = () => {
                                                 min={200}
                                                 max={60000}
                                                 step={100}
-                                                value={tickRateMs}
-                                                onChange={e =>
-                                                    setTickRateMs(Number(e.target.value) || DEFAULT_TICK_RATE_MS)
-                                                }
+                                                value={Number.isFinite(tickRateMsInput) ? tickRateMsInput : ''}
+                                                onChange={e => {
+                                                    const raw = e.target.value;
+                                                    if (raw === '') {
+                                                        setTickRateMsInput(NaN);
+                                                        return;
+                                                    }
+                                                    setTickRateMsInput(Number(raw));
+                                                }}
+                                                onBlur={commitTickRateMsInput}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') {
+                                                        e.currentTarget.blur();
+                                                    } else if (e.key === 'Escape') {
+                                                        revertTickRateMsInput();
+                                                        e.currentTarget.blur();
+                                                    }
+                                                }}
                                                 className="w-24 px-2 py-1 rounded border border-mw-border bg-mw-page text-mw-text-primary"
                                             />
                                         </label>
@@ -1427,6 +1623,7 @@ export const SandboxView: React.FC = () => {
                     workflowProjects={creatureBrainProjects}
                     workflows={workflows}
                     sharedProjectId={sharedProjectId}
+                    sandboxFavoriteColors={sandboxFavoriteColors}
                     onDismiss={dismissCellActionModal}
                     onComplete={interaction => {
                         void completeCellAction(interaction);

@@ -792,6 +792,16 @@ export class ApiClient {
         });
     }
 
+    static applySandboxInteractions(
+        documentId: string,
+        body: { interactions: unknown[]; state_version: number },
+    ): Promise<{ envelope: SandboxEnvelopeJson }> {
+        return this.request(`/sandbox/sessions/${documentId}/interactions`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    }
+
     static resizeSandboxGrid(
         documentId: string,
         body: { width: number; height: number; state_version: number },

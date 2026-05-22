@@ -1,6 +1,6 @@
 # Sandbox Boards
 
-Boards are persisted playing-field templates for the Sandbox. A board defines grid size, static objects (walls, food), and optional pre-placed creatures (each with a `workflow_id` brain).
+Boards are persisted playing-field templates for the Sandbox. A board defines grid size, static objects (walls, food, regions), and optional pre-placed creatures (each with a `workflow_id` brain).
 
 See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creature behavior.
 
@@ -13,15 +13,27 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | **Snapshot** | Starting a session copies a board into session state; the session evolves independently |
 | **Save back** | Paused sessions can **Save as Board** (new row) or **Update Board** (overwrite source) |
 
-## BoardDefinition JSON (`schema_version: 2.1.0`)
+## BoardDefinition JSON (`schema_version: 2.2.0`)
 
 ```json
 {
-  "schema_version": "2.1.0",
+  "schema_version": "2.2.0",
   "grid": { "width": 16, "height": 16 },
   "items": [
     { "id": "w1", "type": "wall", "position": { "x": 3, "y": 3 } },
-    { "id": "f1", "type": "food", "position": { "x": 5, "y": 5 }, "energy": 48 }
+    { "id": "f1", "type": "food", "position": { "x": 5, "y": 5 }, "energy": 48 },
+    {
+      "id": "r1",
+      "type": "region",
+      "position": { "x": 2, "y": 2 },
+      "color": "#3B82F6",
+      "trigger": {
+        "enabled": false,
+        "mode": null,
+        "workflow_id": null,
+        "inputs": {}
+      }
+    }
   ],
   "creatures": [
     {
@@ -41,6 +53,15 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 |------|----------|------------------------|
 | `wall` | Blocks movement and placement | None (read-only Id/Type/Position in Explorer) |
 | `food` | Reported by **Get nearby**; does not block movement | **Energy** editable in Explorer (default `48`) |
+| `region` | Visual underlay only; coexists with other occupants; invisible to **Get nearby** | **Color**, **trigger** stub (editable; not executed yet) |
+
+### Cell occupancy layers
+
+- **Region layer** — at most one region per cell; non-blocking; separate **Place region** / **Remove region** actions
+- **Item layer** — at most one food **or** wall per cell
+- **Creature layer** — at most one creature per cell
+
+Regions can be placed on cells that already have creatures or items. Food/wall placement still requires an empty item layer (no creature, no food/wall).
 
 ### Creature placement
 
@@ -55,8 +76,13 @@ In **Board Builder**, inspect a cell with an item to open the Explorer. Type-spe
 |-----------|-----------------|
 | `food` | `energy` (integer ≥ 0) |
 | `wall` | — |
+| `region` | `color`; `trigger.enabled`, `trigger.mode`, `trigger.workflow_id`, `trigger.inputs` |
 
-**Adding a new item type with metadata:** extend `ItemType` in [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) and backend schemas, then register Explorer fields in [`sandboxItemInspectorFields.ts`](../frontend/src/sandbox/sandboxItemInspectorFields.ts).
+**Adding a new item type:** extend `ItemType` in [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) and backend schemas; engine occupancy + movement in [`engine.py`](../backend/app/domain/sandbox/engine.py); **Get nearby** in [`query.py`](../backend/app/domain/sandbox/query.py); interactions + cell modal; Phaser in [`phaserSandboxAdapter.ts`](../frontend/src/sandbox/runtime/phaserSandboxAdapter.ts); Explorer fields in [`sandboxItemInspectorFields.ts`](../frontend/src/sandbox/sandboxItemInspectorFields.ts); tests in `backend/tests/test_sandbox_*.py` and frontend sandbox unit tests.
+
+### Favorite colors
+
+Users can save up to **16** favorite hex colors under **My Settings → View Settings → Favorite colors** (`User.settings.sandbox_favorite_colors`). The first favorite is the default when placing a new region.
 
 ## HTTP API
 
@@ -81,7 +107,18 @@ System row `builtin_slug = empty_sandbox_board` (`EMPTY_SANDBOX_BOARD_ID` in `bu
 
 Sandbox view has two tabs:
 
-1. **Simulation** — select a board, run ticks, spawn creatures/items, save layout back to boards
+1. **Simulation** — select a board, run ticks, spawn creatures/items/regions, save layout back to boards
 2. **Board Builder** — edit and save board templates without running simulation
 
-Implementation: [frontend/src/components/SandboxView.tsx](../frontend/src/components/SandboxView.tsx), [frontend/src/sandbox/boardBuilderLocalEdits.ts](../frontend/src/sandbox/boardBuilderLocalEdits.ts).
+### Renaming boards
+
+The toolbar shows an editable **board name** field when a user-owned board is active (same pattern as the Workflow Editor name field).
+
+| Tab | Rename behavior |
+|-----|-----------------|
+| **Simulation** | Edit the name in the toolbar; rename is saved on **blur** or **Enter** via `PATCH /boards/{id}` (name only) |
+| **Board Builder** | Edit the name in the toolbar or Explorer; changes are local until **Save** (name + definition) |
+
+System boards (e.g. **Empty Board**) show a read-only name and cannot be renamed or saved from Board Builder.
+
+Implementation: [frontend/src/components/SandboxView.tsx](../frontend/src/components/SandboxView.tsx), [frontend/src/sandbox/boardBuilderLocalEdits.ts](../frontend/src/sandbox/boardBuilderLocalEdits.ts), [frontend/src/sandbox/sandboxBoardRename.ts](../frontend/src/sandbox/sandboxBoardRename.ts).

@@ -6,9 +6,28 @@ import type {
     SandboxSandboxStateJson,
 } from '../domain/sandbox/types';
 
+export const BLOCKING_ITEM_TYPES = new Set(['food', 'wall']);
+export const REGION_ITEM_TYPE = 'region';
+
 export interface CellOccupants {
     items: SandboxItemJson[];
     creatures: SandboxCreatureJson[];
+}
+
+export function isBlockingItem(item: SandboxItemJson): boolean {
+    return BLOCKING_ITEM_TYPES.has(item.type);
+}
+
+export function isRegionItem(item: SandboxItemJson): boolean {
+    return item.type === REGION_ITEM_TYPE;
+}
+
+export function getBlockingItems(items: SandboxItemJson[]): SandboxItemJson[] {
+    return items.filter(isBlockingItem);
+}
+
+export function getRegionItems(items: SandboxItemJson[]): SandboxItemJson[] {
+    return items.filter(isRegionItem);
 }
 
 export function getCellOccupantsFromSandboxState(
@@ -29,7 +48,13 @@ export function cellHasInspectableContent(occupants: CellOccupants): boolean {
     return occupants.items.length > 0 || occupants.creatures.length > 0;
 }
 
-export type CellRootActionId = 'place_item' | 'remove_item' | 'place_creature' | 'remove_creature';
+export type CellRootActionId =
+    | 'place_item'
+    | 'remove_item'
+    | 'place_region'
+    | 'remove_region'
+    | 'place_creature'
+    | 'remove_creature';
 
 export interface CellRootAction {
     id: CellRootActionId;
@@ -46,7 +71,17 @@ const CELL_ROOT_ACTIONS: Record<CellRootActionId, CellRootAction> = {
     remove_item: {
         id: 'remove_item',
         label: 'Remove item',
-        description: 'Clear items from this cell',
+        description: 'Clear food or wall from this cell',
+    },
+    place_region: {
+        id: 'place_region',
+        label: 'Place region',
+        description: 'Colored visual marker — coexists with other occupants',
+    },
+    remove_region: {
+        id: 'remove_region',
+        label: 'Remove region',
+        description: 'Clear the region marker from this cell',
     },
     place_creature: {
         id: 'place_creature',
@@ -65,24 +100,28 @@ export function deriveCellRootActions(
     options?: { allowCreatureActions?: boolean },
 ): CellRootAction[] {
     const allowCreatureActions = options?.allowCreatureActions ?? false;
-    const hasItems = occupants.items.length > 0;
+    const hasBlockingItems = getBlockingItems(occupants.items).length > 0;
+    const hasRegion = getRegionItems(occupants.items).length > 0;
     const hasCreatures = occupants.creatures.length > 0;
-    const isEmpty = !hasItems && !hasCreatures;
 
-    const ids: CellRootActionId[] = [];
+    const ids: CellRootActionId[] = ['place_region'];
 
-    if (isEmpty) {
+    if (hasBlockingItems) {
+        ids.push('remove_item');
+    } else if (!hasCreatures) {
         ids.push('place_item');
-        if (allowCreatureActions) {
+    }
+
+    if (allowCreatureActions) {
+        if (hasCreatures) {
+            ids.push('remove_creature');
+        } else if (!hasBlockingItems) {
             ids.push('place_creature');
         }
-    } else {
-        if (hasItems) {
-            ids.push('remove_item');
-        }
-        if (hasCreatures && allowCreatureActions) {
-            ids.push('remove_creature');
-        }
+    }
+
+    if (hasRegion) {
+        ids.push('remove_region');
     }
 
     return ids.map(id => CELL_ROOT_ACTIONS[id]);

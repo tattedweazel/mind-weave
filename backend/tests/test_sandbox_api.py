@@ -51,6 +51,24 @@ def test_sandbox_boards_crud(client: TestClient):
     assert d.status_code == 200
 
 
+def test_sandbox_board_rename(client: TestClient):
+    board_id = _board_with_creature(client)
+
+    renamed = client.patch(f"/api/v1/sandbox/boards/{board_id}", json={"name": "Renamed"})
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Renamed"
+
+    unchanged = client.patch(f"/api/v1/sandbox/boards/{board_id}", json={"name": "   "})
+    assert unchanged.status_code == 200
+    assert unchanged.json()["name"] == "Renamed"
+
+    system_patch = client.patch(
+        f"/api/v1/sandbox/boards/{EMPTY_SANDBOX_BOARD_ID}",
+        json={"name": "Nope"},
+    )
+    assert system_patch.status_code == 404
+
+
 def test_sandbox_session_create_and_tick(client: TestClient):
     board_id = _board_with_creature(client)
     r = client.post("/api/v1/sandbox/sessions", json={"board_id": board_id})
@@ -109,6 +127,91 @@ def test_sandbox_place_creature_via_tick(client: TestClient):
     assert len(t.json()["envelope"]["sandbox"]["creatures"]) == 1
 
 
+def test_sandbox_place_creature_via_tick(client: TestClient):
+    r = client.post("/api/v1/sandbox/sessions", json={"board_id": str(EMPTY_SANDBOX_BOARD_ID)})
+    doc_id = r.json()["document_id"]
+    v0 = r.json()["envelope"]["state_version"]
+
+    t = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/tick",
+        json={
+            "interactions": [
+                {
+                    "type": "place_creature",
+                    "cell": {"x": 2, "y": 2},
+                    "workflow_id": str(STARTER_SANDBOX_WORKFLOW_ID),
+                }
+            ],
+            "state_version": v0,
+        },
+    )
+    assert t.status_code == 200
+    assert len(t.json()["envelope"]["sandbox"]["creatures"]) == 1
+
+
+def test_sandbox_apply_interactions_without_tick(client: TestClient):
+    r = client.post("/api/v1/sandbox/sessions", json={"board_id": str(EMPTY_SANDBOX_BOARD_ID)})
+    doc_id = r.json()["document_id"]
+    v0 = r.json()["envelope"]["state_version"]
+    assert r.json()["envelope"]["sandbox"]["tick"] == 0
+
+    applied = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/interactions",
+        json={
+            "interactions": [
+                {
+                    "type": "place_creature",
+                    "cell": {"x": 2, "y": 2},
+                    "workflow_id": str(STARTER_SANDBOX_WORKFLOW_ID),
+                    "facing": "E",
+                }
+            ],
+            "state_version": v0,
+        },
+    )
+    assert applied.status_code == 200
+    env = applied.json()["envelope"]
+    assert env["state_version"] == v0 + 1
+    assert env["sandbox"]["tick"] == 0
+    assert len(env["sandbox"]["creatures"]) == 1
+    assert env["sandbox"]["creatures"][0]["facing"] == "E"
+    assert "last_workflow_runs" not in applied.json()
+
+
+def test_sandbox_apply_interactions_rejects_when_not_paused(client: TestClient, db_session):
+    import json
+
+    from app.domain.document_json import deterministic_json_dumps
+    from app.persistence.tables import Document
+
+    r = client.post("/api/v1/sandbox/sessions", json={"board_id": str(EMPTY_SANDBOX_BOARD_ID)})
+    doc_id = uuid.UUID(r.json()["document_id"])
+    v0 = r.json()["envelope"]["state_version"]
+
+    doc = db_session.get(Document, doc_id)
+    assert doc is not None
+    env = json.loads(doc.body)
+    env["playback"] = {**(env.get("playback") or {}), "paused": False}
+    doc.body = deterministic_json_dumps(env)
+    db_session.add(doc)
+    db_session.commit()
+
+    r2 = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/interactions",
+        json={
+            "interactions": [
+                {
+                    "type": "place_item",
+                    "cell": {"x": 1, "y": 1},
+                    "item_type": "wall",
+                }
+            ],
+            "state_version": v0,
+        },
+    )
+    assert r2.status_code == 422
+
+
 def test_sandbox_save_session_as_board(client: TestClient):
     board_id = _board_with_creature(client)
     r = client.post("/api/v1/sandbox/sessions", json={"board_id": board_id})
@@ -152,6 +255,36 @@ def test_sandbox_resize_grid_paused_only_and_version(client: TestClient):
     assert ok.status_code == 200
     env = ok.json()["envelope"]
     assert env["sandbox"]["world"]["grid"]["width"] == 12
+
+
+def test_sandbox_place_and_remove_region(client: TestClient):
+    r = client.post("/api/v1/sandbox/sessions", json={"board_id": str(EMPTY_SANDBOX_BOARD_ID)})
+    doc_id = r.json()["document_id"]
+    v0 = r.json()["envelope"]["state_version"]
+
+    placed = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/interactions",
+        json={
+            "interactions": [
+                {"type": "place_region", "cell": {"x": 2, "y": 2}, "color": "#AABBCC"},
+            ],
+            "state_version": v0,
+        },
+    )
+    assert placed.status_code == 200
+    items = placed.json()["envelope"]["sandbox"]["world"]["items"]
+    assert any(it["type"] == "region" and it["color"] == "#AABBCC" for it in items)
+    v1 = placed.json()["envelope"]["state_version"]
+
+    removed = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/interactions",
+        json={
+            "interactions": [{"type": "remove_region", "cell": {"x": 2, "y": 2}}],
+            "state_version": v1,
+        },
+    )
+    assert removed.status_code == 200
+    assert not any(it["type"] == "region" for it in removed.json()["envelope"]["sandbox"]["world"]["items"])
 
 
 def test_sandbox_resize_grid_rejects_when_not_paused(client: TestClient, db_session):

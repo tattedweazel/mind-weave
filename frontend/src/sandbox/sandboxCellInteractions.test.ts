@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { placeFoodInteraction, removeItemAtCellInteraction } from './sandboxCellInteractions';
+import { placeFoodInteraction, placeRegionInteraction, removeItemAtCellInteraction, removeRegionAtCellInteraction } from './sandboxCellInteractions';
 
 describe('sandboxCellInteractions', () => {
     it('builds place_item payload', () => {
@@ -11,9 +11,24 @@ describe('sandboxCellInteractions', () => {
         });
     });
 
+    it('builds place_region payload', () => {
+        expect(placeRegionInteraction({ x: 1, y: 2 }, '#3B82F6')).toEqual({
+            type: 'place_region',
+            cell: { x: 1, y: 2 },
+            color: '#3B82F6',
+        });
+    });
+
     it('builds remove_item payload', () => {
         expect(removeItemAtCellInteraction({ x: 0, y: 1 })).toEqual({
             type: 'remove_item',
+            cell: { x: 0, y: 1 },
+        });
+    });
+
+    it('builds remove_region payload', () => {
+        expect(removeRegionAtCellInteraction({ x: 0, y: 1 })).toEqual({
+            type: 'remove_region',
             cell: { x: 0, y: 1 },
         });
     });

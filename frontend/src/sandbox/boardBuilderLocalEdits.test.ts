@@ -5,7 +5,7 @@ import {
     createEmptyBoardDefinition,
     updateBoardItemMetadata,
 } from './boardBuilderLocalEdits';
-import { placeFoodInteraction } from './sandboxCellInteractions';
+import { placeFoodInteraction, placeRegionInteraction } from './sandboxCellInteractions';
 import { SANDBOX_DEFAULT_FOOD_ENERGY } from './sandboxItemInspectorFields';
 
 describe('boardBuilderLocalEdits', () => {
@@ -36,5 +36,46 @@ describe('boardBuilderLocalEdits', () => {
         const updated = updateBoardItemMetadata(def, 'w1', { energy: 99 });
         expect(updated).toBe(def);
         expect(updated.items[0]?.energy).toBeUndefined();
+    });
+
+    it('coexists region with food and remove_item keeps region', () => {
+        let def = applyBoardBuilderInteraction(createEmptyBoardDefinition(4, 4), placeRegionInteraction({ x: 1, y: 1 }, '#FF0000'));
+        def = applyBoardBuilderInteraction(def, placeFoodInteraction({ x: 1, y: 1 }));
+        expect(def.items.filter(it => it.position.x === 1 && it.position.y === 1).map(it => it.type).sort()).toEqual([
+            'food',
+            'region',
+        ]);
+        def = applyBoardBuilderInteraction(def, { type: 'remove_item', cell: { x: 1, y: 1 } });
+        expect(def.items).toHaveLength(1);
+        expect(def.items[0]?.type).toBe('region');
+    });
+
+    it('updates region color metadata', () => {
+        const placed = applyBoardBuilderInteraction(
+            createEmptyBoardDefinition(4, 4),
+            placeRegionInteraction({ x: 0, y: 0 }, '#111111'),
+        );
+        const itemId = placed.items[0]?.id;
+        const updated = updateBoardItemMetadata(placed, itemId!, { color: '#222222' });
+        expect(updated.items[0]?.color).toBe('#222222');
+    });
+
+    it('remove_region leaves food intact', () => {
+        let def = applyBoardBuilderInteraction(createEmptyBoardDefinition(4, 4), placeRegionInteraction({ x: 0, y: 0 }, '#111111'));
+        def = applyBoardBuilderInteraction(def, placeFoodInteraction({ x: 0, y: 0 }));
+        def = applyBoardBuilderInteraction(def, { type: 'remove_region', cell: { x: 0, y: 0 } });
+        expect(def.items).toHaveLength(1);
+        expect(def.items[0]?.type).toBe('food');
+    });
+
+    it('place_creature keeps region at cell', () => {
+        let def = applyBoardBuilderInteraction(createEmptyBoardDefinition(4, 4), placeRegionInteraction({ x: 1, y: 1 }, '#111111'));
+        def = applyBoardBuilderInteraction(def, {
+            type: 'place_creature',
+            cell: { x: 1, y: 1 },
+            workflow_id: 'wf-1',
+        });
+        expect(def.items.some(it => it.type === 'region')).toBe(true);
+        expect(def.creatures).toHaveLength(1);
     });
 });

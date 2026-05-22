@@ -11,8 +11,10 @@ import {
     CELL_PX,
     CREATURE_FILL,
     CREATURE_SELECTED_FILL,
+    DEFAULT_REGION_COLOR,
     FOOD_FILL,
     GRID_LINE,
+    REGION_UNDERLAY_ALPHA,
     SANDBOX_GRID_DEFAULT_HEIGHT,
     SANDBOX_GRID_DEFAULT_WIDTH,
     WALL_FILL,
@@ -82,6 +84,21 @@ class SandboxScene extends Phaser.Scene {
         }
         for (let y = 0; y <= height; y++) {
             g.lineBetween(ox, oy + y * CELL_PX, ox + wpx, oy + y * CELL_PX);
+        }
+
+        for (const it of state.world.items) {
+            const cx = ox + it.position.x * CELL_PX + CELL_PX / 2;
+            const cy = oy + it.position.y * CELL_PX + CELL_PX / 2;
+            if (it.type === 'region') {
+                const color = it.color ?? DEFAULT_REGION_COLOR;
+                g.fillStyle(hexToRgbInt(color), REGION_UNDERLAY_ALPHA);
+                g.fillRect(
+                    ox + it.position.x * CELL_PX,
+                    oy + it.position.y * CELL_PX,
+                    CELL_PX,
+                    CELL_PX,
+                );
+            }
         }
 
         for (const it of state.world.items) {

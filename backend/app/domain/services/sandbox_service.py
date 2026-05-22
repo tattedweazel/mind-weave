@@ -156,6 +156,33 @@ class SandboxService:
         fresh = self.get_envelope(document_id)
         return (fresh if fresh else env), True, last_runs
 
+    def apply_interactions(
+        self,
+        document_id: uuid.UUID,
+        *,
+        interactions: List[dict[str, Any]],
+        client_version: int,
+    ) -> Tuple[SandboxDocumentEnvelope, bool]:
+        doc = self._docs.get_document(document_id)
+        if not doc or doc.user_id != self.user_id:
+            raise ValueError("document not found")
+
+        env = _parse_envelope(doc.body)
+        if env.state_version != client_version:
+            return env, False
+
+        pb = SandboxPlaybackState.model_validate(env.playback) if env.playback else SandboxPlaybackState()
+        if not pb.paused:
+            raise ValueError("playback must be paused to apply interactions")
+
+        st = env.sandbox.model_copy(deep=True)
+        SandboxEngine().apply_interactions(st, interactions)
+        env.sandbox = st
+        env.state_version = client_version + 1
+        self.save_envelope(document_id, env)
+        fresh = self.get_envelope(document_id)
+        return (fresh if fresh else env), True
+
     def resize_grid(
         self,
         document_id: uuid.UUID,

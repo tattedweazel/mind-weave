@@ -133,23 +133,29 @@ describe('deriveCellRootActions', () => {
 
     it('returns place actions for empty cell when creature actions allowed', () => {
         expect(deriveCellRootActions({ items: [], creatures: [] }, { allowCreatureActions: true }).map(a => a.id)).toEqual([
+            'place_region',
             'place_item',
             'place_creature',
         ]);
     });
 
-    it('returns only place_item for empty cell when creature actions disallowed', () => {
-        expect(deriveCellRootActions({ items: [], creatures: [] }).map(a => a.id)).toEqual(['place_item']);
+    it('returns place_region and place_item for empty cell when creature actions disallowed', () => {
+        expect(deriveCellRootActions({ items: [], creatures: [] }).map(a => a.id)).toEqual([
+            'place_region',
+            'place_item',
+        ]);
     });
 
-    it('returns remove_item only for item-only cell', () => {
+    it('returns remove_item and place_region for item-only cell', () => {
         expect(deriveCellRootActions({ items: [food], creatures: [] }, { allowCreatureActions: true }).map(a => a.id)).toEqual([
+            'place_region',
             'remove_item',
         ]);
     });
 
-    it('returns remove_creature only for creature-only cell', () => {
+    it('returns remove_creature and place_region for creature-only cell', () => {
         expect(deriveCellRootActions({ items: [], creatures: [creature] }, { allowCreatureActions: true }).map(a => a.id)).toEqual([
+            'place_region',
             'remove_creature',
         ]);
     });
@@ -157,10 +163,22 @@ describe('deriveCellRootActions', () => {
     it('returns both remove actions when item and creature share cell', () => {
         expect(
             deriveCellRootActions({ items: [food], creatures: [creature] }, { allowCreatureActions: true }).map(a => a.id),
-        ).toEqual(['remove_item', 'remove_creature']);
+        ).toEqual(['place_region', 'remove_item', 'remove_creature']);
+    });
+
+    it('includes remove_region when region present', () => {
+        const region = {
+            id: 'r1',
+            type: 'region' as const,
+            position: { x: 0, y: 0 },
+            color: '#3B82F6',
+        };
+        expect(
+            deriveCellRootActions({ items: [region], creatures: [] }, { allowCreatureActions: true }).map(a => a.id),
+        ).toContain('remove_region');
     });
 
     it('hides remove_creature when creature actions disallowed even if creature present', () => {
-        expect(deriveCellRootActions({ items: [], creatures: [creature] }).map(a => a.id)).toEqual([]);
+        expect(deriveCellRootActions({ items: [], creatures: [creature] }).map(a => a.id)).toEqual(['place_region']);
     });
 });

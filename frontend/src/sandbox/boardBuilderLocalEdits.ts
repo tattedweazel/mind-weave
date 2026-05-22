@@ -1,6 +1,13 @@
-import type { BoardDefinitionJson, SandboxFacing, SandboxItemJson } from '../domain/sandbox/types';
+import type {
+    BoardDefinitionJson,
+    RegionTriggerConfigJson,
+    SandboxFacing,
+    SandboxItemJson,
+} from '../domain/sandbox/types';
 import { DEFAULT_SANDBOX_FACING } from '../domain/sandbox/types';
 import type { SandboxCellInteraction } from './sandboxCellInteractions';
+import { normalizeHexColor } from './sandboxColorUtils';
+import { BLOCKING_ITEM_TYPES, REGION_ITEM_TYPE } from './sandboxCellOccupants';
 import {
     getEditableItemFields,
     isEditableItemFieldKey,
@@ -8,6 +15,18 @@ import {
     validateItemFieldValue,
     type SandboxItemEditableFieldKey,
 } from './sandboxItemInspectorFields';
+
+function isBlockingItemType(type: string): boolean {
+    return BLOCKING_ITEM_TYPES.has(type);
+}
+
+function filterBlockingItemsAt(items: SandboxItemJson[], x: number, y: number): SandboxItemJson[] {
+    return items.filter(it => !(it.position.x === x && it.position.y === y && isBlockingItemType(it.type)));
+}
+
+function filterRegionAt(items: SandboxItemJson[], x: number, y: number): SandboxItemJson[] {
+    return items.filter(it => !(it.position.x === x && it.position.y === y && it.type === REGION_ITEM_TYPE));
+}
 
 export function createEmptyBoardDefinition(width: number, height: number): BoardDefinitionJson {
     return {
@@ -27,8 +46,7 @@ export function applyBoardBuilderInteraction(
 
     if (interaction.type === 'place_item') {
         if (!inBounds(x, y)) return def;
-        const items = def.items.filter(it => !(it.position.x === x && it.position.y === y));
-        const creatures = def.creatures.filter(c => !(c.position.x === x && c.position.y === y));
+        const items = filterBlockingItemsAt(def.items, x, y);
         return {
             ...def,
             items: [
@@ -40,18 +58,42 @@ export function applyBoardBuilderInteraction(
                     ...(interaction.item_type === 'food' ? { energy: SANDBOX_DEFAULT_FOOD_ENERGY } : {}),
                 },
             ],
-            creatures,
         };
     }
     if (interaction.type === 'remove_item') {
         return {
             ...def,
-            items: def.items.filter(it => !(it.position.x === x && it.position.y === y)),
+            items: filterBlockingItemsAt(def.items, x, y),
+        };
+    }
+    if (interaction.type === 'place_region') {
+        if (!inBounds(x, y)) return def;
+        const normalized = normalizeHexColor(interaction.color);
+        if (!normalized) return def;
+        const items = filterRegionAt(def.items, x, y);
+        return {
+            ...def,
+            items: [
+                ...items,
+                {
+                    id: `region-${crypto.randomUUID()}`,
+                    type: REGION_ITEM_TYPE,
+                    position: { x, y },
+                    color: normalized,
+                    trigger: { enabled: false, mode: null, workflow_id: null, inputs: {} },
+                },
+            ],
+        };
+    }
+    if (interaction.type === 'remove_region') {
+        return {
+            ...def,
+            items: filterRegionAt(def.items, x, y),
         };
     }
     if (interaction.type === 'place_creature') {
         if (!inBounds(x, y)) return def;
-        const items = def.items.filter(it => !(it.position.x === x && it.position.y === y));
+        const items = filterBlockingItemsAt(def.items, x, y);
         const creatures = def.creatures.filter(c => !(c.position.x === x && c.position.y === y));
         return {
             ...def,
@@ -63,7 +105,7 @@ export function applyBoardBuilderInteraction(
                     workflow_id: interaction.workflow_id,
                     name: interaction.name ?? null,
                     position: { x, y },
-                    facing: DEFAULT_SANDBOX_FACING,
+                    facing: interaction.facing ?? DEFAULT_SANDBOX_FACING,
                 },
             ],
         };
@@ -77,7 +119,9 @@ export function applyBoardBuilderInteraction(
     return def;
 }
 
-export type BoardItemMetadataPatch = Partial<Pick<SandboxItemJson, SandboxItemEditableFieldKey>>;
+export type BoardItemMetadataPatch = Partial<
+    Pick<SandboxItemJson, SandboxItemEditableFieldKey | 'color' | 'trigger'>
+>;
 
 export function updateBoardItemMetadata(
     def: BoardDefinitionJson,
@@ -94,7 +138,23 @@ export function updateBoardItemMetadata(
     const nextItem = { ...item };
     let changed = false;
 
+    if (item.type === REGION_ITEM_TYPE) {
+        if (patch.color !== undefined && typeof patch.color === 'string') {
+            if (nextItem.color !== patch.color) {
+                nextItem.color = patch.color;
+                changed = true;
+            }
+        }
+        if (patch.trigger !== undefined) {
+            nextItem.trigger = patch.trigger as RegionTriggerConfigJson;
+            changed = true;
+        }
+    }
+
     for (const [rawKey, rawValue] of Object.entries(patch)) {
+        if (rawKey === 'color' || rawKey === 'trigger') {
+            continue;
+        }
         if (!isEditableItemFieldKey(item.type, rawKey)) {
             continue;
         }

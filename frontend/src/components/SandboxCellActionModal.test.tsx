@@ -138,26 +138,29 @@ describe('SandboxCellActionModal', () => {
     it('shows place actions on empty cell', () => {
         renderModal();
 
+        expect(screen.getByRole('button', { name: /^Place region/ })).toBeTruthy();
         expect(screen.getByRole('button', { name: /^Place item/ })).toBeTruthy();
         expect(screen.getByRole('button', { name: /^Place creature/ })).toBeTruthy();
         expect(screen.queryByRole('button', { name: /^Remove item/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /^Remove creature/ })).toBeNull();
     });
 
-    it('shows remove_item only on item cell', () => {
+    it('shows remove_item on item cell and still allows place_region', () => {
         renderModal({ occupants: itemOccupants, canInspect: true, onInspect: vi.fn() });
 
         expect(screen.getByRole('button', { name: /^Inspect/ })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^Place region/ })).toBeTruthy();
         expect(screen.getByRole('button', { name: /^Remove item/ })).toBeTruthy();
         expect(screen.queryByRole('button', { name: /^Place item/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /^Place creature/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /^Remove creature/ })).toBeNull();
     });
 
-    it('shows remove_creature only on creature cell', () => {
+    it('shows remove_creature on creature cell and still allows place_region', () => {
         renderModal({ occupants: creatureOccupants, canInspect: true, onInspect: vi.fn() });
 
         expect(screen.getByRole('button', { name: /^Inspect/ })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^Place region/ })).toBeTruthy();
         expect(screen.getByRole('button', { name: /^Remove creature/ })).toBeTruthy();
         expect(screen.queryByRole('button', { name: /^Place item/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /^Remove item/ })).toBeNull();
@@ -168,6 +171,7 @@ describe('SandboxCellActionModal', () => {
 
         expect(screen.getByRole('button', { name: /^Remove item/ })).toBeTruthy();
         expect(screen.getByRole('button', { name: /^Remove creature/ })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^Place region/ })).toBeTruthy();
         expect(screen.queryByRole('button', { name: /^Place item/ })).toBeNull();
     });
 
@@ -194,6 +198,24 @@ describe('SandboxCellActionModal', () => {
             type: 'place_item',
             cell: { x: 1, y: 1 },
             item_type: 'food',
+        });
+    });
+
+    it('completes place_region after color is confirmed', async () => {
+        const user = userEvent.setup();
+        const onComplete = vi.fn();
+        renderModal({
+            cell: { x: 1, y: 1 },
+            onComplete,
+            sandboxFavoriteColors: ['#FF0000'],
+        });
+
+        await user.click(screen.getByRole('button', { name: /^Place region/ }));
+        await user.click(screen.getByRole('button', { name: /Place region \(#FF0000\)/ }));
+        expect(onComplete).toHaveBeenCalledWith({
+            type: 'place_region',
+            cell: { x: 1, y: 1 },
+            color: '#FF0000',
         });
     });
 
@@ -269,6 +291,25 @@ describe('SandboxCellActionModal', () => {
                 type: 'place_creature',
                 cell: { x: 4, y: 5 },
                 workflow_id: 'wf-orphan',
+                facing: 'N',
+            });
+        });
+
+        it('includes selected facing when placing a creature', async () => {
+            const user = userEvent.setup();
+            const onComplete = vi.fn();
+            renderModal({ ...pickerProps, cell: { x: 1, y: 2 }, onComplete });
+
+            await user.click(screen.getByRole('button', { name: /^Place creature/ }));
+            await user.click(screen.getByRole('button', { name: /Shared/ }));
+            await user.click(screen.getByRole('button', { name: 'Face E' }));
+            await user.click(screen.getByRole('button', { name: 'Shared Brain' }));
+
+            expect(onComplete).toHaveBeenCalledWith({
+                type: 'place_creature',
+                cell: { x: 1, y: 2 },
+                workflow_id: 'wf-shared',
+                facing: 'E',
             });
         });
 

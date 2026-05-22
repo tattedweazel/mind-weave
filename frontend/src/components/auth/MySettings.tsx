@@ -26,6 +26,11 @@ import {
 } from '../../domain/gmailCategoryFilters';
 import { getSystemTimeZone, listIanaTimeZones } from '../../domain/gmailRfc3339Date';
 import type { TtsPlaybackWhen } from '../../domain/resolveAutoPlayTtsOnNodeEnd';
+import {
+    MAX_SANDBOX_FAVORITE_COLORS,
+    parseSandboxFavoriteColors,
+} from '../../sandbox/sandboxFavoriteColors';
+import { normalizeHexColor } from '../../sandbox/sandboxColorUtils';
 import { ChevronDown, Gauge, Save, Link2, Unlink, User, Mail, Key, Upload, Eye, Volume2, Trash2, RefreshCw } from 'lucide-react';
 import { ContextHelpModal } from '../ContextHelpModal';
 import { ManagerModal } from '../ManagerModal';
@@ -172,6 +177,8 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
     const [viewThemeMode, setViewThemeMode] = useState<ThemeModeSetting>('system');
     const [viewRememberWorkflowPanelWidths, setViewRememberWorkflowPanelWidths] = useState(true);
     const [viewTtsPlaybackWhen, setViewTtsPlaybackWhen] = useState<TtsPlaybackWhen>('inline');
+    const [viewSandboxFavoriteColors, setViewSandboxFavoriteColors] = useState<string[]>([]);
+    const [newSandboxFavoriteColor, setNewSandboxFavoriteColor] = useState('#3B82F6');
     const [workflowGoogleConnections, setWorkflowGoogleConnections] = useState<GoogleWorkflowConnection[]>([]);
     const [workflowGoogleLoading, setWorkflowGoogleLoading] = useState(false);
     const [workflowGoogleConnecting, setWorkflowGoogleConnecting] = useState(false);
@@ -229,6 +236,7 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
             const ap = user.settings.auto_play_tts_on_node_end;
             setViewTtsPlaybackWhen(typeof ap === 'boolean' && !ap ? 'manual' : 'inline');
         }
+        setViewSandboxFavoriteColors(parseSandboxFavoriteColors(user.settings as Record<string, unknown>));
     }, [user, isOpen]);
 
     useEffect(() => {
@@ -458,6 +466,7 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
                     workflow_editor_remember_panel_widths: viewRememberWorkflowPanelWidths,
                     tts_playback_when: viewTtsPlaybackWhen,
                     auto_play_tts_on_node_end: viewTtsPlaybackWhen === 'inline',
+                    sandbox_favorite_colors: viewSandboxFavoriteColors,
                 },
             });
             await checkAuth({ silent: true });
@@ -705,6 +714,66 @@ export const MySettings: React.FC<MySettingsProps> = ({ isOpen, onClose }) => {
                                     Default for Text-to-Speech nodes that follow &quot;My Settings&quot;. You can override
                                     each node in the inspector. Run log play and download stay available for every clip.
                                 </p>
+                            </div>
+                            <div className="rounded-lg border border-mw-border bg-mw-page/90 dark:bg-mw-card-alt/25 p-4 space-y-3">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-mw-text-secondary">
+                                    Favorite colors
+                                </p>
+                                <p className="text-xs text-mw-text-secondary">
+                                    Saved swatches for color pickers across the app (e.g. Sandbox regions). Up to{' '}
+                                    {MAX_SANDBOX_FAVORITE_COLORS} colors.
+                                </p>
+                                {viewSandboxFavoriteColors.length > 0 ? (
+                                    <ul className="flex flex-wrap gap-2">
+                                        {viewSandboxFavoriteColors.map(color => (
+                                            <li key={color} className="flex items-center gap-1">
+                                                <span
+                                                    className="h-8 w-8 rounded-md border border-mw-border shrink-0"
+                                                    style={{ backgroundColor: color }}
+                                                    title={color}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Remove ${color}`}
+                                                    onClick={() =>
+                                                        setViewSandboxFavoriteColors(prev =>
+                                                            prev.filter(c => c !== color),
+                                                        )
+                                                    }
+                                                    className="p-1 text-mw-text-secondary hover:text-mw-error rounded"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-xs text-mw-text-secondary">No favorites yet.</p>
+                                )}
+                                {viewSandboxFavoriteColors.length < MAX_SANDBOX_FAVORITE_COLORS ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="color"
+                                            value={newSandboxFavoriteColor}
+                                            onChange={e => setNewSandboxFavoriteColor(e.target.value.toUpperCase())}
+                                            className="h-9 w-12 rounded border border-mw-border cursor-pointer"
+                                            aria-label="Pick a favorite color"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const normalized = normalizeHexColor(newSandboxFavoriteColor);
+                                                if (!normalized) return;
+                                                setViewSandboxFavoriteColors(prev =>
+                                                    prev.includes(normalized) ? prev : [...prev, normalized],
+                                                );
+                                            }}
+                                            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-mw-border hover:bg-mw-card-alt"
+                                        >
+                                            Add favorite
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
                             <button
                                 type="button"

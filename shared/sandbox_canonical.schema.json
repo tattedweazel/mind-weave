@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mind-weave.dev/schemas/sandbox_canonical.schema.json",
   "title": "Mind Weave Sandbox V2",
-  "schema_version": "2.1.0",
+  "schema_version": "2.2.0",
   "$defs": {
     "GridCell": {
       "type": "object",
@@ -37,7 +37,24 @@
     },
     "ItemType": {
       "type": "string",
-      "enum": ["food", "wall"]
+      "enum": ["food", "wall", "region"]
+    },
+    "RegionTriggerMode": {
+      "type": "string",
+      "enum": ["enter", "exit", "while_inside", "on_enter_once"]
+    },
+    "RegionTriggerConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "mode", "workflow_id", "inputs"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mode": {
+          "anyOf": [{ "$ref": "#/$defs/RegionTriggerMode" }, { "type": "null" }]
+        },
+        "workflow_id": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "inputs": { "type": "object" }
+      }
     },
     "SandboxItem": {
       "type": "object",
@@ -47,7 +64,9 @@
         "id": { "type": "string", "minLength": 1 },
         "type": { "$ref": "#/$defs/ItemType" },
         "position": { "$ref": "#/$defs/GridCell" },
-        "energy": { "type": "integer", "minimum": 0 }
+        "energy": { "type": "integer", "minimum": 0 },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "trigger": { "$ref": "#/$defs/RegionTriggerConfig" }
       }
     },
     "CreatureState": {
@@ -172,7 +191,8 @@
             "type": { "const": "place_creature" },
             "cell": { "$ref": "#/$defs/GridCell" },
             "workflow_id": { "type": "string", "minLength": 1 },
-            "name": { "type": "string" }
+            "name": { "type": "string" },
+            "facing": { "$ref": "#/$defs/Facing" }
           }
         },
         {
@@ -180,6 +200,23 @@
           "required": ["type", "cell"],
           "properties": {
             "type": { "const": "remove_creature" },
+            "cell": { "$ref": "#/$defs/GridCell" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "cell", "color"],
+          "properties": {
+            "type": { "const": "place_region" },
+            "cell": { "$ref": "#/$defs/GridCell" },
+            "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "cell"],
+          "properties": {
+            "type": { "const": "remove_region" },
             "cell": { "$ref": "#/$defs/GridCell" }
           }
         }

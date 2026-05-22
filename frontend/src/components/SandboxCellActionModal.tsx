@@ -5,7 +5,8 @@ import React from 'react';
 import { ChevronLeft, X } from 'lucide-react';
 
 import type { WorkflowDefinitionListItem, WorkflowProject } from '../api/types';
-import type { SandboxGridCellJson } from '../domain/sandbox/types';
+import type { SandboxGridCellJson, SandboxFacing } from '../domain/sandbox/types';
+import { DEFAULT_SANDBOX_FACING, SANDBOX_FACING_VALUES } from '../domain/sandbox/types';
 import {
     creatureBrainCountForProject,
     creatureBrainWorkflowsInProject,
@@ -14,11 +15,15 @@ import { deriveCellRootActions, type CellOccupants } from '../sandbox/sandboxCel
 import {
     placeCreatureInteraction,
     placeFoodInteraction,
+    placeRegionInteraction,
     placeWallInteraction,
     removeCreatureAtCellInteraction,
     removeItemAtCellInteraction,
+    removeRegionAtCellInteraction,
     type SandboxCellInteraction,
 } from '../sandbox/sandboxCellInteractions';
+import { defaultRegionPlacementColor } from '../sandbox/sandboxFavoriteColors';
+import { SandboxRegionColorPicker } from './sandbox/SandboxRegionColorPicker';
 import { PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS } from './workflow-editor/workflowEditorPanelLayout';
 import {
     filterNamesByPrefix,
@@ -26,7 +31,12 @@ import {
     type WorkflowListSort,
 } from './workflow-editor/workflowListFilter';
 
-export type CellActionWizardStep = 'choose_action' | 'choose_item_type' | 'choose_project' | 'choose_workflow';
+export type CellActionWizardStep =
+    | 'choose_action'
+    | 'choose_item_type'
+    | 'choose_region_color'
+    | 'choose_project'
+    | 'choose_workflow';
 
 const PLACE_ITEM_TYPES = [
     { id: 'food' as const, label: 'Food', description: 'Energy for creatures' },
@@ -45,6 +55,8 @@ export interface SandboxCellActionModalProps {
     workflows?: WorkflowDefinitionListItem[];
     /** Seeded Shared project id (null project_id rows belong here). */
     sharedProjectId?: string | null;
+    /** User favorite hex colors from View Settings. */
+    sandboxFavoriteColors?: string[];
     initialStep?: CellActionWizardStep;
     onComplete: (interaction: SandboxCellInteraction) => void;
     onDismiss: () => void;
@@ -59,6 +71,7 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
     workflowProjects = [],
     workflows = [],
     sharedProjectId = null,
+    sandboxFavoriteColors = [],
     initialStep = 'choose_action',
     onComplete,
     onDismiss,
@@ -68,6 +81,14 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
     const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(null);
     const [workflowNameFilter, setWorkflowNameFilter] = React.useState('');
     const [workflowListSort, setWorkflowListSort] = React.useState<WorkflowListSort>('updated');
+    const [selectedFacing, setSelectedFacing] = React.useState<SandboxFacing>(DEFAULT_SANDBOX_FACING);
+    const [selectedRegionColor, setSelectedRegionColor] = React.useState(() =>
+        defaultRegionPlacementColor(sandboxFavoriteColors),
+    );
+
+    React.useEffect(() => {
+        setSelectedRegionColor(defaultRegionPlacementColor(sandboxFavoriteColors));
+    }, [sandboxFavoriteColors]);
 
     React.useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -115,6 +136,10 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
             setStep('choose_action');
             return;
         }
+        if (step === 'choose_region_color') {
+            setStep('choose_action');
+            return;
+        }
         onDismiss();
     };
 
@@ -122,6 +147,7 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
         setSelectedProjectId(projectId);
         setWorkflowNameFilter('');
         setWorkflowListSort('updated');
+        setSelectedFacing(DEFAULT_SANDBOX_FACING);
         setStep('choose_workflow');
     };
 
@@ -183,12 +209,21 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                                     onComplete(removeItemAtCellInteraction(cell));
                                                     return;
                                                 }
+                                                if (a.id === 'remove_region') {
+                                                    onComplete(removeRegionAtCellInteraction(cell));
+                                                    return;
+                                                }
                                                 if (a.id === 'remove_creature') {
                                                     onComplete(removeCreatureAtCellInteraction(cell));
                                                     return;
                                                 }
                                                 if (a.id === 'place_creature') {
                                                     setStep('choose_project');
+                                                    return;
+                                                }
+                                                if (a.id === 'place_region') {
+                                                    setSelectedRegionColor(defaultRegionPlacementColor(sandboxFavoriteColors));
+                                                    setStep('choose_region_color');
                                                     return;
                                                 }
                                                 setStep('choose_item_type');
@@ -226,6 +261,20 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                         </>
                     ) : null}
 
+                    {step === 'choose_region_color' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                Region color
+                            </p>
+                            <SandboxRegionColorPicker
+                                value={selectedRegionColor}
+                                favoriteColors={sandboxFavoriteColors}
+                                onChange={setSelectedRegionColor}
+                                onConfirm={color => onComplete(placeRegionInteraction(cell, color))}
+                            />
+                        </>
+                    ) : null}
+
                     {step === 'choose_project' ? (
                         <>
                             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Project</p>
@@ -255,6 +304,27 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                     {step === 'choose_workflow' ? (
                         <>
                             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Workflow brain</p>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-slate-500">Initial facing</span>
+                                <div className="flex gap-1" role="group" aria-label="Initial facing">
+                                    {SANDBOX_FACING_VALUES.map(facing => (
+                                        <button
+                                            key={facing}
+                                            type="button"
+                                            aria-label={`Face ${facing}`}
+                                            aria-pressed={selectedFacing === facing}
+                                            onClick={() => setSelectedFacing(facing)}
+                                            className={`px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                                                selectedFacing === facing
+                                                    ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                                                    : 'border-slate-200 dark:border-slate-600 text-slate-500 hover:text-sky-600 dark:hover:text-sky-400'
+                                            }`}
+                                        >
+                                            {facing}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                             <div
                                 role="group"
                                 aria-label="Sort workflows"
@@ -298,7 +368,13 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                             <button
                                                 type="button"
                                                 className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500"
-                                                onClick={() => onComplete(placeCreatureInteraction(cell, wf.id))}
+                                                onClick={() =>
+                                                    onComplete(
+                                                        placeCreatureInteraction(cell, wf.id, {
+                                                            facing: selectedFacing,
+                                                        }),
+                                                    )
+                                                }
                                             >
                                                 <span className="block text-sm font-medium">{wf.name}</span>
                                             </button>

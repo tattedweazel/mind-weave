@@ -1,4 +1,5 @@
-import type { SandboxItemJson } from '../domain/sandbox/types';
+import type { RegionTriggerMode, SandboxItemJson } from '../domain/sandbox/types';
+import { DEFAULT_REGION_TRIGGER } from '../domain/sandbox/types';
 
 /** Matches backend `DEFAULT_FOOD_ENERGY` in sandbox/constants.py */
 export const SANDBOX_DEFAULT_FOOD_ENERGY = 48;
@@ -14,6 +15,13 @@ export interface SandboxItemEditableField {
     description?: string;
 }
 
+export const REGION_TRIGGER_MODES: { value: RegionTriggerMode; label: string }[] = [
+    { value: 'enter', label: 'Enter — when a creature moves onto this cell' },
+    { value: 'exit', label: 'Exit — when a creature leaves this cell' },
+    { value: 'while_inside', label: 'While inside — every tick while overlapping' },
+    { value: 'on_enter_once', label: 'On enter once — first entry per creature per session' },
+];
+
 export const SANDBOX_ITEM_INSPECTOR_FIELDS: Record<string, SandboxItemEditableField[]> = {
     food: [
         {
@@ -25,6 +33,7 @@ export const SANDBOX_ITEM_INSPECTOR_FIELDS: Record<string, SandboxItemEditableFi
         },
     ],
     wall: [],
+    region: [],
 };
 
 export function getEditableItemFields(itemType: string): SandboxItemEditableField[] {
@@ -62,4 +71,24 @@ export function isEditableItemFieldKey(
     key: string,
 ): key is SandboxItemEditableFieldKey {
     return getEditableItemFields(itemType).some(field => field.key === key);
+}
+
+export function regionTriggerFromItem(item: SandboxItemJson) {
+    return item.trigger ?? { ...DEFAULT_REGION_TRIGGER };
+}
+
+export function parseRegionTriggerInputs(raw: string): Record<string, unknown> | null {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+        return {};
+    }
+    try {
+        const parsed: unknown = JSON.parse(trimmed);
+        if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return null;
+        }
+        return parsed as Record<string, unknown>;
+    } catch {
+        return null;
+    }
 }
