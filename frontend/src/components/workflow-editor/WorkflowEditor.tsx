@@ -1997,6 +1997,13 @@ export const WorkflowEditor: React.FC<Props> = ({
                 position,
                 data: { label: extra.label ?? 'Get inventory' },
             }]);
+        } else if (type === 'sandboxPromptUserAction') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxPromptUserAction',
+                position,
+                data: { label: extra.label ?? 'Prompt for User Action' },
+            }]);
         } else if (type === 'intToString') {
             setNodes(ns => [...ns, { id, type: 'intToString', position, data: { label: extra.label ?? 'Int to String' } }]);
         } else if (type === 'listItemByIndex') {

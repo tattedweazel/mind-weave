@@ -314,3 +314,168 @@ def test_sandbox_resize_grid_rejects_when_not_paused(client: TestClient, db_sess
         json={"width": 10, "height": 10, "state_version": v0},
     )
     assert r2.status_code == 422
+
+
+def _prompt_user_action_graph(*, u_id: str = "n_prompt", stop_id: str = "n_stop"):
+    return {
+        "nodes": [
+            {
+                "id": "start",
+                "kind": "start",
+                "label": "Start",
+                "data": {
+                    "required_inputs": [
+                        {"key": "sandbox_tick", "type": "dictionary", "value": None},
+                    ],
+                },
+                "position": {"x": 0, "y": 0},
+            },
+            {
+                "id": u_id,
+                "kind": "utility",
+                "utility_type": "sandbox_prompt_user_action",
+                "label": "Prompt for User Action",
+                "data": {},
+                "position": {"x": 200, "y": 0},
+            },
+            {
+                "id": stop_id,
+                "kind": "stop",
+                "label": "Stop",
+                "data": {"required_outputs": [{"key": "output", "type": "dictionary"}]},
+                "position": {"x": 400, "y": 0},
+            },
+        ],
+        "edges": [
+            {
+                "source": "start",
+                "target": u_id,
+                "source_handle": "sandbox_tick",
+                "target_handle": "input",
+            },
+            {
+                "source": u_id,
+                "target": stop_id,
+                "source_handle": "output",
+                "target_handle": "output",
+            },
+        ],
+    }
+
+
+def _board_with_prompt_creature(client: TestClient, workflow_id: str) -> str:
+    r = client.post(
+        "/api/v1/sandbox/boards",
+        json={
+            "name": "Prompt brain board",
+            "definition": BoardDefinition(
+                grid=WorldGrid(width=8, height=8),
+                creatures=[
+                    BoardCreaturePlacement(
+                        id="c-prompt",
+                        workflow_id=workflow_id,
+                        position=GridCell(x=4, y=4),
+                    )
+                ],
+            ).model_dump(mode="json"),
+        },
+    )
+    assert r.status_code == 200
+    return r.json()["id"]
+
+
+def test_sandbox_tick_with_creature_user_actions(client: TestClient):
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "sandbox prompt user action session",
+            "graph": _prompt_user_action_graph(),
+        },
+    )
+    assert workflow_res.status_code == 201
+    wf_id = workflow_res.json()["id"]
+
+    board_id = _board_with_prompt_creature(client, wf_id)
+    session_res = client.post("/api/v1/sandbox/sessions", json={"board_id": board_id})
+    assert session_res.status_code == 200
+    doc_id = session_res.json()["document_id"]
+    v0 = session_res.json()["envelope"]["state_version"]
+    creature_id = session_res.json()["envelope"]["sandbox"]["creatures"][0]["id"]
+    assert creature_id == "c-prompt"
+
+    tick_res = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/tick",
+        json={
+            "interactions": [],
+            "state_version": v0,
+            "creature_user_actions": {creature_id: {"action": "move_forward"}},
+        },
+    )
+    assert tick_res.status_code == 200, tick_res.text
+    body = tick_res.json()
+    env = body["envelope"]
+    assert env["state_version"] == v0 + 1
+    assert env["sandbox"]["creatures"][0]["position"]["y"] == 3
+    runs = body.get("last_workflow_runs") or {}
+    assert runs[creature_id]["status"] == "ok"
+    assert env.get("last_errors", {}).get(creature_id) is None
+
+
+def test_sandbox_tick_creature_user_actions_place_item(client: TestClient):
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "sandbox prompt place item session",
+            "graph": _prompt_user_action_graph(),
+        },
+    )
+    assert workflow_res.status_code == 201
+    wf_id = workflow_res.json()["id"]
+
+    board_id = _board_with_prompt_creature(client, wf_id)
+    session_res = client.post("/api/v1/sandbox/sessions", json={"board_id": board_id})
+    doc_id = session_res.json()["document_id"]
+    v0 = session_res.json()["envelope"]["state_version"]
+    creature_id = session_res.json()["envelope"]["sandbox"]["creatures"][0]["id"]
+
+    tick_res = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/tick",
+        json={
+            "interactions": [],
+            "state_version": v0,
+            "creature_user_actions": {
+                creature_id: {"action": "place_item", "item_type": "food"},
+            },
+        },
+    )
+    assert tick_res.status_code == 200, tick_res.text
+    runs = tick_res.json().get("last_workflow_runs") or {}
+    assert runs[creature_id]["status"] == "ok"
+
+
+def test_sandbox_tick_prompt_brain_missing_user_action_records_error(client: TestClient):
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "sandbox prompt missing action session",
+            "graph": _prompt_user_action_graph(),
+        },
+    )
+    assert workflow_res.status_code == 201
+    wf_id = workflow_res.json()["id"]
+
+    board_id = _board_with_prompt_creature(client, wf_id)
+    session_res = client.post("/api/v1/sandbox/sessions", json={"board_id": board_id})
+    doc_id = session_res.json()["document_id"]
+    v0 = session_res.json()["envelope"]["state_version"]
+    creature_id = session_res.json()["envelope"]["sandbox"]["creatures"][0]["id"]
+
+    tick_res = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/tick",
+        json={"interactions": [], "state_version": v0},
+    )
+    assert tick_res.status_code == 200, tick_res.text
+    env = tick_res.json()["envelope"]
+    assert env.get("last_errors", {}).get(creature_id) is not None
+    runs = tick_res.json().get("last_workflow_runs") or {}
+    assert runs[creature_id] is None

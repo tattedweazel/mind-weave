@@ -921,6 +921,12 @@ const SandboxNavigationActionNodeComp: React.FC<{
     );
 };
 
+const SandboxPromptUserActionNodeComp: React.FC<{
+    data: { label: string; isRunning?: boolean; tickHasValue?: boolean; paletteColors?: Record<string, string> };
+}> = props => (
+    <SandboxTickInputUtilityNodeComp {...props} paletteKey="sandbox_prompt_user_action" outputType="dictionary" />
+);
+
 const SandboxMoveForwardNodeComp: React.FC<{
     data: { label: string; isRunning?: boolean; reasonHasValue?: boolean; paletteColors?: Record<string, string> };
 }> = props => <SandboxNavigationActionNodeComp {...props} paletteKey="sandbox_move_forward" />;
@@ -2378,6 +2384,7 @@ export const nodeTypes = {
     sandboxPickUpItem: SandboxPickUpItemNodeComp,
     sandboxPlaceItem: SandboxPlaceItemNodeComp,
     sandboxGetInventory: SandboxGetInventoryNodeComp,
+    sandboxPromptUserAction: SandboxPromptUserActionNodeComp,
     dictionaryValueByKey: DictionaryValueByKeyNodeComp,
     dictionarySetValueByKey: DictionarySetValueByKeyNodeComp,
     readDocumentProperty: ReadDocumentPropertyNodeComp,

@@ -68,6 +68,7 @@ const FLOW_TYPE_LABELS: Record<string, string> = {
     sandboxGetPosition: 'Get position',
     sandboxGetFacing: 'Get facing',
     sandboxGetNearby: 'Get nearby',
+    sandboxPromptUserAction: 'Prompt for User Action',
     sandboxMoveForward: 'Move forward',
     sandboxTurnLeft: 'Turn left',
     sandboxTurnRight: 'Turn right',

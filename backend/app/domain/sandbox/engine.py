@@ -209,8 +209,13 @@ def _pop_inventory_entry(
     creature: CreatureState,
     *,
     item_type: PlaceItemFilterType | None = None,
+    inventory_index: int | None = None,
 ) -> InventoryItem | None:
     if not creature.inventory:
+        return None
+    if inventory_index is not None:
+        if 0 <= inventory_index < len(creature.inventory):
+            return creature.inventory.pop(inventory_index)
         return None
     if item_type is None:
         return creature.inventory.pop(0)
@@ -503,7 +508,11 @@ class SandboxEngine:
 
         if act == "place_item":
             fwd = _forward_cell(creature, w, h)
-            entry = _pop_inventory_entry(creature, item_type=dec.item_type)
+            entry = _pop_inventory_entry(
+                creature,
+                item_type=dec.item_type,
+                inventory_index=dec.inventory_index,
+            )
             if (
                 fwd is not None
                 and entry is not None

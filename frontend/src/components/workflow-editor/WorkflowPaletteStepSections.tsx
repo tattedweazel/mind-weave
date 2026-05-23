@@ -30,6 +30,7 @@ import {
     FileText,
     Frame,
     GitBranch,
+    Hand,
     Hash,
     Image,
     ImagePlus,
@@ -46,6 +47,7 @@ import {
     Minus,
     MoveUp,
     Octagon,
+    Package,
     Percent,
     Plus,
     Pause,
@@ -159,6 +161,14 @@ export function paletteStepIcon(nodeType: string): React.ReactNode {
             return <RotateCcw size={size} />;
         case 'sandboxIdle':
             return <Pause size={size} />;
+        case 'sandboxPickUpItem':
+            return <Hand size={size} />;
+        case 'sandboxPlaceItem':
+            return <ArrowDownToLine size={size} />;
+        case 'sandboxGetInventory':
+            return <Package size={size} />;
+        case 'sandboxPromptUserAction':
+            return <Target size={size} />;
         case 'intToString':
             return <ArrowLeftRight size={size} />;
         case 'listItemByIndex':

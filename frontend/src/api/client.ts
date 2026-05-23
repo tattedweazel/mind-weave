@@ -784,7 +784,11 @@ export class ApiClient {
 
     static tickSandbox(
         documentId: string,
-        body: { interactions: unknown[]; state_version: number },
+        body: {
+            interactions: unknown[];
+            state_version: number;
+            creature_user_actions?: Record<string, { action: string; item_type?: string; inventory_index?: number }>;
+        },
     ): Promise<SandboxTickResponseJson> {
         return this.request(`/sandbox/sessions/${documentId}/tick`, {
             method: 'POST',

@@ -27,6 +27,10 @@ class SandboxSessionCreate(BaseModel):
 class SandboxTickBody(BaseModel):
     interactions: List[dict[str, Any]] = Field(default_factory=list)
     state_version: int = Field(ge=0)
+    creature_user_actions: Optional[dict[str, dict[str, Any]]] = Field(
+        default=None,
+        description="Per-creature DecisionIntent payloads for sandbox_prompt_user_action brains",
+    )
 
 
 class SandboxApplyInteractionsBody(BaseModel):
@@ -292,6 +296,7 @@ async def tick_sandbox_session(
             document_id,
             interactions=body.interactions,
             client_version=body.state_version,
+            creature_user_actions=body.creature_user_actions,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

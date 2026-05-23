@@ -60,6 +60,7 @@ from app.domain.schemas import (
     SandboxIdleUtilityNode,
     SandboxPickUpItemUtilityNode,
     SandboxPlaceItemUtilityNode,
+    SandboxPromptUserActionUtilityNode,
     SandboxMoveForwardUtilityNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -201,6 +202,10 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
             return executor._resolve_sandbox_place_item_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, SandboxGetInventoryUtilityNode):
             return executor._resolve_sandbox_get_inventory_node(node, ctx.upstream)
+        if isinstance(node, SandboxPromptUserActionUtilityNode):
+            return executor._resolve_sandbox_prompt_user_action_node(
+                node, ctx.upstream, overrides
+            )
         if isinstance(node, ListItemByIndexUtilityNode):
             return executor._resolve_list_item_by_index_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, DictionaryValueByKeyUtilityNode):

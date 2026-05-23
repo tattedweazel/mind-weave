@@ -1,5 +1,12 @@
 /** Aligned with ``DecisionAction`` on the backend sandbox schema. */
-export const SANDBOX_DECISION_ACTIONS = ['move_forward', 'turn_left', 'turn_right', 'idle'] as const;
+export const SANDBOX_DECISION_ACTIONS = [
+    'move_forward',
+    'turn_left',
+    'turn_right',
+    'idle',
+    'pick_up_item',
+    'place_item',
+] as const;
 
 export type SandboxDecisionAction = (typeof SANDBOX_DECISION_ACTIONS)[number];
 

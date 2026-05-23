@@ -233,6 +233,12 @@ export const WORKFLOW_PALETTE_SANDBOX_UTILITY_ITEMS: readonly WorkflowPaletteSte
         extra: { label: 'Get inventory' },
         paletteType: 'sandbox_get_inventory',
     },
+    {
+        type: 'sandboxPromptUserAction',
+        label: 'Prompt for User Action',
+        extra: { label: 'Prompt for User Action' },
+        paletteType: 'sandbox_prompt_user_action',
+    },
 ];
 
 export const WORKFLOW_PALETTE_CONTROL_ITEMS: readonly WorkflowPaletteStepItem[] = [

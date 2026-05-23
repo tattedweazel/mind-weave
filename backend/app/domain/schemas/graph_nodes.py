@@ -350,6 +350,17 @@ class SandboxGetInventoryUtilityNode(BaseModel):
     position: Dict[str, float] = Field(default_factory=dict)
 
 
+class SandboxPromptUserActionUtilityNode(BaseModel):
+    """Emit a ``DecisionIntent`` from a simulation user action (``sandbox_user_action`` run override)."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_prompt_user_action"] = "sandbox_prompt_user_action"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
 class IntToStringUtilityNode(BaseModel):
     """A utility node that converts an integer input to its decimal string form."""
 
@@ -993,6 +1004,7 @@ GraphNode = Union[
     SandboxPickUpItemUtilityNode,
     SandboxPlaceItemUtilityNode,
     SandboxGetInventoryUtilityNode,
+    SandboxPromptUserActionUtilityNode,
     IntToStringUtilityNode,
     ListItemByIndexUtilityNode,
     DictionaryValueByKeyUtilityNode,

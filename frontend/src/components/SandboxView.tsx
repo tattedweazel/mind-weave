@@ -17,7 +17,7 @@ import {
 import { ApiClient } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import type { WorkflowDefinition, WorkflowDefinitionListItem, WorkflowProject, WorkflowRunResult } from '../api/types';
-import type { BoardDefinitionJson, SandboxBoardJson, SandboxEnvelopeJson } from '../domain/sandbox/types';
+import type { BoardDefinitionJson, SandboxBoardJson, SandboxCreatureJson, SandboxEnvelopeJson } from '../domain/sandbox/types';
 import { SANDBOX_FACING_VALUES, sandboxStateFromBoardDefinition } from '../domain/sandbox/types';
 import {
     projectsWithCreatureBrains,
@@ -40,13 +40,19 @@ import {
 import { PhaserSandboxAdapter } from '../sandbox/runtime/phaserSandboxAdapter';
 import type { SandboxGridCellJson } from '../domain/sandbox/types';
 import type { SandboxCellInteraction } from '../sandbox/sandboxCellInteractions';
-import { collectUserMessagesFromNodeResults } from '../sandbox/userMessageFromRun';
+import {
+    mergeCollectedUserActions,
+    planCreatureUserActionPrompts,
+} from '../sandbox/sandboxTickUserActions';
+import type { CreatureUserActionsMap, SandboxCreatureUserAction } from '../sandbox/sandboxPromptUserAction';
 import { SANDBOX_DECISION_ERROR_HINT, shouldShowSandboxDecisionHint } from '../sandbox/sandboxLastErrorHint';
 import {
     mergeSandboxWorkflowRuns,
     sandboxTickTranscriptSummary,
 } from '../sandbox/sandboxWorkflowRunMerge';
+import { collectUserMessagesFromNodeResults } from '../sandbox/userMessageFromRun';
 import { SandboxCellActionModal } from './SandboxCellActionModal';
+import { SandboxUserActionModal } from './sandbox/SandboxUserActionModal';
 import { SandboxCreatureInventorySection } from './sandbox/SandboxCreatureInventorySection';
 import { SandboxItemInspectorSection } from './sandbox/SandboxItemInspectorSection';
 import { SandboxRegionInspectorSection } from './sandbox/SandboxRegionInspectorSection';
@@ -150,6 +156,7 @@ export const SandboxView: React.FC = () => {
     const [gridWidthInput, setGridWidthInput] = useState(SANDBOX_GRID_DEFAULT_WIDTH);
     const [gridHeightInput, setGridHeightInput] = useState(SANDBOX_GRID_DEFAULT_HEIGHT);
     const [gridResizeError, setGridResizeError] = useState<string | null>(null);
+    const [tickError, setTickError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
     const [workflows, setWorkflows] = useState<WorkflowDefinitionListItem[]>([]);
@@ -198,14 +205,21 @@ export const SandboxView: React.FC = () => {
 
     const [cellActionCell, setCellActionCell] = useState<SandboxGridCellJson | null>(null);
     const [cellActionNonce, setCellActionNonce] = useState(0);
+    const [userActionPrompt, setUserActionPrompt] = useState<{
+        creatures: SandboxCreatureJson[];
+        collected: CreatureUserActionsMap;
+        index: number;
+        pendingInteractions: unknown[];
+    } | null>(null);
     const [inspectedCell, setInspectedCell] = useState<SandboxGridCellJson | null>(null);
     const restorePausedAfterCellActionRef = useRef(true);
+    const restorePausedAfterUserActionRef = useRef(true);
     const busyRef = useRef(busy);
     busyRef.current = busy;
     const pausedRef = useRef(paused);
     pausedRef.current = paused;
     const cellActionModalOpenRef = useRef(false);
-    cellActionModalOpenRef.current = cellActionCell !== null;
+    cellActionModalOpenRef.current = cellActionCell !== null || userActionPrompt !== null;
     const mainTabRef = useRef(mainTab);
     mainTabRef.current = mainTab;
 
@@ -438,15 +452,22 @@ export const SandboxView: React.FC = () => {
     }, [mainTab, documentId, gridWidthInput, gridHeightInput]);
 
     const runTick = useCallback(
-        async (interactions: unknown[]) => {
+        async (
+            interactions: unknown[],
+            creatureUserActions?: Record<string, { action: string; item_type?: string }>,
+        ) => {
             const doc = documentId;
             const env = envelopeRef.current;
             if (!doc || !env) return;
             setBusy(true);
+            setTickError(null);
             try {
                 const res = await ApiClient.tickSandbox(doc, {
                     interactions,
                     state_version: env.state_version,
+                    ...(creatureUserActions && Object.keys(creatureUserActions).length > 0
+                        ? { creature_user_actions: creatureUserActions }
+                        : {}),
                 });
                 setEnvelope(res.envelope);
                 setLastWorkflowRuns(prev =>
@@ -480,16 +501,18 @@ export const SandboxView: React.FC = () => {
                     const runSummary = sandboxTickTranscriptSummary(res.last_workflow_runs);
                     return [...prev, `Tick ${tick}: ${runSummary}`].slice(-120);
                 });
+                setTickError(null);
             } catch (e) {
                 if (isSandboxStateVersionMismatchError(e)) {
                     try {
                         const refreshed = await ApiClient.getSandboxSession(doc);
                         setEnvelope(refreshed.envelope);
+                        setTickError(null);
                     } catch (refreshError) {
                         setLoadError(refreshError instanceof Error ? refreshError.message : String(refreshError));
                     }
                 } else {
-                    setLoadError(e instanceof Error ? e.message : String(e));
+                    setTickError(e instanceof Error ? e.message : String(e));
                 }
             } finally {
                 setBusy(false);
@@ -497,6 +520,66 @@ export const SandboxView: React.FC = () => {
         },
         [documentId, selectedCreatureId],
     );
+
+    const runTickWithUserActions = useCallback(
+        async (interactions: unknown[]) => {
+            const env = envelopeRef.current;
+            if (!env || mainTabRef.current !== 'simulation') {
+                await runTick(interactions);
+                return;
+            }
+            setBusy(true);
+            setTickError(null);
+            try {
+                const { needing } = await planCreatureUserActionPrompts(env.sandbox.creatures);
+                if (needing.length === 0) {
+                    await runTick(interactions);
+                    return;
+                }
+                restorePausedAfterUserActionRef.current = pausedRef.current;
+                setPaused(true);
+                setUserActionPrompt({
+                    creatures: needing,
+                    collected: {},
+                    index: 0,
+                    pendingInteractions: interactions,
+                });
+            } catch (e) {
+                setTickError(e instanceof Error ? e.message : String(e));
+            } finally {
+                setBusy(false);
+            }
+        },
+        [runTick],
+    );
+
+    const handleUserActionConfirm = useCallback(
+        (action: SandboxCreatureUserAction) => {
+            setUserActionPrompt(prev => {
+                if (!prev) return null;
+                const creature = prev.creatures[prev.index];
+                const collected = { ...prev.collected, [creature.id]: action };
+                const nextIndex = prev.index + 1;
+                if (nextIndex >= prev.creatures.length) {
+                    const restorePaused = restorePausedAfterUserActionRef.current;
+                    void runTick(
+                        prev.pendingInteractions,
+                        mergeCollectedUserActions(collected),
+                    ).finally(() => {
+                        setPaused(restorePaused);
+                    });
+                    return null;
+                }
+                return { ...prev, collected, index: nextIndex };
+            });
+        },
+        [runTick],
+    );
+
+    const handleUserActionDismiss = useCallback(() => {
+        setUserActionPrompt(null);
+        setPaused(true);
+    }, []);
 
     const startSessionFromBoard = useCallback(async (boardId: string) => {
         setBusy(true);
@@ -801,10 +884,10 @@ export const SandboxView: React.FC = () => {
         if (mainTab !== 'simulation' || paused || !documentId) return;
         const id = window.setInterval(() => {
             if (busyRef.current) return;
-            void runTick([]);
+            void runTickWithUserActions([]);
         }, tickRateMs);
         return () => clearInterval(id);
-    }, [mainTab, paused, tickRateMs, documentId, runTick]);
+    }, [mainTab, paused, tickRateMs, documentId, runTickWithUserActions]);
 
     const builderPreviewState = React.useMemo(
         () => sandboxStateFromBoardDefinition(localBoardDef),
@@ -1014,12 +1097,17 @@ export const SandboxView: React.FC = () => {
                             <button
                                 type="button"
                                 disabled={busy}
-                                onClick={() => void runTick([])}
+                                onClick={() => void runTickWithUserActions([])}
                                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs"
                             >
                                 <StepForward size={14} />
                                 Step
                             </button>
+                            {tickError ? (
+                                <p className="text-xs text-mw-error max-w-xs truncate" role="alert" title={tickError}>
+                                    {tickError}
+                                </p>
+                            ) : null}
                             {paused ? (
                                 <>
                                     <button
@@ -1643,6 +1731,16 @@ export const SandboxView: React.FC = () => {
                     </div>
                 </div>
             </div>
+            {userActionPrompt && envelope ? (
+                <SandboxUserActionModal
+                    creature={userActionPrompt.creatures[userActionPrompt.index]}
+                    sandboxState={envelope.sandbox}
+                    creatureIndex={userActionPrompt.index}
+                    creatureTotal={userActionPrompt.creatures.length}
+                    onConfirm={handleUserActionConfirm}
+                    onDismiss={handleUserActionDismiss}
+                />
+            ) : null}
             {cellActionCell ? (
                 <SandboxCellActionModal
                     key={`${cellActionCell.x}-${cellActionCell.y}-${cellActionNonce}`}

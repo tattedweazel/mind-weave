@@ -135,6 +135,7 @@ class DecisionIntent(BaseModel):
     action: DecisionAction
     reason: Optional[str] = None
     item_type: Optional[PlaceItemFilterType] = None
+    inventory_index: Optional[int] = Field(default=None, ge=0)
 
 
 class CreatureState(BaseModel):

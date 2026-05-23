@@ -204,6 +204,9 @@
         "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "item_type": {
           "anyOf": [{ "$ref": "#/$defs/PlaceItemFilterType" }, { "type": "null" }]
+        },
+        "inventory_index": {
+          "anyOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
         }
       }
     },

@@ -17,6 +17,7 @@ from app.domain.sandbox.engine import (
     resize_world_grid,
     sandbox_state_from_board,
 )
+from app.domain.sandbox.workflow_bridge import graph_requires_simulation_user_action
 from app.domain.schemas.documents import DocumentCreate
 from app.domain.schemas.sandbox import BoardDefinition, SandboxDocumentEnvelope, SandboxPlaybackState
 from app.domain.schemas.workflow_run import WorkflowRunResult
@@ -109,6 +110,7 @@ class SandboxService:
         *,
         interactions: List[dict[str, Any]],
         client_version: int,
+        creature_user_actions: Optional[Dict[str, dict[str, Any]]] = None,
     ) -> Tuple[SandboxDocumentEnvelope, bool, Dict[str, Optional[WorkflowRunResult]]]:
         doc = self._docs.get_document(document_id)
         if not doc or doc.user_id != self.user_id:
@@ -128,6 +130,7 @@ class SandboxService:
         wf_svc = WorkflowDefinitionService(self.session, self.user_id)
         executor = WorkflowExecutor(self.session, self.user_id)
         last_errors: Dict[str, Optional[str]] = dict(env.last_errors or {})
+        user_actions = creature_user_actions or {}
 
         for creature in st.creatures:
             wf = wf_svc.get_workflow(uuid.UUID(creature.workflow_id))
@@ -136,10 +139,27 @@ class SandboxService:
                 last_runs[creature.id] = None
                 continue
 
+            graph_nodes = wf.graph.get("nodes") or []
+            requires_user_action = graph_requires_simulation_user_action(graph_nodes)
+            creature_action = user_actions.get(creature.id)
+
+            if requires_user_action and not isinstance(creature_action, dict):
+                last_errors[creature.id] = (
+                    "sandbox_prompt_user_action requires a simulation user action for this tick"
+                )
+                last_runs[creature.id] = None
+                continue
+
             tick_in = eng.build_tick_input(st, creature)
+            input_overrides: dict[str, Any] = {
+                "sandbox_tick": tick_in.model_dump(mode="json"),
+            }
+            if isinstance(creature_action, dict):
+                input_overrides["sandbox_user_action"] = creature_action
+
             run_result = await executor.run(
                 wf,
-                input_overrides={"sandbox_tick": tick_in.model_dump(mode="json")},
+                input_overrides=input_overrides,
             )
             last_runs[creature.id] = run_result
             dec, perr = eng.parse_workflow_decision(run_result, wf.graph)

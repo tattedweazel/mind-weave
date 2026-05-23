@@ -55,6 +55,7 @@ from app.domain.schemas import (
     ReadDocumentPropertyUtilityNode,
     SandboxGetFacingUtilityNode,
     SandboxGetInventoryUtilityNode,
+    SandboxPromptUserActionUtilityNode,
     SandboxGetNearbyUtilityNode,
     SandboxGetPositionUtilityNode,
     SandboxIdleUtilityNode,
@@ -227,6 +228,8 @@ def _parse_node(raw: Dict[str, Any]):
             return SandboxPlaceItemUtilityNode(**raw)
         if utype == "sandbox_get_inventory":
             return SandboxGetInventoryUtilityNode(**raw)
+        if utype == "sandbox_prompt_user_action":
+            return SandboxPromptUserActionUtilityNode(**raw)
         if utype == "int_to_string":
             return IntToStringUtilityNode(**raw)
         if utype == "list_item_by_index":

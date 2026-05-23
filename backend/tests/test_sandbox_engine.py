@@ -315,3 +315,23 @@ def test_place_item_filters_by_type():
     assert ball.color == "#111111"
     assert len(st.creatures[0].inventory) == 1
     assert st.creatures[0].inventory[0].type == "food"
+
+
+def test_place_item_by_inventory_index():
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.creatures[0].inventory = [
+        InventoryItem(type="food", energy=10),
+        InventoryItem(type="ball", color="#222222"),
+    ]
+    eng = SandboxEngine()
+    eng.apply_decision(
+        st,
+        st.creatures[0],
+        DecisionIntent(action="place_item", item_type="food", inventory_index=0),
+    )
+    food = next(it for it in st.world.items if it.type == "food")
+    assert food.position == GridCell(x=2, y=1)
+    assert food.energy == 10
+    assert len(st.creatures[0].inventory) == 1
+    assert st.creatures[0].inventory[0].type == "ball"
+    assert st.creatures[0].inventory[0].color == "#222222"

@@ -17,6 +17,7 @@ from app.domain.schemas import (
     SandboxMoveForwardUtilityNode,
     SandboxPickUpItemUtilityNode,
     SandboxPlaceItemUtilityNode,
+    SandboxPromptUserActionUtilityNode,
     SandboxTickPrimitiveNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -301,4 +302,73 @@ class SandboxNodeResolverMixin:
             "status": "ok",
             "output": ListNodeOutput(node_id=node.id, data=entries),
             "details": {"resolved_inputs": {"count": len(entries)}},
+        }
+
+    def _resolve_sandbox_prompt_user_action_node(
+        self: WorkflowExecutorResolverMixin,
+        node: SandboxPromptUserActionUtilityNode,
+        upstream: list[NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        from app.domain.sandbox.query import navigation_action_dict
+
+        raw_action = input_overrides.get("sandbox_user_action")
+        if not isinstance(raw_action, dict):
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_prompt_user_action requires a simulation user action for this tick",
+                {"sandbox_user_action": raw_action},
+            )
+
+        action_raw = raw_action.get("action")
+        if not isinstance(action_raw, str) or not action_raw.strip():
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_prompt_user_action: action must be a non-empty string",
+                {"sandbox_user_action": raw_action},
+            )
+        action = action_raw.strip()
+
+        item_type = None
+        raw_item_type = raw_action.get("item_type")
+        if raw_item_type in ("ball", "food"):
+            item_type = raw_item_type
+
+        inventory_index = None
+        raw_inventory_index = raw_action.get("inventory_index")
+        if isinstance(raw_inventory_index, int) and raw_inventory_index >= 0:
+            inventory_index = raw_inventory_index
+
+        if action == "place_item" and item_type:
+            if inventory_index is not None:
+                auto_reason = f"user: place_item:{item_type}@{inventory_index}"
+            else:
+                auto_reason = f"user: place_item:{item_type}"
+        else:
+            auto_reason = f"user: {action}"
+
+        try:
+            data = navigation_action_dict(
+                action,
+                auto_reason,
+                item_type=item_type,
+                inventory_index=inventory_index,
+            )
+        except Exception as exc:
+            return _executor_mod()._error_with_resolved_inputs(
+                f"sandbox_prompt_user_action: {exc}",
+                {"sandbox_user_action": raw_action},
+            )
+
+        tick_raw = _executor_mod()._sandbox_tick_dict_from_upstream(upstream)
+        details: dict[str, Any] = {
+            "resolved_inputs": data,
+            "user_action_source": "simulation_prompt",
+            "auto_reason": auto_reason,
+        }
+        if tick_raw is not None:
+            details["sandbox_tick"] = tick_raw
+
+        return {
+            "status": "ok",
+            "output": DictionaryNodeOutput(node_id=node.id, data=data),
+            "details": details,
         }

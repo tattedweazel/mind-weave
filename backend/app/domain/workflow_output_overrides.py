@@ -78,6 +78,7 @@ from app.domain.schemas import (
     SandboxIdleUtilityNode,
     SandboxPickUpItemUtilityNode,
     SandboxPlaceItemUtilityNode,
+    SandboxPromptUserActionUtilityNode,
     SandboxMoveForwardUtilityNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -402,6 +403,7 @@ def coerce_raw_to_node_output(
             SandboxIdleUtilityNode,
             SandboxPickUpItemUtilityNode,
             SandboxPlaceItemUtilityNode,
+            SandboxPromptUserActionUtilityNode,
         ),
     ):
         if not isinstance(raw, dict):

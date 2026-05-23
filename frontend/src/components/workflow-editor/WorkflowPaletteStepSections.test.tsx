@@ -136,4 +136,19 @@ describe('WorkflowPaletteStepSections', () => {
             expect(container.querySelector('svg')).not.toBeNull();
         }
     });
+
+    it('renders icons for sandbox inventory and user-action utility palette types', () => {
+        const sandboxTypes = [
+            'sandboxPickUpItem',
+            'sandboxPlaceItem',
+            'sandboxGetInventory',
+            'sandboxPromptUserAction',
+        ] as const;
+        for (const type of sandboxTypes) {
+            const icon = paletteStepIcon(type);
+            expect(icon).not.toBeNull();
+            const { container } = render(<>{icon}</>);
+            expect(container.querySelector('svg')).not.toBeNull();
+        }
+    });
 });

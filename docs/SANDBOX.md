@@ -46,9 +46,44 @@ Navigation-focused utilities in the workflow editor (**Sandbox Utilities** secti
 | **Turn left** / **Turn right** | Emits turn action dict for Stop |
 | **Idle** | Emits `{action: "idle"}` for Stop |
 | **Pick up item** | Emits `{action: "pick_up_item"}` — picks up **ball** or **food** in the **forward adjacent** cell into inventory |
-| **Place item** | Emits `{action: "place_item", item_type?: "ball" \| "food"}` — places first inventory entry (or first matching `item_type`) on the **forward adjacent** cell |
+| **Place item** | Emits `{action: "place_item", item_type?: "ball" \| "food", inventory_index?: number}` — places the chosen inventory entry (by index, or first / first matching `item_type`) on the **forward adjacent** cell |
+| **Prompt for User Action** | Emits a `DecisionIntent` chosen in the **Simulation** remote-control modal (see below) |
 
 Wire one action node (or a conditional that picks one) to **Stop** `output` (dictionary).
+
+### Manual control brain (Prompt for User Action)
+
+Example graph for testing:
+
+**Start** (`sandbox_tick`) → **Prompt for User Action** → **Stop** (`output`, dictionary)
+
+On each **Step** or **Play** tick, the SPA **auto-pauses**, opens a **remote-control** modal per creature (in creature array order) whose brain includes this node, then submits all choices in one tick request.
+
+| Simulation UI | Behavior |
+|---------------|----------|
+| D-pad | **Forward**, **Turn left**, **Turn right**, **Idle** |
+| Secondary | **Pick up item** only when forward cell is **ball** or **food**; **Place item** only when the creature holds at least one item — opens **Inventory** selection (choose a held item; **Confirm** requires an empty forward cell) |
+| Sensory probes | **Nearby**, **Position**, **Facing**, **Inventory** — client-side reads from the current envelope (no extra HTTP). One structured readout at a time (latest click replaces the previous): compass ring for **Nearby**, coordinate rows for **Position**, compass badge for **Facing**, inventory cards for **Inventory** (balls show a colored **Ball** label and matching swatch; food shows **Food** with a separate energy badge; selectable rows when **Place item** is active). Optional collapsible **Raw JSON** for debugging. Re-click the active probe to collapse; cached results restore on re-open for the modal session. |
+| Cancel | Aborts the tick; playback stays paused |
+| Confirm | Submits the tick; **Play** resumes if it was active before the modal opened (**Step** stays paused) |
+
+**Tick body** (optional):
+
+```json
+{
+  "interactions": [],
+  "state_version": 1,
+  "creature_user_actions": {
+    "creature-id": {
+      "action": "place_item",
+      "item_type": "ball",
+      "inventory_index": 0
+    }
+  }
+}
+```
+
+The executor receives `sandbox_user_action` in `input_overrides` for that creature’s brain run. `reason` is auto-filled (e.g. `user: move_forward`, `user: place_item:ball@0`) and appears in **Run Logs**. Brains without this node ignore `creature_user_actions`. Brains with the node but no entry for that creature record `last_errors` and skip applying a decision for that creature.
 
 Compass: **North = decreasing y**, East = +x. Default spawn facing: **North**.
 
@@ -85,7 +120,7 @@ Base: `/api/v1/sandbox/`
 | `POST` | `/boards/{id}/duplicate` | Duplicate board |
 | `POST` | `/sessions` | Create session (`board_id` optional → Empty Board) |
 | `GET` | `/sessions/{id}` | Load envelope |
-| `POST` | `/sessions/{id}/tick` | Run tick (`interactions`, `state_version`) |
+| `POST` | `/sessions/{id}/tick` | Run tick (`interactions`, `state_version`, optional `creature_user_actions` for [Prompt for User Action](#manual-control-brain-prompt-for-user-action) brains) |
 | `POST` | `/sessions/{id}/interactions` | Apply cell edits without advancing tick (paused only) |
 | `POST` | `/sessions/{id}/grid` | Resize grid (paused only) |
 | `POST` | `/sessions/{id}/save-board` | Save session layout as board |

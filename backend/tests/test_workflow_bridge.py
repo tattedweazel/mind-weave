@@ -2,7 +2,11 @@
 
 import uuid
 
-from app.domain.sandbox.workflow_bridge import decision_intent_from_workflow_result
+from app.domain.sandbox.workflow_bridge import (
+    decision_intent_from_workflow_result,
+    graph_requires_simulation_user_action,
+    prompt_user_action_node_id_from_graph,
+)
 from app.domain.schemas.outputs import DictionaryNodeOutput
 from app.domain.schemas.sandbox import DecisionIntent
 from app.domain.schemas.workflow_run import NodeRunResult, WorkflowRunResult
@@ -122,3 +126,13 @@ def test_decision_intent_tie_breaks_equal_priority_by_step_number():
     assert err is None
     assert dec is not None
     assert dec.reason == "b"
+
+
+def test_prompt_user_action_node_detection():
+    graph_nodes = [
+        {"id": "p1", "kind": "utility", "utility_type": "sandbox_prompt_user_action"},
+        {"id": "other", "kind": "utility", "utility_type": "sandbox_idle"},
+    ]
+    assert prompt_user_action_node_id_from_graph(graph_nodes) == "p1"
+    assert graph_requires_simulation_user_action(graph_nodes) is True
+    assert prompt_user_action_node_id_from_graph([]) is None

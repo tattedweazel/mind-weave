@@ -14,6 +14,8 @@ _GLOBAL_OVERRIDE_KEYS = frozenset(
         "structure",
         # Injected by Sandbox tick runs and accepted by the sandbox_tick primitive / Start sandbox_tick slot.
         "sandbox_tick",
+        # Injected by Sandbox simulation UI for sandbox_prompt_user_action brains.
+        "sandbox_user_action",
     }
 )
 

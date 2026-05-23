@@ -127,6 +127,12 @@ def navigation_action_dict(
     reason: str | None = None,
     *,
     item_type: PlaceItemFilterType | None = None,
+    inventory_index: int | None = None,
 ) -> dict[str, Any]:
-    intent = DecisionIntent(action=action, reason=reason, item_type=item_type)  # type: ignore[arg-type]
+    intent = DecisionIntent(
+        action=action,  # type: ignore[arg-type]
+        reason=reason,
+        item_type=item_type,
+        inventory_index=inventory_index,
+    )
     return intent.model_dump(mode="json", exclude_none=True)

@@ -718,6 +718,15 @@ export interface SandboxGetInventoryUtilityNode {
     position: { x: number; y: number };
 }
 
+export interface SandboxPromptUserActionUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_prompt_user_action';
+    label: string;
+    data: Record<string, unknown>;
+    position: { x: number; y: number };
+}
+
 export interface StringPrimitiveNode {
     id: string;
     kind: 'primitive';
@@ -1211,6 +1220,7 @@ export type GraphNode =
     | SandboxPickUpItemUtilityNode
     | SandboxPlaceItemUtilityNode
     | SandboxGetInventoryUtilityNode
+    | SandboxPromptUserActionUtilityNode
     | IntToStringUtilityNode
     | ListItemByIndexUtilityNode
     | DictionaryValueByKeyUtilityNode

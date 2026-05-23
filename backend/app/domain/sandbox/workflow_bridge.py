@@ -11,6 +11,23 @@ from app.domain.schemas.sandbox import DecisionIntent
 from app.domain.schemas.workflow_run import WorkflowRunResult
 
 
+def prompt_user_action_node_id_from_graph(graph_nodes: list[dict[str, Any]]) -> str | None:
+    """Return the id of the first ``sandbox_prompt_user_action`` utility node, if any."""
+    for node in graph_nodes:
+        if (
+            node.get("kind") == "utility"
+            and node.get("utility_type") == "sandbox_prompt_user_action"
+        ):
+            node_id = node.get("id")
+            if isinstance(node_id, str) and node_id.strip():
+                return node_id.strip()
+    return None
+
+
+def graph_requires_simulation_user_action(graph_nodes: list[dict[str, Any]]) -> bool:
+    return prompt_user_action_node_id_from_graph(graph_nodes) is not None
+
+
 def decision_intent_from_workflow_result(
     result: WorkflowRunResult,
     graph_nodes: list[dict[str, Any]],

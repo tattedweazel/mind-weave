@@ -51,6 +51,7 @@ PALETTE_HANDLE_TO_FAMILY_FALLBACK: dict[str, str] = {
     "sandbox_pick_up_item": "utility",
     "sandbox_place_item": "utility",
     "sandbox_get_inventory": "utility",
+    "sandbox_prompt_user_action": "utility",
     "boolean": "primitive",
     "int": "primitive",
     "datetime": "primitive",

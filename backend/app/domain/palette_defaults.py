@@ -27,6 +27,7 @@ DEFAULT_PALETTE_COLORS: Dict[str, str] = {
     "sandbox_pick_up_item": "#fbbf24",
     "sandbox_place_item": "#fb923c",
     "sandbox_get_inventory": "#a78bfa",
+    "sandbox_prompt_user_action": "#6366f1",
     "read_document_property": "#14b8a6",
     "load_document": "#2dd4bf",
     "upsert_document": "#14b8a6",

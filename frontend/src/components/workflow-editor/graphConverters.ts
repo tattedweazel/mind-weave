@@ -549,7 +549,8 @@ export function appNodeToFlow(n: AppGraphNode): Node {
         (n.utility_type === 'sandbox_get_position' ||
             n.utility_type === 'sandbox_get_facing' ||
             n.utility_type === 'sandbox_get_nearby' ||
-            n.utility_type === 'sandbox_get_inventory')
+            n.utility_type === 'sandbox_get_inventory' ||
+            n.utility_type === 'sandbox_prompt_user_action')
     ) {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
     }
@@ -1363,7 +1364,8 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
         src.type === 'sandboxTurnRight' ||
         src.type === 'sandboxIdle' ||
         src.type === 'sandboxPickUpItem' ||
-        src.type === 'sandboxPlaceItem'
+        src.type === 'sandboxPlaceItem' ||
+        src.type === 'sandboxPromptUserAction'
     ) {
         return 'dictionary';
     }
@@ -1721,7 +1723,7 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         targetHandle = 'trigger';
     }
     if (sourceNode && (sourceHandle == null || sourceHandle === '') &&
-        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxGetPosition' || sourceNode.type === 'sandboxGetFacing' || sourceNode.type === 'sandboxGetNearby' || sourceNode.type === 'sandboxGetInventory' || sourceNode.type === 'sandboxMoveForward' || sourceNode.type === 'sandboxTurnLeft' || sourceNode.type === 'sandboxTurnRight' || sourceNode.type === 'sandboxIdle' || sourceNode.type === 'sandboxPickUpItem' || sourceNode.type === 'sandboxPlaceItem' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
+        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxGetPosition' || sourceNode.type === 'sandboxGetFacing' || sourceNode.type === 'sandboxGetNearby' || sourceNode.type === 'sandboxGetInventory' || sourceNode.type === 'sandboxMoveForward' || sourceNode.type === 'sandboxTurnLeft' || sourceNode.type === 'sandboxTurnRight' || sourceNode.type === 'sandboxIdle' || sourceNode.type === 'sandboxPickUpItem' || sourceNode.type === 'sandboxPlaceItem' || sourceNode.type === 'sandboxPromptUserAction' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
         sourceHandle = (sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' ? 'output_string' : 'output');
     }
     if (sourceNode && sourceNode.type === 'forLoopControl' && (sourceHandle == null || sourceHandle === '')) {
@@ -2135,6 +2137,17 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             kind: 'utility',
             utility_type: 'sandbox_get_inventory',
             label: d?.label ?? 'Get inventory',
+            data: {},
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxPromptUserAction') {
+        const d = n.data as any;
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_prompt_user_action',
+            label: d?.label ?? 'Prompt for User Action',
             data: {},
             position: pos,
         };

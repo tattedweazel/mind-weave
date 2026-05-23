@@ -325,7 +325,8 @@ export function enrichNodesForCanvasFlow(
                 n.type === 'sandboxGetPosition' ||
                 n.type === 'sandboxGetFacing' ||
                 n.type === 'sandboxGetNearby' ||
-                n.type === 'sandboxGetInventory'
+                n.type === 'sandboxGetInventory' ||
+                n.type === 'sandboxPromptUserAction'
             ) {
                 const tickHasValue = edges.some(
                     e => e.target === n.id && (e.targetHandle === 'input' || e.targetHandle == null),

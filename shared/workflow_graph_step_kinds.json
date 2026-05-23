@@ -170,6 +170,14 @@
       "editor_label": "Get inventory"
     },
     {
+      "kind": "utility",
+      "utility_type": "sandbox_prompt_user_action",
+      "react_flow_type": "sandboxPromptUserAction",
+      "pydantic_model": "SandboxPromptUserActionUtilityNode",
+      "palette_handle": "sandbox_prompt_user_action",
+      "editor_label": "Prompt for User Action"
+    },
+    {
       "kind": "skill",
       "skill_type": "simple_llm_call",
       "react_flow_type": "simpleLLMCall",
