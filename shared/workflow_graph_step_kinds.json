@@ -146,6 +146,30 @@
       "editor_label": "Idle"
     },
     {
+      "kind": "utility",
+      "utility_type": "sandbox_pick_up_item",
+      "react_flow_type": "sandboxPickUpItem",
+      "pydantic_model": "SandboxPickUpItemUtilityNode",
+      "palette_handle": "sandbox_pick_up_item",
+      "editor_label": "Pick up item"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_place_item",
+      "react_flow_type": "sandboxPlaceItem",
+      "pydantic_model": "SandboxPlaceItemUtilityNode",
+      "palette_handle": "sandbox_place_item",
+      "editor_label": "Place item"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_get_inventory",
+      "react_flow_type": "sandboxGetInventory",
+      "pydantic_model": "SandboxGetInventoryUtilityNode",
+      "palette_handle": "sandbox_get_inventory",
+      "editor_label": "Get inventory"
+    },
+    {
       "kind": "skill",
       "skill_type": "simple_llm_call",
       "react_flow_type": "simpleLLMCall",

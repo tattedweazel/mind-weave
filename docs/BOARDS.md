@@ -13,11 +13,11 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | **Snapshot** | Starting a session copies a board into session state; the session evolves independently |
 | **Save back** | Paused sessions can **Save as Board** (new row) or **Update Board** (overwrite source) |
 
-## BoardDefinition JSON (`schema_version: 2.2.0`)
+## BoardDefinition JSON (`schema_version: 2.3.0`)
 
 ```json
 {
-  "schema_version": "2.2.0",
+  "schema_version": "2.3.0",
   "grid": { "width": 16, "height": 16 },
   "items": [
     { "id": "w1", "type": "wall", "position": { "x": 3, "y": 3 } },
@@ -52,13 +52,14 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | Type | Behavior | Board Builder metadata |
 |------|----------|------------------------|
 | `wall` | Blocks movement and placement | None (read-only Id/Type/Position in Explorer) |
-| `food` | Reported by **Get nearby**; does not block movement | **Energy** editable in Explorer (default `48`) |
+| `food` | Reported by **Get nearby**; does not block movement; pickable | **Energy** editable in Explorer (default `48`) |
+| `ball` | Reported by **Get nearby** as `ball`; does not block movement; pickable | **Color** at placement (read-only in Explorer after place) |
 | `region` | Visual underlay only; coexists with other occupants; invisible to **Get nearby** | **Color**, **trigger** stub (editable; not executed yet) |
 
 ### Cell occupancy layers
 
 - **Region layer** — at most one region per cell; non-blocking; separate **Place region** / **Remove region** actions
-- **Item layer** — at most one food **or** wall per cell
+- **Item layer** — at most one food, **ball**, or wall per cell
 - **Creature layer** — at most one creature per cell
 
 Regions can be placed on cells that already have creatures or items. Food/wall placement still requires an empty item layer (no creature, no food/wall).
@@ -67,6 +68,7 @@ Regions can be placed on cells that already have creatures or items. Food/wall p
 
 - **`facing`**: `"N"` \| `"E"` \| `"S"` \| `"W"` (default `"N"` if omitted). Editable in Board Builder Explorer.
 - **`color`**: `#RRGGBB` hex (chosen in the placement wizard; not editable in Explorer after placement). Legacy board creatures without `color` render with the index palette.
+- **`inventory`**: ordered list of held items (`ball` with `color`, `food` with `energy`). Editable in Board Builder Explorer; read-only during Simulation.
 - Compass: North = decreasing y, East = +x.
 
 ### Item metadata editing
@@ -76,6 +78,7 @@ In **Board Builder**, inspect a cell with an item to open the Explorer. Type-spe
 | Item type | Editable fields |
 |-----------|-----------------|
 | `food` | `energy` (integer ≥ 0) |
+| `ball` | — (color chosen at placement) |
 | `wall` | — |
 | `region` | `color`; `trigger.enabled`, `trigger.mode`, `trigger.workflow_id`, `trigger.inputs` |
 

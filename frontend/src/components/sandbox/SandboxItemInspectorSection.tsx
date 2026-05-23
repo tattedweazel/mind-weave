@@ -89,6 +89,19 @@ export const SandboxItemInspectorSection: React.FC<SandboxItemInspectorSectionPr
                 <div className="text-mw-text-primary tabular-nums text-right font-mono">
                     ({item.position.x}, {item.position.y})
                 </div>
+                {item.type === 'ball' && item.color ? (
+                    <>
+                        <div className="text-mw-text-secondary">Color</div>
+                        <div className="flex items-center justify-end gap-2">
+                            <span
+                                className="inline-block h-4 w-4 rounded border border-mw-border shrink-0"
+                                style={{ backgroundColor: item.color }}
+                                aria-hidden
+                            />
+                            <span className="text-mw-text-primary font-mono text-[10px]">{item.color}</span>
+                        </div>
+                    </>
+                ) : null}
                 {readOnly
                     ? editableFields.map(field => {
                           const value = getItemFieldValue(item, field.key);

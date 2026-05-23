@@ -7,7 +7,8 @@ import type { SandboxFacing, SandboxGridCellJson } from '../domain/sandbox/types
 export type SandboxPlaceItemInteraction = {
     type: 'place_item';
     cell: SandboxGridCellJson;
-    item_type: 'food' | 'wall';
+    item_type: 'food' | 'wall' | 'ball';
+    color?: string;
 };
 
 export type SandboxRemoveItemInteraction = {
@@ -54,6 +55,10 @@ export function placeFoodInteraction(cell: SandboxGridCellJson): SandboxPlaceIte
 
 export function placeWallInteraction(cell: SandboxGridCellJson): SandboxPlaceItemInteraction {
     return { type: 'place_item', cell, item_type: 'wall' };
+}
+
+export function placeBallInteraction(cell: SandboxGridCellJson, color: string): SandboxPlaceItemInteraction {
+    return { type: 'place_item', cell, item_type: 'ball', color };
 }
 
 export function placeRegionInteraction(cell: SandboxGridCellJson, color: string): SandboxPlaceRegionInteraction {

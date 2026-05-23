@@ -5,12 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.schemas.sandbox import (
+    BALL_ITEM_TYPE,
     CreatureState,
     DecisionIntent,
     Facing,
     GridCell,
     NearbyCell,
     NearbyCellKind,
+    PlaceItemFilterType,
     REGION_ITEM_TYPE,
     SandboxTickInput,
     SOLID_ITEM_TYPES,
@@ -100,9 +102,18 @@ def _cell_kind(
                 continue
             if it.type in SOLID_ITEM_TYPES:
                 return "wall"
+            if it.type == BALL_ITEM_TYPE:
+                return "ball"
             if it.type == "food":
                 return "food"
     return "empty"
+
+
+def inventory_from_tick_dict(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    tick = parse_tick(raw)
+    return [
+        entry.model_dump(mode="json", exclude_none=True) for entry in tick.creature.inventory
+    ]
 
 
 def grid_cell_from_jsonable(raw: Any) -> GridCell:
@@ -111,6 +122,11 @@ def grid_cell_from_jsonable(raw: Any) -> GridCell:
     return GridCell.model_validate(raw)
 
 
-def navigation_action_dict(action: str, reason: str | None = None) -> dict[str, Any]:
-    intent = DecisionIntent(action=action, reason=reason)  # type: ignore[arg-type]
-    return intent.model_dump(mode="json")
+def navigation_action_dict(
+    action: str,
+    reason: str | None = None,
+    *,
+    item_type: PlaceItemFilterType | None = None,
+) -> dict[str, Any]:
+    intent = DecisionIntent(action=action, reason=reason, item_type=item_type)  # type: ignore[arg-type]
+    return intent.model_dump(mode="json", exclude_none=True)

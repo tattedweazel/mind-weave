@@ -23,6 +23,7 @@ export const REGION_TRIGGER_MODES: { value: RegionTriggerMode; label: string }[]
 ];
 
 export const SANDBOX_ITEM_INSPECTOR_FIELDS: Record<string, SandboxItemEditableField[]> = {
+    ball: [],
     food: [
         {
             key: 'energy',

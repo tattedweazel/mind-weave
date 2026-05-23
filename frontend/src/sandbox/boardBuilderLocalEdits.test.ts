@@ -5,13 +5,21 @@ import {
     createEmptyBoardDefinition,
     updateBoardItemMetadata,
 } from './boardBuilderLocalEdits';
-import { placeFoodInteraction, placeRegionInteraction } from './sandboxCellInteractions';
+import { placeBallInteraction, placeFoodInteraction, placeRegionInteraction } from './sandboxCellInteractions';
 import { SANDBOX_DEFAULT_FOOD_ENERGY } from './sandboxItemInspectorFields';
 
 describe('boardBuilderLocalEdits', () => {
     it('seeds food with default energy aligned to backend', () => {
         const def = applyBoardBuilderInteraction(createEmptyBoardDefinition(4, 4), placeFoodInteraction({ x: 1, y: 1 }));
         expect(def.items[0]?.energy).toBe(SANDBOX_DEFAULT_FOOD_ENERGY);
+    });
+
+    it('places ball with color', () => {
+        const def = applyBoardBuilderInteraction(
+            createEmptyBoardDefinition(4, 4),
+            placeBallInteraction({ x: 1, y: 1 }, '#AABBCC'),
+        );
+        expect(def.items[0]).toMatchObject({ type: 'ball', color: '#AABBCC', position: { x: 1, y: 1 } });
     });
 
     it('updates editable metadata for food items', () => {

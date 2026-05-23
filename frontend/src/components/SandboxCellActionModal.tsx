@@ -14,6 +14,7 @@ import {
 import { deriveCellRootActions, type CellOccupants } from '../sandbox/sandboxCellOccupants';
 import {
     placeCreatureInteraction,
+    placeBallInteraction,
     placeFoodInteraction,
     placeRegionInteraction,
     placeWallInteraction,
@@ -38,11 +39,13 @@ export type CellActionWizardStep =
     | 'choose_project'
     | 'choose_workflow'
     | 'choose_creature_facing'
-    | 'choose_creature_color';
+    | 'choose_creature_color'
+    | 'choose_ball_color';
 
 const PLACE_ITEM_TYPES = [
     { id: 'food' as const, label: 'Food', description: 'Energy for creatures' },
     { id: 'wall' as const, label: 'Wall', description: 'Solid block — blocks movement and placement' },
+    { id: 'ball' as const, label: 'Ball', description: 'Pickable object — choose color at placement' },
 ];
 
 export interface SandboxCellActionModalProps {
@@ -91,10 +94,14 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
     const [selectedCreatureColor, setSelectedCreatureColor] = React.useState(() =>
         defaultSandboxPlacementColor(sandboxFavoriteColors),
     );
+    const [selectedBallColor, setSelectedBallColor] = React.useState(() =>
+        defaultSandboxPlacementColor(sandboxFavoriteColors),
+    );
 
     React.useEffect(() => {
         setSelectedRegionColor(defaultSandboxPlacementColor(sandboxFavoriteColors));
         setSelectedCreatureColor(defaultSandboxPlacementColor(sandboxFavoriteColors));
+        setSelectedBallColor(defaultSandboxPlacementColor(sandboxFavoriteColors));
     }, [sandboxFavoriteColors]);
 
     React.useEffect(() => {
@@ -163,6 +170,10 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
         }
         if (step === 'choose_region_color') {
             setStep('choose_action');
+            return;
+        }
+        if (step === 'choose_ball_color') {
+            setStep('choose_item_type');
             return;
         }
         onDismiss();
@@ -293,6 +304,12 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                             onClick={() => {
                                                 if (t.id === 'food') onComplete(placeFoodInteraction(cell));
                                                 else if (t.id === 'wall') onComplete(placeWallInteraction(cell));
+                                                else if (t.id === 'ball') {
+                                                    setSelectedBallColor(
+                                                        defaultSandboxPlacementColor(sandboxFavoriteColors),
+                                                    );
+                                                    setStep('choose_ball_color');
+                                                }
                                             }}
                                         >
                                             <span className="block text-sm font-medium">{t.label}</span>
@@ -301,6 +318,21 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                     </li>
                                 ))}
                             </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_ball_color' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                Ball color
+                            </p>
+                            <SandboxColorPicker
+                                value={selectedBallColor}
+                                favoriteColors={sandboxFavoriteColors}
+                                onChange={setSelectedBallColor}
+                                onConfirm={color => onComplete(placeBallInteraction(cell, color))}
+                                confirmLabel={`Place ball (${selectedBallColor})`}
+                            />
                         </>
                     ) : null}
 

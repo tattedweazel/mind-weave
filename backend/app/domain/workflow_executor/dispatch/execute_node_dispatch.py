@@ -54,9 +54,12 @@ from app.domain.schemas import (
     RandomItemFromListUtilityNode,
     ReadDocumentPropertyUtilityNode,
     SandboxGetFacingUtilityNode,
+    SandboxGetInventoryUtilityNode,
     SandboxGetNearbyUtilityNode,
     SandboxGetPositionUtilityNode,
     SandboxIdleUtilityNode,
+    SandboxPickUpItemUtilityNode,
+    SandboxPlaceItemUtilityNode,
     SandboxMoveForwardUtilityNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -192,6 +195,12 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
             return executor._resolve_sandbox_turn_right_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, SandboxIdleUtilityNode):
             return executor._resolve_sandbox_idle_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, SandboxPickUpItemUtilityNode):
+            return executor._resolve_sandbox_pick_up_item_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, SandboxPlaceItemUtilityNode):
+            return executor._resolve_sandbox_place_item_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, SandboxGetInventoryUtilityNode):
+            return executor._resolve_sandbox_get_inventory_node(node, ctx.upstream)
         if isinstance(node, ListItemByIndexUtilityNode):
             return executor._resolve_list_item_by_index_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, DictionaryValueByKeyUtilityNode):

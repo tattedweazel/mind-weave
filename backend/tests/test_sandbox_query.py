@@ -87,6 +87,18 @@ def test_parse_tick_validates_creature_facing():
     assert tick.creature.facing == "W"
 
 
+def test_nearby_reports_ball():
+    world = WorldState(
+        grid=WorldGrid(width=5, height=5),
+        items=[
+            SandboxItem(id="b1", type="ball", position=GridCell(x=3, y=1), color="#FF0000"),
+        ],
+    )
+    creature = CreatureState(id="c1", workflow_id="wf", position=GridCell(x=3, y=2), facing="N")
+    cells = nearby_cells_clockwise("N", creature.position, 5, 5, world, [creature], exclude_creature_id="c1")
+    assert cells[0].kind == "ball"
+
+
 def test_nearby_ignores_region_only_cell():
     world = WorldState(
         grid=WorldGrid(width=5, height=5),

@@ -47,8 +47,10 @@ import {
     sandboxTickTranscriptSummary,
 } from '../sandbox/sandboxWorkflowRunMerge';
 import { SandboxCellActionModal } from './SandboxCellActionModal';
+import { SandboxCreatureInventorySection } from './sandbox/SandboxCreatureInventorySection';
 import { SandboxItemInspectorSection } from './sandbox/SandboxItemInspectorSection';
 import { SandboxRegionInspectorSection } from './sandbox/SandboxRegionInspectorSection';
+import { addBoardCreatureInventoryEntry } from '../sandbox/sandboxCreatureInventory';
 import { parseSandboxFavoriteColors } from '../sandbox/sandboxFavoriteColors';
 import { isRegionItem } from '../sandbox/sandboxCellOccupants';
 import { useCompactViewport } from '../hooks/useCompactViewport';
@@ -1298,6 +1300,34 @@ export const SandboxView: React.FC = () => {
                                                                     </div>
                                                                 </>
                                                             )}
+                                                        </div>
+                                                        <div className="mt-3">
+                                                            <SandboxCreatureInventorySection
+                                                                creature={creature}
+                                                                readOnly={mainTab === 'simulation'}
+                                                                onBoardChange={
+                                                                    mainTab === 'builder'
+                                                                        ? updater => {
+                                                                              setLocalBoardDef(prev => updater(prev));
+                                                                              setBuilderDirty(true);
+                                                                          }
+                                                                        : undefined
+                                                                }
+                                                                onAddEntry={
+                                                                    mainTab === 'builder'
+                                                                        ? type => {
+                                                                              setLocalBoardDef(prev =>
+                                                                                  addBoardCreatureInventoryEntry(
+                                                                                      prev,
+                                                                                      creature.id,
+                                                                                      type,
+                                                                                  ),
+                                                                              );
+                                                                              setBuilderDirty(true);
+                                                                          }
+                                                                        : undefined
+                                                                }
+                                                            />
                                                         </div>
                                                     </InspectorSection>
                                                 ))}

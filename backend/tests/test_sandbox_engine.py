@@ -7,6 +7,7 @@ from app.domain.schemas.sandbox import (
     CreatureState,
     DecisionIntent,
     GridCell,
+    InventoryItem,
     SandboxItem,
     SandboxState,
     WorldGrid,
@@ -256,3 +257,61 @@ def test_place_region_out_of_bounds_noop():
     eng = SandboxEngine()
     eng.apply_interactions(st, [{"type": "place_region", "cell": {"x": 99, "y": 99}, "color": "#FF0000"}])
     assert st.world.items == []
+
+
+def test_place_ball_via_interaction():
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [{"type": "place_item", "cell": {"x": 1, "y": 1}, "item_type": "ball", "color": "#FF00FF"}],
+    )
+    ball = next(it for it in st.world.items if it.type == "ball")
+    assert ball.color == "#FF00FF"
+    assert ball.position == GridCell(x=1, y=1)
+
+
+def test_pick_up_ball_forward_adjacent():
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.world.items.append(
+        SandboxItem(id="b1", type="ball", position=GridCell(x=2, y=1), color="#3B82F6")
+    )
+    eng = SandboxEngine()
+    eng.apply_decision(st, st.creatures[0], DecisionIntent(action="pick_up_item"))
+    assert not any(it.type == "ball" for it in st.world.items)
+    assert len(st.creatures[0].inventory) == 1
+    assert st.creatures[0].inventory[0].type == "ball"
+    assert st.creatures[0].inventory[0].color == "#3B82F6"
+
+
+def test_place_item_from_inventory_forward():
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.creatures[0].inventory = [InventoryItem(type="ball", color="#AABBCC")]
+    eng = SandboxEngine()
+    eng.apply_decision(
+        st,
+        st.creatures[0],
+        DecisionIntent(action="place_item", item_type="ball"),
+    )
+    ball = next(it for it in st.world.items if it.type == "ball")
+    assert ball.position == GridCell(x=2, y=1)
+    assert ball.color == "#AABBCC"
+    assert st.creatures[0].inventory == []
+
+
+def test_place_item_filters_by_type():
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.creatures[0].inventory = [
+        InventoryItem(type="food", energy=10),
+        InventoryItem(type="ball", color="#111111"),
+    ]
+    eng = SandboxEngine()
+    eng.apply_decision(
+        st,
+        st.creatures[0],
+        DecisionIntent(action="place_item", item_type="ball"),
+    )
+    ball = next(it for it in st.world.items if it.type == "ball")
+    assert ball.color == "#111111"
+    assert len(st.creatures[0].inventory) == 1
+    assert st.creatures[0].inventory[0].type == "food"

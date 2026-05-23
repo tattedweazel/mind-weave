@@ -36,6 +36,14 @@ export interface SandboxItemJson {
     trigger?: RegionTriggerConfigJson;
 }
 
+export type SandboxInventoryItemType = 'ball' | 'food';
+
+export interface SandboxInventoryItemJson {
+    type: SandboxInventoryItemType;
+    color?: string;
+    energy?: number;
+}
+
 export interface SandboxCreatureJson {
     id: string;
     workflow_id: string;
@@ -43,6 +51,7 @@ export interface SandboxCreatureJson {
     position: SandboxGridCellJson;
     facing: SandboxFacing;
     color?: string;
+    inventory?: SandboxInventoryItemJson[];
 }
 
 export interface SandboxWorldJson {
@@ -80,6 +89,7 @@ export interface BoardCreaturePlacementJson {
     position: SandboxGridCellJson;
     facing?: SandboxFacing;
     color?: string;
+    inventory?: SandboxInventoryItemJson[];
 }
 
 export interface BoardDefinitionJson {
@@ -110,6 +120,7 @@ export function sandboxStateFromBoardDefinition(def: BoardDefinitionJson): Sandb
             position: c.position,
             facing: c.facing ?? DEFAULT_SANDBOX_FACING,
             ...(c.color !== undefined ? { color: c.color } : {}),
+            inventory: c.inventory ?? [],
         })),
         world: { grid: def.grid, items: def.items ?? [] },
         recent_actions: [],

@@ -1,6 +1,6 @@
 # Sandbox (board-driven simulation)
 
-Operational reference for **Sandbox V2.2**: board templates, multi-creature sessions, per-creature workflow brains, **atomic navigation ticks**, and Phaser as view-only renderer.
+Operational reference for **Sandbox V2.3**: board templates, multi-creature sessions, per-creature workflow brains, **atomic navigation ticks**, creature **inventory**, and Phaser as view-only renderer.
 
 Related: [BOARDS.md](BOARDS.md), [shared/sandbox_canonical.schema.json](../shared/sandbox_canonical.schema.json).
 
@@ -11,7 +11,7 @@ Related: [BOARDS.md](BOARDS.md), [shared/sandbox_canonical.schema.json](../share
 | **Boards** | `sandbox_boards` table, `BoardDefinition` JSON — see [BOARDS.md](BOARDS.md) |
 | **Domain** | `CreatureState` (position + **facing**), `SandboxState`, engine rules (`backend/app/domain/sandbox/engine.py`) |
 | **Workflows** | Per-creature `workflow_id`; `SandboxTickInput` with focused `creature` + all `creatures` |
-| **Persistence** | Session `Document.body` → `SandboxDocumentEnvelope` (`schema_version: 2.2.0`) |
+| **Persistence** | Session `Document.body` → `SandboxDocumentEnvelope` (`schema_version: 2.3.0`) |
 | **HTTP** | `backend/app/api/v1/sandbox.py` |
 | **SPA** | [SandboxView.tsx](../frontend/src/components/SandboxView.tsx) — **Simulation** + **Board Builder** tabs |
 
@@ -25,7 +25,7 @@ Each HTTP tick:
 2. Advance global tick counter once
 3. For each creature in **array order**:
    - **Always** run that creature's `workflow_id` graph with tick input scoped to that creature
-   - Apply the resulting **one** navigation action (`move_forward`, `turn_left`, `turn_right`, or `idle`)
+   - Apply the resulting **one** action (`move_forward`, `turn_left`, `turn_right`, `idle`, `pick_up_item`, or `place_item`)
 
 There is no multi-tick `move_to` or intent continuation. Every tick is a fresh brain execution.
 
@@ -40,10 +40,13 @@ Navigation-focused utilities in the workflow editor (**Sandbox Utilities** secti
 | **Tick input** (`sandbox_tick` primitive) | Full `SandboxTickInput` dict (includes `tick` for scripted sequences) |
 | **Get position** | Focused creature `{x, y}` |
 | **Get facing** | `"N"` \| `"E"` \| `"S"` \| `"W"` |
-| **Get nearby** | Eight neighbors clockwise from facing; each `{x, y, kind}` where `kind` is `empty`, `wall`, `food`, `creature`, or `out_of_bounds` |
+| **Get nearby** | Eight neighbors clockwise from facing; each `{x, y, kind}` where `kind` is `empty`, `wall`, `food`, `ball`, `creature`, or `out_of_bounds` |
+| **Get inventory** | List of held items on the focused creature (`{type, color?}` or `{type, energy?}`) |
 | **Move forward** | Emits `{action: "move_forward"}` for Stop |
 | **Turn left** / **Turn right** | Emits turn action dict for Stop |
 | **Idle** | Emits `{action: "idle"}` for Stop |
+| **Pick up item** | Emits `{action: "pick_up_item"}` — picks up **ball** or **food** in the **forward adjacent** cell into inventory |
+| **Place item** | Emits `{action: "place_item", item_type?: "ball" \| "food"}` — places first inventory entry (or first matching `item_type`) on the **forward adjacent** cell |
 
 Wire one action node (or a conditional that picks one) to **Stop** `output` (dictionary).
 
@@ -92,8 +95,8 @@ Base: `/api/v1/sandbox/`
 
 | `type` | Payload | Behavior |
 |--------|---------|----------|
-| `place_item` | `cell`, `item_type`: `food` \| `wall` | Place if no creature and no food/wall at cell (regions ignored) |
-| `remove_item` | `cell` | Remove food/wall only (regions remain) |
+| `place_item` | `cell`, `item_type`: `food` \| `wall` \| `ball`, `color` required for `ball` | Place if no creature and no food/wall/ball at cell (regions ignored) |
+| `remove_item` | `cell` | Remove food/wall/ball only (regions remain) |
 | `place_region` | `cell`, `color` (`#RRGGBB`) | Place or replace region at cell (allowed on occupied cells) |
 | `remove_region` | `cell` | Remove region only |
 | `place_creature` | `cell`, `workflow_id`, `color` (`#RRGGBB`), optional `name`, optional `facing` (`N`/`E`/`S`/`W`, default **N**) | Spawn creature if no creature and no food/wall (regions ignored) |
@@ -123,6 +126,7 @@ Implementation: [`SandboxView.tsx`](../frontend/src/components/SandboxView.tsx),
 | Grid | 16×16 (8–64 via resize) |
 | Creature | Colored rectangles with facing indicator (color chosen at placement; legacy creatures without `color` use index palette) |
 | Food | Pink circle |
+| Ball | Colored circle (placement color) |
 | Wall | Gray square |
 | Region | Full-cell colored underlay (~35% opacity), drawn under other items |
 | Cell | 48px |

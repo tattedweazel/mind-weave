@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mind-weave.dev/schemas/sandbox_canonical.schema.json",
   "title": "Mind Weave Sandbox V2",
-  "schema_version": "2.2.0",
+  "schema_version": "2.3.0",
   "$defs": {
     "GridCell": {
       "type": "object",
@@ -19,11 +19,22 @@
     },
     "DecisionAction": {
       "type": "string",
-      "enum": ["move_forward", "turn_left", "turn_right", "idle"]
+      "enum": [
+        "move_forward",
+        "turn_left",
+        "turn_right",
+        "idle",
+        "pick_up_item",
+        "place_item"
+      ]
+    },
+    "PlaceItemFilterType": {
+      "type": "string",
+      "enum": ["ball", "food"]
     },
     "NearbyCellKind": {
       "type": "string",
-      "enum": ["empty", "wall", "food", "creature", "out_of_bounds"]
+      "enum": ["empty", "wall", "food", "ball", "creature", "out_of_bounds"]
     },
     "NearbyCell": {
       "type": "object",
@@ -37,7 +48,25 @@
     },
     "ItemType": {
       "type": "string",
-      "enum": ["food", "wall", "region"]
+      "enum": ["food", "wall", "region", "ball"]
+    },
+    "PlaceableItemType": {
+      "type": "string",
+      "enum": ["food", "wall", "ball"]
+    },
+    "InventoryItemType": {
+      "type": "string",
+      "enum": ["ball", "food"]
+    },
+    "InventoryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "$ref": "#/$defs/InventoryItemType" },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "energy": { "type": "integer", "minimum": 0 }
+      }
     },
     "RegionTriggerMode": {
       "type": "string",
@@ -79,7 +108,11 @@
         "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "position": { "$ref": "#/$defs/GridCell" },
         "facing": { "$ref": "#/$defs/Facing" },
-        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "inventory": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/InventoryItem" }
+        }
       }
     },
     "WorldGrid": {
@@ -144,7 +177,11 @@
         "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "position": { "$ref": "#/$defs/GridCell" },
         "facing": { "$ref": "#/$defs/Facing" },
-        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "inventory": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/InventoryItem" }
+        }
       }
     },
     "BoardDefinition": {
@@ -164,18 +201,22 @@
       "required": ["action"],
       "properties": {
         "action": { "$ref": "#/$defs/DecisionAction" },
-        "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+        "reason": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "item_type": {
+          "anyOf": [{ "$ref": "#/$defs/PlaceItemFilterType" }, { "type": "null" }]
+        }
       }
     },
     "SandboxInteractionEvent": {
       "oneOf": [
         {
           "type": "object",
-          "required": ["type", "cell"],
+          "required": ["type", "cell", "item_type"],
           "properties": {
             "type": { "const": "place_item" },
             "cell": { "$ref": "#/$defs/GridCell" },
-            "item_type": { "$ref": "#/$defs/ItemType" }
+            "item_type": { "$ref": "#/$defs/PlaceableItemType" },
+            "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
           }
         },
         {

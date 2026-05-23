@@ -366,7 +366,26 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 position: pos,
             };
         }
-        if (ut === 'sandbox_move_forward' || ut === 'sandbox_idle') {
+        if (ut === 'sandbox_place_item') {
+            return {
+                id: nodeId,
+                kind: 'utility',
+                utility_type: ut,
+                label,
+                data: {
+                    required_inputs: [
+                        { key: 'reason', type: 'string', value: null },
+                        { key: 'item_type', type: 'string', value: null },
+                    ],
+                },
+                position: pos,
+            };
+        }
+        if (
+            ut === 'sandbox_move_forward' ||
+            ut === 'sandbox_idle' ||
+            ut === 'sandbox_pick_up_item'
+        ) {
             return {
                 id: nodeId,
                 kind: 'utility',

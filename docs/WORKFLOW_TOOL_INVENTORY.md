@@ -114,6 +114,9 @@ Each utility typically includes `data.required_inputs`: `{ "key", "type", "value
 | `sandbox_get_nearby` | `sandbox_tick` | `output` (list) | Eight typed neighbor cells clockwise from facing. |
 | `sandbox_move_forward` | optional `reason` | `output` (dictionary) | `{action: "move_forward"}` for Stop. |
 | `sandbox_turn_left` / `sandbox_turn_right` / `sandbox_idle` | optional `reason` | `output` (dictionary) | Navigation action dict for Stop. |
+| `sandbox_pick_up_item` | optional `reason` | `output` (dictionary) | `{action: "pick_up_item"}` — forward-adjacent ball/food into creature inventory. |
+| `sandbox_place_item` | optional `reason`, optional `item_type` (`ball` \| `food`) | `output` (dictionary) | `{action: "place_item", item_type?: ...}` — place from inventory on forward cell. |
+| `sandbox_get_inventory` | `sandbox_tick` | `output` (list) | Focused creature held items. |
 
 ---
 

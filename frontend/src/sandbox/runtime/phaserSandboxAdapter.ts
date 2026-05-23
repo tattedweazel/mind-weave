@@ -115,6 +115,12 @@ class SandboxScene extends Phaser.Scene {
             } else if (it.type === 'food') {
                 g.fillStyle(hexToRgbInt(FOOD_FILL), 1);
                 g.fillCircle(cx, cy, CELL_PX * 0.28);
+            } else if (it.type === 'ball') {
+                const ballColor = it.color ?? '#F59E0B';
+                g.fillStyle(hexToRgbInt(ballColor), 1);
+                g.fillCircle(cx, cy, CELL_PX * 0.32);
+                g.lineStyle(2, hexToRgbInt('#ffffff'), 0.85);
+                g.strokeCircle(cx, cy, CELL_PX * 0.32);
             }
         }
 

@@ -8,7 +8,9 @@ from pydantic import ValidationError
 from app.domain.schemas.sandbox import (
     BoardCreaturePlacement,
     CreatureState,
+    InventoryItem,
     PlaceCreatureEvent,
+    PlaceItemEvent,
     PlaceRegionEvent,
     SandboxItem,
     default_region_trigger,
@@ -34,6 +36,39 @@ def test_region_item_requires_color():
 def test_food_item_rejects_color():
     with pytest.raises(ValidationError):
         SandboxItem(id="f1", type="food", position={"x": 0, "y": 0}, energy=1, color="#FF0000")
+
+
+def test_ball_item_requires_color():
+    with pytest.raises(ValidationError):
+        SandboxItem(id="b1", type="ball", position={"x": 0, "y": 0})
+
+
+def test_ball_item_accepts_color():
+    item = SandboxItem(id="b1", type="ball", position={"x": 0, "y": 0}, color="#abc")
+    assert item.color == "#AABBCC"
+
+
+def test_place_item_ball_requires_color():
+    with pytest.raises(ValidationError):
+        PlaceItemEvent(cell={"x": 0, "y": 0}, item_type="ball")
+
+
+def test_inventory_ball_and_food():
+    ball = InventoryItem(type="ball", color="#FF0000")
+    assert ball.color == "#FF0000"
+    food = InventoryItem(type="food", energy=12)
+    assert food.energy == 12
+
+
+def test_creature_inventory_round_trip():
+    c = CreatureState(
+        id="c1",
+        workflow_id="wf-1",
+        position={"x": 0, "y": 0},
+        inventory=[InventoryItem(type="ball", color="#3B82F6")],
+    )
+    assert len(c.inventory) == 1
+    assert c.inventory[0].type == "ball"
 
 
 def test_place_region_event_normalizes_color():

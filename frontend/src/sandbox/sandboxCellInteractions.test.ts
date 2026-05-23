@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { placeCreatureInteraction, placeFoodInteraction, placeRegionInteraction, removeItemAtCellInteraction, removeRegionAtCellInteraction } from './sandboxCellInteractions';
+import {
+    placeBallInteraction,
+    placeCreatureInteraction,
+    placeFoodInteraction,
+    placeRegionInteraction,
+    removeItemAtCellInteraction,
+    removeRegionAtCellInteraction,
+} from './sandboxCellInteractions';
 
 describe('sandboxCellInteractions', () => {
     it('builds place_item payload', () => {
@@ -8,6 +15,15 @@ describe('sandboxCellInteractions', () => {
             type: 'place_item',
             cell: { x: 2, y: 3 },
             item_type: 'food',
+        });
+    });
+
+    it('builds place_ball payload', () => {
+        expect(placeBallInteraction({ x: 2, y: 3 }, '#AABBCC')).toEqual({
+            type: 'place_item',
+            cell: { x: 2, y: 3 },
+            item_type: 'ball',
+            color: '#AABBCC',
         });
     });
 

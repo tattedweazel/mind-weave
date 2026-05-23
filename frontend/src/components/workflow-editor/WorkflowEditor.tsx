@@ -1967,6 +1967,36 @@ export const WorkflowEditor: React.FC<Props> = ({
                     required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
+        } else if (type === 'sandboxPickUpItem') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxPickUpItem',
+                position,
+                data: {
+                    label: extra.label ?? 'Pick up item',
+                    required_inputs: [{ key: 'reason', type: 'string', value: null }],
+                },
+            }]);
+        } else if (type === 'sandboxPlaceItem') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxPlaceItem',
+                position,
+                data: {
+                    label: extra.label ?? 'Place item',
+                    required_inputs: [
+                        { key: 'reason', type: 'string', value: null },
+                        { key: 'item_type', type: 'string', value: null },
+                    ],
+                },
+            }]);
+        } else if (type === 'sandboxGetInventory') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxGetInventory',
+                position,
+                data: { label: extra.label ?? 'Get inventory' },
+            }]);
         } else if (type === 'intToString') {
             setNodes(ns => [...ns, { id, type: 'intToString', position, data: { label: extra.label ?? 'Int to String' } }]);
         } else if (type === 'listItemByIndex') {

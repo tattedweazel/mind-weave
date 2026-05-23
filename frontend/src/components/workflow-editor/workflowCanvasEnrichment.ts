@@ -324,7 +324,8 @@ export function enrichNodesForCanvasFlow(
             if (
                 n.type === 'sandboxGetPosition' ||
                 n.type === 'sandboxGetFacing' ||
-                n.type === 'sandboxGetNearby'
+                n.type === 'sandboxGetNearby' ||
+                n.type === 'sandboxGetInventory'
             ) {
                 const tickHasValue = edges.some(
                     e => e.target === n.id && (e.targetHandle === 'input' || e.targetHandle == null),
@@ -335,7 +336,8 @@ export function enrichNodesForCanvasFlow(
                 n.type === 'sandboxMoveForward' ||
                 n.type === 'sandboxTurnLeft' ||
                 n.type === 'sandboxTurnRight' ||
-                n.type === 'sandboxIdle'
+                n.type === 'sandboxIdle' ||
+                n.type === 'sandboxPickUpItem'
             ) {
                 const d = n.data as any;
                 const req = d?.required_inputs ?? [];
@@ -344,6 +346,19 @@ export function enrichNodesForCanvasFlow(
                     edges.some(e => e.target === n.id && e.targetHandle === 'reason') ||
                     (rsn != null && String(rsn).trim() !== '');
                 return { ...n, data: { ...baseData, reasonHasValue } };
+            }
+            if (n.type === 'sandboxPlaceItem') {
+                const d = n.data as any;
+                const req = d?.required_inputs ?? [];
+                const rsn = req.find((r: { key?: string }) => r?.key === 'reason')?.value;
+                const it = req.find((r: { key?: string }) => r?.key === 'item_type')?.value;
+                const reasonHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'reason') ||
+                    (rsn != null && String(rsn).trim() !== '');
+                const itemTypeHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'item_type') ||
+                    (it != null && String(it).trim() !== '');
+                return { ...n, data: { ...baseData, reasonHasValue, itemTypeHasValue } };
             }
             if (n.type === 'dictionaryValueByKey') {
                 const d = n.data as any;

@@ -140,6 +140,40 @@ def test_sandbox_idle_action(client: TestClient):
     assert u_res["output"]["data"]["action"] == "idle"
 
 
+def test_sandbox_pick_up_item_action(client: TestClient):
+    u_res = _run_utility_graph(
+        client,
+        utility_type="sandbox_pick_up_item",
+        tick=_tick_dict(),
+        output_kind="dictionary",
+    )
+    assert u_res["output"]["data"]["action"] == "pick_up_item"
+
+
+def test_sandbox_place_item_action_with_filter(client: TestClient):
+    u_res = _run_utility_graph(
+        client,
+        utility_type="sandbox_place_item",
+        tick=_tick_dict(),
+        output_kind="dictionary",
+    )
+    data = u_res["output"]["data"]
+    assert data["action"] == "place_item"
+    assert data.get("item_type") is None
+
+
+def test_sandbox_get_inventory(client: TestClient):
+    tick = _tick_dict()
+    tick["creature"]["inventory"] = [{"type": "ball", "color": "#3B82F6"}]
+    u_res = _run_utility_graph(
+        client,
+        utility_type="sandbox_get_inventory",
+        tick=tick,
+        output_kind="list",
+    )
+    assert u_res["output"]["data"] == [{"type": "ball", "color": "#3B82F6"}]
+
+
 def test_sandbox_tick_primitive(client: TestClient):
     tick = _tick_dict()
     wf_id = str(uuid.uuid4())

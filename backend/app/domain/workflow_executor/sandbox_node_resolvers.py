@@ -12,8 +12,11 @@ from app.domain.schemas import (
     SandboxGetFacingUtilityNode,
     SandboxGetNearbyUtilityNode,
     SandboxGetPositionUtilityNode,
+    SandboxGetInventoryUtilityNode,
     SandboxIdleUtilityNode,
     SandboxMoveForwardUtilityNode,
+    SandboxPickUpItemUtilityNode,
+    SandboxPlaceItemUtilityNode,
     SandboxTickPrimitiveNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -154,15 +157,23 @@ class SandboxNodeResolverMixin:
         outputs: Dict[str, NodeOutputUnion],
         input_overrides: Dict[str, Any],
         node_data: Dict[str, Any] | None,
+        *,
+        include_item_type: bool = False,
     ) -> Dict[str, Any]:
         from app.domain.sandbox.query import navigation_action_dict
 
+        input_keys = ["reason", "item_type"] if include_item_type else ["reason"]
         raw_inputs = (node_data or {}).get("required_inputs") or [
             {"key": "reason", "type": "string", "value": None},
+            *(
+                [{"key": "item_type", "type": "string", "value": None}]
+                if include_item_type
+                else []
+            ),
         ]
         resolved = _resolve_inputs_by_target_handle(
             node_id,
-            ["reason"],
+            input_keys,
             edges,
             outputs,
             input_overrides,
@@ -172,8 +183,17 @@ class SandboxNodeResolverMixin:
         reason: str | None = None
         if reason_raw is not None and str(reason_raw).strip():
             reason = str(reason_raw).strip()
+        item_type = None
+        if include_item_type:
+            raw_item_type = resolved.get("item_type")
+            if raw_item_type in ("ball", "food"):
+                item_type = raw_item_type
         try:
-            data = navigation_action_dict(action, reason)
+            data = navigation_action_dict(
+                action,
+                reason,
+                item_type=item_type,
+            )
         except Exception as exc:
             return _executor_mod()._error_with_resolved_inputs(
                 f"{action}: {exc}",
@@ -228,3 +248,57 @@ class SandboxNodeResolverMixin:
         return self._resolve_sandbox_navigation_action_node(
             node.id, "idle", edges, outputs, input_overrides, node.data
         )
+
+    def _resolve_sandbox_pick_up_item_node(
+        self: WorkflowExecutorResolverMixin,
+        node: SandboxPickUpItemUtilityNode,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._resolve_sandbox_navigation_action_node(
+            node.id, "pick_up_item", edges, outputs, input_overrides, node.data
+        )
+
+    def _resolve_sandbox_place_item_node(
+        self: WorkflowExecutorResolverMixin,
+        node: SandboxPlaceItemUtilityNode,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return self._resolve_sandbox_navigation_action_node(
+            node.id,
+            "place_item",
+            edges,
+            outputs,
+            input_overrides,
+            node.data,
+            include_item_type=True,
+        )
+
+    def _resolve_sandbox_get_inventory_node(
+        self: WorkflowExecutorResolverMixin,
+        node: SandboxGetInventoryUtilityNode,
+        upstream: list[NodeOutputUnion],
+    ) -> Dict[str, Any]:
+        from app.domain.sandbox.query import inventory_from_tick_dict
+
+        raw = _executor_mod()._sandbox_tick_dict_from_upstream(upstream)
+        if raw is None:
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_get_inventory: connect sandbox_tick (Start output) or a tick-shaped dictionary",
+                {"sandbox_tick": None},
+            )
+        try:
+            entries = inventory_from_tick_dict(raw)
+        except Exception as exc:
+            return _executor_mod()._error_with_resolved_inputs(
+                f"sandbox_get_inventory: {exc}",
+                {"sandbox_tick": raw},
+            )
+        return {
+            "status": "ok",
+            "output": ListNodeOutput(node_id=node.id, data=entries),
+            "details": {"resolved_inputs": {"count": len(entries)}},
+        }

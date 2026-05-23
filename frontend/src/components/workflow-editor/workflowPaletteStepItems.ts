@@ -215,6 +215,24 @@ export const WORKFLOW_PALETTE_SANDBOX_UTILITY_ITEMS: readonly WorkflowPaletteSte
         extra: { label: 'Idle' },
         paletteType: 'sandbox_idle',
     },
+    {
+        type: 'sandboxPickUpItem',
+        label: 'Pick up item',
+        extra: { label: 'Pick up item' },
+        paletteType: 'sandbox_pick_up_item',
+    },
+    {
+        type: 'sandboxPlaceItem',
+        label: 'Place item',
+        extra: { label: 'Place item' },
+        paletteType: 'sandbox_place_item',
+    },
+    {
+        type: 'sandboxGetInventory',
+        label: 'Get inventory',
+        extra: { label: 'Get inventory' },
+        paletteType: 'sandbox_get_inventory',
+    },
 ];
 
 export const WORKFLOW_PALETTE_CONTROL_ITEMS: readonly WorkflowPaletteStepItem[] = [

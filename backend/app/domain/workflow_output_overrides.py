@@ -72,9 +72,12 @@ from app.domain.schemas import (
     ReadDocumentPropertyUtilityNode,
     ResponseNodeOutput,
     SandboxGetFacingUtilityNode,
+    SandboxGetInventoryUtilityNode,
     SandboxGetNearbyUtilityNode,
     SandboxGetPositionUtilityNode,
     SandboxIdleUtilityNode,
+    SandboxPickUpItemUtilityNode,
+    SandboxPlaceItemUtilityNode,
     SandboxMoveForwardUtilityNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -397,11 +400,17 @@ def coerce_raw_to_node_output(
             SandboxTurnLeftUtilityNode,
             SandboxTurnRightUtilityNode,
             SandboxIdleUtilityNode,
+            SandboxPickUpItemUtilityNode,
+            SandboxPlaceItemUtilityNode,
         ),
     ):
         if not isinstance(raw, dict):
             raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON object")
         return DictionaryNodeOutput(node_id=node_id, data=dict(raw))
+    if isinstance(parsed, SandboxGetInventoryUtilityNode):
+        if not isinstance(raw, list):
+            raise ValueError(f"output_overrides[{node_id!r}]: expected a JSON array")
+        return ListNodeOutput(node_id=node_id, data=list(raw))
 
     if isinstance(parsed, (ListItemByIndexUtilityNode, RandomItemFromListUtilityNode)):
         return _json_like_to_node_output(node_id, raw)

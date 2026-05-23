@@ -6,7 +6,7 @@ import type {
     SandboxSandboxStateJson,
 } from '../domain/sandbox/types';
 
-export const BLOCKING_ITEM_TYPES = new Set(['food', 'wall']);
+export const BLOCKING_ITEM_TYPES = new Set(['food', 'wall', 'ball']);
 export const REGION_ITEM_TYPE = 'region';
 
 export interface CellOccupants {

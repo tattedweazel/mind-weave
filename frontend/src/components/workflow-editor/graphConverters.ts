@@ -548,16 +548,41 @@ export function appNodeToFlow(n: AppGraphNode): Node {
         n.kind === 'utility' &&
         (n.utility_type === 'sandbox_get_position' ||
             n.utility_type === 'sandbox_get_facing' ||
-            n.utility_type === 'sandbox_get_nearby')
+            n.utility_type === 'sandbox_get_nearby' ||
+            n.utility_type === 'sandbox_get_inventory')
     ) {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
+    }
+    if (n.kind === 'utility' && n.utility_type === 'sandbox_place_item') {
+        const d = n.data as any;
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter(
+                  (r: { key?: string }) => r?.key === 'reason' || r?.key === 'item_type',
+              )
+            : [
+                  { key: 'reason', type: 'string' as const, value: null },
+                  { key: 'item_type', type: 'string' as const, value: null },
+              ];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'reason')) {
+            requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
+        }
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'item_type')) {
+            requiredInputs.push({ key: 'item_type', type: 'string' as const, value: null });
+        }
+        return {
+            id: n.id,
+            type: reactFlowTypeForAppNode(n),
+            position: pos,
+            data: { label: n.label, required_inputs: requiredInputs },
+        };
     }
     if (
         n.kind === 'utility' &&
         (n.utility_type === 'sandbox_move_forward' ||
             n.utility_type === 'sandbox_turn_left' ||
             n.utility_type === 'sandbox_turn_right' ||
-            n.utility_type === 'sandbox_idle')
+            n.utility_type === 'sandbox_idle' ||
+            n.utility_type === 'sandbox_pick_up_item')
     ) {
         const d = n.data as any;
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
@@ -1331,12 +1356,14 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (src.type === 'gmailPrimitive') return 'gmail';
     if (src.type === 'sandboxGetPosition') return 'dictionary';
     if (src.type === 'sandboxGetFacing') return 'string';
-    if (src.type === 'sandboxGetNearby') return 'list';
+    if (src.type === 'sandboxGetNearby' || src.type === 'sandboxGetInventory') return 'list';
     if (
         src.type === 'sandboxMoveForward' ||
         src.type === 'sandboxTurnLeft' ||
         src.type === 'sandboxTurnRight' ||
-        src.type === 'sandboxIdle'
+        src.type === 'sandboxIdle' ||
+        src.type === 'sandboxPickUpItem' ||
+        src.type === 'sandboxPlaceItem'
     ) {
         return 'dictionary';
     }
@@ -1465,7 +1492,8 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         targetNode &&
         (targetNode.type === 'sandboxGetPosition' ||
             targetNode.type === 'sandboxGetFacing' ||
-            targetNode.type === 'sandboxGetNearby') &&
+            targetNode.type === 'sandboxGetNearby' ||
+            targetNode.type === 'sandboxGetInventory') &&
         (targetHandle == null || targetHandle === '')
     ) {
         targetHandle = 'input';
@@ -1475,10 +1503,18 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         (targetNode.type === 'sandboxMoveForward' ||
             targetNode.type === 'sandboxTurnLeft' ||
             targetNode.type === 'sandboxTurnRight' ||
-            targetNode.type === 'sandboxIdle') &&
+            targetNode.type === 'sandboxIdle' ||
+            targetNode.type === 'sandboxPickUpItem') &&
         (targetHandle == null || targetHandle === '')
     ) {
         targetHandle = 'reason';
+    }
+    if (
+        targetNode &&
+        targetNode.type === 'sandboxPlaceItem' &&
+        (targetHandle == null || targetHandle === '')
+    ) {
+        targetHandle = 'item_type';
     }
     if (targetNode && targetNode.type === 'dictionaryValueByKey' && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'dictionary';
@@ -1678,14 +1714,14 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         targetHandle = 'message';
     }
     const sourceNode = nodes.find(n => n.id === e.source);
-    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'googleDocsGetDocument', 'googleDocsParseDocument', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'googleDocsParseDocument', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxGetPosition', 'sandboxGetFacing', 'sandboxGetNearby', 'sandboxMoveForward', 'sandboxTurnLeft', 'sandboxTurnRight', 'sandboxIdle', 'workflowRef'];
+    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'googleDocsGetDocument', 'googleDocsParseDocument', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'googleDocsParseDocument', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxGetPosition', 'sandboxGetFacing', 'sandboxGetNearby', 'sandboxGetInventory', 'sandboxMoveForward', 'sandboxTurnLeft', 'sandboxTurnRight', 'sandboxIdle', 'sandboxPickUpItem', 'sandboxPlaceItem', 'workflowRef'];
     if (sourceNode && targetNode && nodesWithTrigger.includes(targetNode.type ?? '') && (targetHandle == null || targetHandle === '') &&
         ((['basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl'].includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) ||
             (sourceNode.type === 'tryCatchControl' && (sourceHandle === 'try' || sourceHandle === 'catch')))) {
         targetHandle = 'trigger';
     }
     if (sourceNode && (sourceHandle == null || sourceHandle === '') &&
-        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxGetPosition' || sourceNode.type === 'sandboxGetFacing' || sourceNode.type === 'sandboxGetNearby' || sourceNode.type === 'sandboxMoveForward' || sourceNode.type === 'sandboxTurnLeft' || sourceNode.type === 'sandboxTurnRight' || sourceNode.type === 'sandboxIdle' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
+        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxGetPosition' || sourceNode.type === 'sandboxGetFacing' || sourceNode.type === 'sandboxGetNearby' || sourceNode.type === 'sandboxGetInventory' || sourceNode.type === 'sandboxMoveForward' || sourceNode.type === 'sandboxTurnLeft' || sourceNode.type === 'sandboxTurnRight' || sourceNode.type === 'sandboxIdle' || sourceNode.type === 'sandboxPickUpItem' || sourceNode.type === 'sandboxPlaceItem' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
         sourceHandle = (sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' ? 'output_string' : 'output');
     }
     if (sourceNode && sourceNode.type === 'forLoopControl' && (sourceHandle == null || sourceHandle === '')) {
@@ -2089,6 +2125,59 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             utility_type: 'sandbox_get_nearby',
             label: d?.label ?? 'Get nearby',
             data: {},
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxGetInventory') {
+        const d = n.data as any;
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_get_inventory',
+            label: d?.label ?? 'Get inventory',
+            data: {},
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxPickUpItem') {
+        const d = n.data as any;
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'reason')
+            : [{ key: 'reason', type: 'string' as const, value: null }];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'reason')) {
+            requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
+        }
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_pick_up_item',
+            label: d?.label ?? 'Pick up item',
+            data: { required_inputs: requiredInputs },
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxPlaceItem') {
+        const d = n.data as any;
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter(
+                  (r: { key?: string }) => r?.key === 'reason' || r?.key === 'item_type',
+              )
+            : [
+                  { key: 'reason', type: 'string' as const, value: null },
+                  { key: 'item_type', type: 'string' as const, value: null },
+              ];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'reason')) {
+            requiredInputs.push({ key: 'reason', type: 'string' as const, value: null });
+        }
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'item_type')) {
+            requiredInputs.push({ key: 'item_type', type: 'string' as const, value: null });
+        }
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_place_item',
+            label: d?.label ?? 'Place item',
+            data: { required_inputs: requiredInputs },
             position: pos,
         };
     }

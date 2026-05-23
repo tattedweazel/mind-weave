@@ -317,6 +317,39 @@ class SandboxIdleUtilityNode(BaseModel):
     position: Dict[str, float] = Field(default_factory=dict)
 
 
+class SandboxPickUpItemUtilityNode(BaseModel):
+    """Emit a validated ``pick_up_item`` ``DecisionIntent`` dictionary for Stop."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_pick_up_item"] = "sandbox_pick_up_item"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class SandboxPlaceItemUtilityNode(BaseModel):
+    """Emit a validated ``place_item`` ``DecisionIntent`` dictionary for Stop."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_place_item"] = "sandbox_place_item"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class SandboxGetInventoryUtilityNode(BaseModel):
+    """Emit focused creature inventory as a list of dictionaries."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_get_inventory"] = "sandbox_get_inventory"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
 class IntToStringUtilityNode(BaseModel):
     """A utility node that converts an integer input to its decimal string form."""
 
@@ -957,6 +990,9 @@ GraphNode = Union[
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
     SandboxIdleUtilityNode,
+    SandboxPickUpItemUtilityNode,
+    SandboxPlaceItemUtilityNode,
+    SandboxGetInventoryUtilityNode,
     IntToStringUtilityNode,
     ListItemByIndexUtilityNode,
     DictionaryValueByKeyUtilityNode,

@@ -187,6 +187,26 @@ describe('SandboxCellActionModal', () => {
         });
     });
 
+    it('completes place_item after Ball color is confirmed', async () => {
+        const user = userEvent.setup();
+        const onComplete = vi.fn();
+        renderModal({
+            cell: { x: 1, y: 1 },
+            onComplete,
+            sandboxFavoriteColors: ['#00FF00'],
+        });
+
+        await user.click(screen.getByRole('button', { name: /^Place item/ }));
+        await user.click(screen.getByRole('button', { name: /^Ball/ }));
+        await user.click(screen.getByRole('button', { name: /Place ball \(#00FF00\)/ }));
+        expect(onComplete).toHaveBeenCalledWith({
+            type: 'place_item',
+            cell: { x: 1, y: 1 },
+            item_type: 'ball',
+            color: '#00FF00',
+        });
+    });
+
     it('completes place_item after Food is chosen', async () => {
         const user = userEvent.setup();
         const onComplete = vi.fn();

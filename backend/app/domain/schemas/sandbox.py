@@ -7,10 +7,20 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
-DecisionAction = Literal["move_forward", "turn_left", "turn_right", "idle"]
+DecisionAction = Literal[
+    "move_forward",
+    "turn_left",
+    "turn_right",
+    "idle",
+    "pick_up_item",
+    "place_item",
+]
 Facing = Literal["N", "E", "S", "W"]
-NearbyCellKind = Literal["empty", "wall", "food", "creature", "out_of_bounds"]
-ItemType = Literal["food", "wall", "region"]
+NearbyCellKind = Literal["empty", "wall", "food", "ball", "creature", "out_of_bounds"]
+ItemType = Literal["food", "wall", "region", "ball"]
+PlaceableItemType = Literal["food", "wall", "ball"]
+InventoryItemType = Literal["ball", "food"]
+PlaceItemFilterType = Literal["ball", "food"]
 RegionTriggerMode = Literal["enter", "exit", "while_inside", "on_enter_once"]
 InteractionType = Literal[
     "cell_click",
@@ -24,11 +34,14 @@ InteractionType = Literal[
 ]
 
 SOLID_ITEM_TYPES = frozenset({"wall"})
-BLOCKING_ITEM_TYPES = frozenset({"food", "wall"})
+BLOCKING_ITEM_TYPES = frozenset({"food", "wall", "ball"})
+PICKABLE_ITEM_TYPES = frozenset({"food", "ball"})
 REGION_ITEM_TYPE = "region"
+BALL_ITEM_TYPE = "ball"
 DEFAULT_FACING: Facing = "N"
 DEFAULT_REGION_COLOR = "#3B82F6"
 _HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+SANDBOX_SCHEMA_VERSION = "2.3.0"
 
 
 def normalize_hex_color(raw: str) -> str:
@@ -66,6 +79,27 @@ class RegionTriggerConfig(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
 
 
+class InventoryItem(BaseModel):
+    type: InventoryItemType
+    color: Optional[str] = None
+    energy: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _validate_fields(self) -> InventoryItem:
+        if self.type == BALL_ITEM_TYPE:
+            if not self.color:
+                raise ValueError("ball inventory items require color")
+            self.color = normalize_hex_color(self.color)
+            if self.energy is not None:
+                raise ValueError("energy is not valid for ball inventory items")
+        elif self.type == "food":
+            if self.energy is None:
+                raise ValueError("food inventory items require energy")
+            if self.color is not None:
+                raise ValueError("color is not valid for food inventory items")
+        return self
+
+
 class SandboxItem(BaseModel):
     id: str = Field(min_length=1)
     type: ItemType
@@ -75,21 +109,32 @@ class SandboxItem(BaseModel):
     trigger: Optional[RegionTriggerConfig] = None
 
     @model_validator(mode="after")
-    def _validate_region_fields(self) -> SandboxItem:
+    def _validate_item_fields(self) -> SandboxItem:
         if self.type == REGION_ITEM_TYPE:
             if not self.color:
                 raise ValueError("region items require color")
             self.color = normalize_hex_color(self.color)
             if self.trigger is None:
                 self.trigger = default_region_trigger()
-        elif self.color is not None or self.trigger is not None:
-            raise ValueError("color and trigger are only valid for region items")
+        elif self.type == BALL_ITEM_TYPE:
+            if not self.color:
+                raise ValueError("ball items require color")
+            self.color = normalize_hex_color(self.color)
+            if self.energy is not None or self.trigger is not None:
+                raise ValueError("ball items cannot have energy or trigger")
+        elif self.type == "food":
+            if self.color is not None or self.trigger is not None:
+                raise ValueError("color and trigger are not valid for food items")
+        elif self.type == "wall":
+            if self.color is not None or self.trigger is not None or self.energy is not None:
+                raise ValueError("wall items cannot have color, trigger, or energy")
         return self
 
 
 class DecisionIntent(BaseModel):
     action: DecisionAction
     reason: Optional[str] = None
+    item_type: Optional[PlaceItemFilterType] = None
 
 
 class CreatureState(BaseModel):
@@ -99,6 +144,7 @@ class CreatureState(BaseModel):
     position: GridCell
     facing: Facing = DEFAULT_FACING
     color: Optional[str] = None
+    inventory: list[InventoryItem] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _normalize_color(self) -> CreatureState:
@@ -152,6 +198,7 @@ class BoardCreaturePlacement(BaseModel):
     position: GridCell
     facing: Facing = DEFAULT_FACING
     color: Optional[str] = None
+    inventory: list[InventoryItem] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _normalize_color(self) -> BoardCreaturePlacement:
@@ -163,7 +210,7 @@ class BoardCreaturePlacement(BaseModel):
 class BoardDefinition(BaseModel):
     """Persisted JSON inside SandboxBoard.body."""
 
-    schema_version: str = "2.2.0"
+    schema_version: str = SANDBOX_SCHEMA_VERSION
     grid: WorldGrid
     items: list[SandboxItem] = Field(default_factory=list)
     creatures: list[BoardCreaturePlacement] = Field(default_factory=list)
@@ -182,7 +229,18 @@ class ItemClickEvent(BaseModel):
 class PlaceItemEvent(BaseModel):
     type: Literal["place_item"] = "place_item"
     cell: GridCell
-    item_type: ItemType
+    item_type: PlaceableItemType
+    color: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_place_item(self) -> PlaceItemEvent:
+        if self.item_type == BALL_ITEM_TYPE:
+            if not self.color:
+                raise ValueError("ball placement requires color")
+            self.color = normalize_hex_color(self.color)
+        elif self.color is not None:
+            raise ValueError("color is only valid when placing a ball")
+        return self
 
 
 class RemoveItemEvent(BaseModel):
@@ -240,7 +298,7 @@ SandboxInteractionEvent = Union[
 class SandboxDocumentEnvelope(BaseModel):
     """Persisted JSON inside Document.body for a sandbox session."""
 
-    schema_version: str = "2.2.0"
+    schema_version: str = SANDBOX_SCHEMA_VERSION
     board_id: Optional[str] = None
     sandbox: SandboxState
     playback: dict[str, Any] = Field(default_factory=dict)

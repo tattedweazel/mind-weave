@@ -47,6 +47,9 @@ export function applyBoardBuilderInteraction(
     if (interaction.type === 'place_item') {
         if (!inBounds(x, y)) return def;
         const items = filterBlockingItemsAt(def.items, x, y);
+        const normalizedBallColor =
+            interaction.item_type === 'ball' ? normalizeHexColor(interaction.color ?? '') : null;
+        if (interaction.item_type === 'ball' && !normalizedBallColor) return def;
         return {
             ...def,
             items: [
@@ -56,6 +59,9 @@ export function applyBoardBuilderInteraction(
                     type: interaction.item_type,
                     position: { x, y },
                     ...(interaction.item_type === 'food' ? { energy: SANDBOX_DEFAULT_FOOD_ENERGY } : {}),
+                    ...(interaction.item_type === 'ball' && normalizedBallColor
+                        ? { color: normalizedBallColor }
+                        : {}),
                 },
             ],
         };

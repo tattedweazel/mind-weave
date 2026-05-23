@@ -16,16 +16,20 @@ from app.domain.sandbox.constants import (
 )
 from app.domain.sandbox.workflow_bridge import decision_intent_from_workflow_result
 from app.domain.schemas.sandbox import (
+    BALL_ITEM_TYPE,
     BoardCreaturePlacement,
     BoardDefinition,
     CreatureState,
     DecisionIntent,
     Facing,
     GridCell,
+    InventoryItem,
+    PlaceItemFilterType,
     RecentAction,
     REGION_ITEM_TYPE,
     SOLID_ITEM_TYPES,
     BLOCKING_ITEM_TYPES,
+    PICKABLE_ITEM_TYPES,
     SandboxItem,
     SandboxState,
     SandboxTickInput,
@@ -131,7 +135,14 @@ def _remove_creature_at_cell(state: SandboxState, g: GridCell) -> None:
     state.creatures = [c for c in state.creatures if not (c.position.x == g.x and c.position.y == g.y)]
 
 
-def _place_item_at_cell(state: SandboxState, g: GridCell, item_type: str) -> None:
+def _place_item_at_cell(
+    state: SandboxState,
+    g: GridCell,
+    item_type: str,
+    *,
+    color: str | None = None,
+    energy: int | None = None,
+) -> None:
     if _cell_blocked_for_item_placement(state, g):
         return
     if item_type == "food":
@@ -140,7 +151,7 @@ def _place_item_at_cell(state: SandboxState, g: GridCell, item_type: str) -> Non
                 id=str(uuid.uuid4()),
                 type="food",
                 position=g,
-                energy=DEFAULT_FOOD_ENERGY,
+                energy=energy if energy is not None else DEFAULT_FOOD_ENERGY,
             )
         )
     elif item_type == "wall":
@@ -152,6 +163,61 @@ def _place_item_at_cell(state: SandboxState, g: GridCell, item_type: str) -> Non
                 energy=None,
             )
         )
+    elif item_type == BALL_ITEM_TYPE:
+        if not color:
+            return
+        try:
+            normalized = normalize_hex_color(color)
+        except ValueError:
+            return
+        state.world.items.append(
+            SandboxItem(
+                id=str(uuid.uuid4()),
+                type=BALL_ITEM_TYPE,
+                position=g,
+                color=normalized,
+            )
+        )
+
+
+def _remove_pickable_item_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
+    removed: SandboxItem | None = None
+    kept: list[SandboxItem] = []
+    for it in state.world.items:
+        if (
+            removed is None
+            and it.position.x == g.x
+            and it.position.y == g.y
+            and it.type in PICKABLE_ITEM_TYPES
+        ):
+            removed = it
+            continue
+        kept.append(it)
+    state.world.items = kept
+    return removed
+
+
+def _inventory_item_from_world_item(it: SandboxItem) -> InventoryItem | None:
+    if it.type == BALL_ITEM_TYPE and it.color:
+        return InventoryItem(type=BALL_ITEM_TYPE, color=it.color)
+    if it.type == "food" and it.energy is not None:
+        return InventoryItem(type="food", energy=it.energy)
+    return None
+
+
+def _pop_inventory_entry(
+    creature: CreatureState,
+    *,
+    item_type: PlaceItemFilterType | None = None,
+) -> InventoryItem | None:
+    if not creature.inventory:
+        return None
+    if item_type is None:
+        return creature.inventory.pop(0)
+    for idx, entry in enumerate(creature.inventory):
+        if entry.type == item_type:
+            return creature.inventory.pop(idx)
+    return None
 
 
 def _place_region_at_cell(state: SandboxState, g: GridCell, color: str) -> None:
@@ -253,6 +319,7 @@ def sandbox_state_from_board(board: BoardDefinition) -> SandboxState:
                 position=bp.position.model_copy(deep=True),
                 facing=bp.facing,
                 color=bp.color,
+                inventory=[entry.model_copy(deep=True) for entry in bp.inventory],
             )
         )
     return st
@@ -268,6 +335,7 @@ def board_definition_from_sandbox_state(state: SandboxState) -> BoardDefinition:
             position=c.position.model_copy(deep=True),
             facing=c.facing,
             color=c.color,
+            inventory=[entry.model_copy(deep=True) for entry in c.inventory],
         )
         for c in state.creatures
     ]
@@ -309,9 +377,18 @@ class SandboxEngine:
                 if g is None:
                     continue
                 item_type = ev.get("item_type")
-                if item_type not in ("food", "wall"):
-                    continue
-                _place_item_at_cell(state, g, item_type)
+                if item_type == "food":
+                    _place_item_at_cell(state, g, "food")
+                elif item_type == "wall":
+                    _place_item_at_cell(state, g, "wall")
+                elif item_type == BALL_ITEM_TYPE:
+                    raw_color = ev.get("color")
+                    if not raw_color or not str(raw_color).strip():
+                        continue
+                    try:
+                        _place_item_at_cell(state, g, BALL_ITEM_TYPE, color=str(raw_color))
+                    except ValueError:
+                        continue
                 continue
             if et == "remove_item":
                 g = _parse_interaction_cell(ev, w, h)
@@ -411,6 +488,36 @@ class SandboxEngine:
                 if not _creature_blocks_cell(state, nxt, exclude_id=creature.id):
                     creature.position = nxt
             _append_recent(state, creature.id, "move_forward", dec.reason)
+            return
+
+        if act == "pick_up_item":
+            fwd = _forward_cell(creature, w, h)
+            if fwd is not None and not _creature_blocks_cell(state, fwd, exclude_id=creature.id):
+                removed = _remove_pickable_item_at_cell(state, fwd)
+                if removed is not None:
+                    entry = _inventory_item_from_world_item(removed)
+                    if entry is not None:
+                        creature.inventory.append(entry)
+            _append_recent(state, creature.id, "pick_up_item", dec.reason)
+            return
+
+        if act == "place_item":
+            fwd = _forward_cell(creature, w, h)
+            entry = _pop_inventory_entry(creature, item_type=dec.item_type)
+            if (
+                fwd is not None
+                and entry is not None
+                and not _cell_blocked_for_item_placement(state, fwd)
+            ):
+                if entry.type == BALL_ITEM_TYPE and entry.color:
+                    _place_item_at_cell(state, fwd, BALL_ITEM_TYPE, color=entry.color)
+                elif entry.type == "food" and entry.energy is not None:
+                    _place_item_at_cell(state, fwd, "food", energy=entry.energy)
+                else:
+                    creature.inventory.insert(0, entry)
+            elif entry is not None:
+                creature.inventory.insert(0, entry)
+            _append_recent(state, creature.id, "place_item", dec.reason)
             return
 
         assert_never(act)

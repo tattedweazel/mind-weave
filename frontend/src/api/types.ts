@@ -691,6 +691,33 @@ export interface SandboxIdleUtilityNode {
     position: { x: number; y: number };
 }
 
+export interface SandboxPickUpItemUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_pick_up_item';
+    label: string;
+    data: { required_inputs?: RequiredInput[] };
+    position: { x: number; y: number };
+}
+
+export interface SandboxPlaceItemUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_place_item';
+    label: string;
+    data: { required_inputs?: RequiredInput[] };
+    position: { x: number; y: number };
+}
+
+export interface SandboxGetInventoryUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'sandbox_get_inventory';
+    label: string;
+    data: Record<string, unknown>;
+    position: { x: number; y: number };
+}
+
 export interface StringPrimitiveNode {
     id: string;
     kind: 'primitive';
@@ -1181,6 +1208,9 @@ export type GraphNode =
     | SandboxTurnLeftUtilityNode
     | SandboxTurnRightUtilityNode
     | SandboxIdleUtilityNode
+    | SandboxPickUpItemUtilityNode
+    | SandboxPlaceItemUtilityNode
+    | SandboxGetInventoryUtilityNode
     | IntToStringUtilityNode
     | ListItemByIndexUtilityNode
     | DictionaryValueByKeyUtilityNode
