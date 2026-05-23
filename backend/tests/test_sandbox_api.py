@@ -118,6 +118,7 @@ def test_sandbox_place_creature_via_tick(client: TestClient):
                     "type": "place_creature",
                     "cell": {"x": 2, "y": 2},
                     "workflow_id": str(STARTER_SANDBOX_WORKFLOW_ID),
+                    "color": "#3B82F6",
                 }
             ],
             "state_version": v0,
@@ -140,6 +141,7 @@ def test_sandbox_place_creature_via_tick(client: TestClient):
                     "type": "place_creature",
                     "cell": {"x": 2, "y": 2},
                     "workflow_id": str(STARTER_SANDBOX_WORKFLOW_ID),
+                    "color": "#3B82F6",
                 }
             ],
             "state_version": v0,
@@ -164,6 +166,7 @@ def test_sandbox_apply_interactions_without_tick(client: TestClient):
                     "cell": {"x": 2, "y": 2},
                     "workflow_id": str(STARTER_SANDBOX_WORKFLOW_ID),
                     "facing": "E",
+                    "color": "#FF0000",
                 }
             ],
             "state_version": v0,
@@ -175,6 +178,7 @@ def test_sandbox_apply_interactions_without_tick(client: TestClient):
     assert env["sandbox"]["tick"] == 0
     assert len(env["sandbox"]["creatures"]) == 1
     assert env["sandbox"]["creatures"][0]["facing"] == "E"
+    assert env["sandbox"]["creatures"][0]["color"] == "#FF0000"
     assert "last_workflow_runs" not in applied.json()
 
 

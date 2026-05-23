@@ -98,6 +98,13 @@ class CreatureState(BaseModel):
     name: Optional[str] = None
     position: GridCell
     facing: Facing = DEFAULT_FACING
+    color: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _normalize_color(self) -> CreatureState:
+        if self.color is not None:
+            self.color = normalize_hex_color(self.color)
+        return self
 
 
 class WorldGrid(BaseModel):
@@ -144,6 +151,13 @@ class BoardCreaturePlacement(BaseModel):
     name: Optional[str] = None
     position: GridCell
     facing: Facing = DEFAULT_FACING
+    color: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _normalize_color(self) -> BoardCreaturePlacement:
+        if self.color is not None:
+            self.color = normalize_hex_color(self.color)
+        return self
 
 
 class BoardDefinition(BaseModel):
@@ -182,6 +196,12 @@ class PlaceCreatureEvent(BaseModel):
     workflow_id: str = Field(min_length=1)
     name: Optional[str] = None
     facing: Facing = DEFAULT_FACING
+    color: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _normalize_color(self) -> PlaceCreatureEvent:
+        self.color = normalize_hex_color(self.color)
+        return self
 
 
 class RemoveCreatureEvent(BaseModel):

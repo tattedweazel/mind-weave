@@ -74,8 +74,10 @@ describe('boardBuilderLocalEdits', () => {
             type: 'place_creature',
             cell: { x: 1, y: 1 },
             workflow_id: 'wf-1',
+            color: '#3B82F6',
         });
         expect(def.items.some(it => it.type === 'region')).toBe(true);
         expect(def.creatures).toHaveLength(1);
+        expect(def.creatures[0]?.color).toBe('#3B82F6');
     });
 });

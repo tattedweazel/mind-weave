@@ -25,6 +25,11 @@ export function parseSandboxFavoriteColors(settings: Record<string, unknown> | u
     return out;
 }
 
-export function defaultRegionPlacementColor(favorites: string[]): string {
+export function defaultSandboxPlacementColor(favorites: string[]): string {
     return favorites[0] ?? DEFAULT_REGION_COLOR;
+}
+
+/** @deprecated Use defaultSandboxPlacementColor */
+export function defaultRegionPlacementColor(favorites: string[]): string {
+    return defaultSandboxPlacementColor(favorites);
 }

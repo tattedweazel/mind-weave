@@ -287,43 +287,71 @@ describe('SandboxCellActionModal', () => {
             expect(screen.getByRole('button', { name: 'Orphan Brain' })).toBeTruthy();
 
             await user.click(screen.getByRole('button', { name: 'Orphan Brain' }));
+            await user.click(screen.getByRole('button', { name: 'Continue' }));
+            await user.click(screen.getByRole('button', { name: /Place creature \(#3B82F6\)/ }));
             expect(onComplete).toHaveBeenCalledWith({
                 type: 'place_creature',
                 cell: { x: 4, y: 5 },
                 workflow_id: 'wf-orphan',
                 facing: 'N',
+                color: '#3B82F6',
             });
         });
 
-        it('includes selected facing when placing a creature', async () => {
+        it('includes selected facing and favorite color when placing a creature', async () => {
             const user = userEvent.setup();
             const onComplete = vi.fn();
-            renderModal({ ...pickerProps, cell: { x: 1, y: 2 }, onComplete });
+            renderModal({
+                ...pickerProps,
+                cell: { x: 1, y: 2 },
+                onComplete,
+                sandboxFavoriteColors: ['#FF0000'],
+            });
 
             await user.click(screen.getByRole('button', { name: /^Place creature/ }));
             await user.click(screen.getByRole('button', { name: /Shared/ }));
-            await user.click(screen.getByRole('button', { name: 'Face E' }));
             await user.click(screen.getByRole('button', { name: 'Shared Brain' }));
+            await user.click(screen.getByRole('button', { name: 'Face E' }));
+            await user.click(screen.getByRole('button', { name: 'Continue' }));
+            await user.click(screen.getByRole('button', { name: /Place creature \(#FF0000\)/ }));
 
             expect(onComplete).toHaveBeenCalledWith({
                 type: 'place_creature',
                 cell: { x: 1, y: 2 },
                 workflow_id: 'wf-shared',
                 facing: 'E',
+                color: '#FF0000',
             });
         });
 
-        it('navigates back from workflow to project to actions', async () => {
+        it('does not show facing picker on workflow step', async () => {
+            const user = userEvent.setup();
+            renderModal(pickerProps);
+
+            await user.click(screen.getByRole('button', { name: /^Place creature/ }));
+            await user.click(screen.getByRole('button', { name: /Shared/ }));
+
+            expect(screen.queryByRole('button', { name: 'Face N' })).toBeNull();
+        });
+
+        it('navigates back from color to facing to workflow to project to actions', async () => {
             const user = userEvent.setup();
             renderModal(pickerProps);
 
             await user.click(screen.getByRole('button', { name: /^Place creature/ }));
             await user.click(screen.getByRole('button', { name: /Alpha/ }));
+            await user.click(screen.getByRole('button', { name: 'Alpha Brain' }));
+            await user.click(screen.getByRole('button', { name: 'Continue' }));
+            expect(screen.getByText('Creature color')).toBeTruthy();
+
+            await user.click(screen.getByRole('button', { name: 'Back' }));
+            expect(screen.getByText('Initial facing')).toBeTruthy();
+
+            await user.click(screen.getByRole('button', { name: 'Back' }));
             expect(screen.getByRole('heading', { name: 'Alpha' })).toBeTruthy();
 
             await user.click(screen.getByRole('button', { name: 'Back' }));
             expect(screen.getByText('Project')).toBeTruthy();
-            expect(screen.getByRole('button', { name: /Alpha/ })).toBeTruthy();
 
             await user.click(screen.getByRole('button', { name: 'Back' }));
             expect(screen.getByRole('button', { name: /^Place creature/ })).toBeTruthy();

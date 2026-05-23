@@ -66,6 +66,7 @@ Regions can be placed on cells that already have creatures or items. Food/wall p
 ### Creature placement
 
 - **`facing`**: `"N"` \| `"E"` \| `"S"` \| `"W"` (default `"N"` if omitted). Editable in Board Builder Explorer.
+- **`color`**: `#RRGGBB` hex (chosen in the placement wizard; not editable in Explorer after placement). Legacy board creatures without `color` render with the index palette.
 - Compass: North = decreasing y, East = +x.
 
 ### Item metadata editing
@@ -82,7 +83,7 @@ In **Board Builder**, inspect a cell with an item to open the Explorer. Type-spe
 
 ### Favorite colors
 
-Users can save up to **16** favorite hex colors under **My Settings → View Settings → Favorite colors** (`User.settings.sandbox_favorite_colors`). The first favorite is the default when placing a new region.
+Users can save up to **16** favorite hex colors under **My Settings → View Settings → Favorite colors** (`User.settings.sandbox_favorite_colors`). The first favorite is the default when placing a new region or creature.
 
 ## HTTP API
 

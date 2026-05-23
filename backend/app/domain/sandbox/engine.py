@@ -178,11 +178,16 @@ def _place_creature_at_cell(
     state: SandboxState,
     g: GridCell,
     workflow_id: str,
+    color: str,
     name: str | None = None,
     *,
     facing: Facing | None = None,
 ) -> None:
     if _cell_blocked_for_creature_placement(state, g):
+        return
+    try:
+        normalized = normalize_hex_color(color)
+    except ValueError:
         return
     creature_num = len(state.creatures) + 1
     resolved_facing = facing if facing is not None else DEFAULT_CREATURE_FACING
@@ -193,6 +198,7 @@ def _place_creature_at_cell(
             name=name or f"Creature {creature_num}",
             position=g,
             facing=resolved_facing,
+            color=normalized,
         )
     )
 
@@ -246,6 +252,7 @@ def sandbox_state_from_board(board: BoardDefinition) -> SandboxState:
                 name=bp.name,
                 position=bp.position.model_copy(deep=True),
                 facing=bp.facing,
+                color=bp.color,
             )
         )
     return st
@@ -260,6 +267,7 @@ def board_definition_from_sandbox_state(state: SandboxState) -> BoardDefinition:
             name=c.name,
             position=c.position.model_copy(deep=True),
             facing=c.facing,
+            color=c.color,
         )
         for c in state.creatures
     ]
@@ -336,10 +344,14 @@ class SandboxEngine:
                 wf_id = ev.get("workflow_id")
                 if not wf_id or not str(wf_id).strip():
                     continue
+                raw_color = ev.get("color")
+                if not raw_color or not str(raw_color).strip():
+                    continue
                 _place_creature_at_cell(
                     state,
                     g,
                     str(wf_id),
+                    str(raw_color),
                     ev.get("name"),
                     facing=_parse_creature_facing(ev.get("facing")),
                 )

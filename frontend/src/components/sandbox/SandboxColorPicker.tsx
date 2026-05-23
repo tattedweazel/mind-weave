@@ -3,7 +3,7 @@ import React from 'react';
 import { normalizeHexColor } from '../../sandbox/sandboxColorUtils';
 import { REGION_PRESET_COLORS } from '../../sandbox/sandboxVisualDefaults';
 
-export interface SandboxRegionColorPickerProps {
+export interface SandboxColorPickerProps {
     value: string;
     favoriteColors?: string[];
     onChange: (color: string) => void;
@@ -37,7 +37,7 @@ function SwatchButton({
     );
 }
 
-export const SandboxRegionColorPicker: React.FC<SandboxRegionColorPickerProps> = ({
+export const SandboxColorPicker: React.FC<SandboxColorPickerProps> = ({
     value,
     favoriteColors = [],
     onChange,
@@ -135,7 +135,7 @@ export const SandboxRegionColorPicker: React.FC<SandboxRegionColorPickerProps> =
                     onClick={() => onConfirm(value)}
                     className="w-full rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium py-2.5"
                 >
-                    {confirmLabel ?? `Place region (${value})`}
+                    {confirmLabel ?? `Confirm (${value})`}
                 </button>
             ) : null}
         </div>

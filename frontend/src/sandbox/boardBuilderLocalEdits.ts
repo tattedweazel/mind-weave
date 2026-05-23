@@ -93,6 +93,8 @@ export function applyBoardBuilderInteraction(
     }
     if (interaction.type === 'place_creature') {
         if (!inBounds(x, y)) return def;
+        const normalized = normalizeHexColor(interaction.color);
+        if (!normalized) return def;
         const items = filterBlockingItemsAt(def.items, x, y);
         const creatures = def.creatures.filter(c => !(c.position.x === x && c.position.y === y));
         return {
@@ -106,6 +108,7 @@ export function applyBoardBuilderInteraction(
                     name: interaction.name ?? null,
                     position: { x, y },
                     facing: interaction.facing ?? DEFAULT_SANDBOX_FACING,
+                    color: normalized,
                 },
             ],
         };

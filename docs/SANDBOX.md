@@ -96,7 +96,7 @@ Base: `/api/v1/sandbox/`
 | `remove_item` | `cell` | Remove food/wall only (regions remain) |
 | `place_region` | `cell`, `color` (`#RRGGBB`) | Place or replace region at cell (allowed on occupied cells) |
 | `remove_region` | `cell` | Remove region only |
-| `place_creature` | `cell`, `workflow_id`, optional `name`, optional `facing` (`N`/`E`/`S`/`W`, default **N**) | Spawn creature if no creature and no food/wall (regions ignored) |
+| `place_creature` | `cell`, `workflow_id`, `color` (`#RRGGBB`), optional `name`, optional `facing` (`N`/`E`/`S`/`W`, default **N**) | Spawn creature if no creature and no food/wall (regions ignored) |
 | `remove_creature` | `cell` | Remove creature at cell |
 
 Paused cell edits in **Simulation** use `/interactions` so layout changes do not advance the tick counter or run workflow brains. Use **Play** or **Step** (`/tick`) to advance simulation.
@@ -106,7 +106,7 @@ Paused cell edits in **Simulation** use `/interactions` so layout changes do not
 - **Simulation tab**: board picker, play/pause/step, cell action menu, per-creature Explorer + Run Logs
 - **Board Builder tab**: edit/save boards without ticking; creature **facing** editable in Explorer
 
-When placing a creature (Simulation or Board Builder), the cell action modal includes an **Initial facing** picker (`N`/`E`/`S`/`W`, default North). Placement does not auto-advance ticks — press **Play** or **Step** to run brains.
+When placing a creature (Simulation or Board Builder), the cell action modal steps through **workflow** → **initial facing** (`N`/`E`/`S`/`W`, default North) → **color** (presets, favorites, or custom hex). Placement does not auto-advance ticks — press **Play** or **Step** to run brains.
 
 **Tick ms** in Explorer sets the client-side Play interval (200–60000 ms). It does not advance simulation or require pause; commit with Enter or by leaving the field (partial values while typing do not affect playback until committed).
 
@@ -121,7 +121,7 @@ Implementation: [`SandboxView.tsx`](../frontend/src/components/SandboxView.tsx),
 | Item | Default |
 |------|---------|
 | Grid | 16×16 (8–64 via resize) |
-| Creature | Colored rectangles with facing indicator |
+| Creature | Colored rectangles with facing indicator (color chosen at placement; legacy creatures without `color` use index palette) |
 | Food | Pink circle |
 | Wall | Gray square |
 | Region | Full-cell colored underlay (~35% opacity), drawn under other items |
@@ -129,7 +129,7 @@ Implementation: [`SandboxView.tsx`](../frontend/src/components/SandboxView.tsx),
 
 Constants: `frontend/src/sandbox/sandboxVisualDefaults.ts`, `backend/app/domain/sandbox/constants.py`.
 
-Favorite region colors: **My Settings → View Settings → Favorite colors** (`User.settings.sandbox_favorite_colors`, up to 16 hex swatches).
+Favorite placement colors: **My Settings → View Settings → Favorite colors** (`User.settings.sandbox_favorite_colors`, up to 16 hex swatches). The first favorite is the default when placing a new region or creature.
 
 ## Future: region triggers
 

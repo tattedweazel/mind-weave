@@ -3,7 +3,7 @@ import React from 'react';
 import type { WorkflowDefinitionListItem } from '../../api/types';
 import type { RegionTriggerConfigJson, SandboxItemJson } from '../../domain/sandbox/types';
 import { regionTriggerFromItem } from '../../sandbox/sandboxItemInspectorFields';
-import { SandboxRegionColorPicker } from './SandboxRegionColorPicker';
+import { SandboxColorPicker } from './SandboxColorPicker';
 import { InspectorSection } from '../workflow-editor/InspectorSection';
 
 export interface SandboxRegionInspectorSectionProps {
@@ -74,7 +74,7 @@ export const SandboxRegionInspectorSection: React.FC<SandboxRegionInspectorSecti
                 </>
             ) : (
                 <div className="mb-4">
-                    <SandboxRegionColorPicker
+                    <SandboxColorPicker
                         value={color}
                         favoriteColors={favoriteColors}
                         onChange={next => onItemChange?.(item.id, { color: next })}

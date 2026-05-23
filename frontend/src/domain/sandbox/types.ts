@@ -42,6 +42,7 @@ export interface SandboxCreatureJson {
     name?: string | null;
     position: SandboxGridCellJson;
     facing: SandboxFacing;
+    color?: string;
 }
 
 export interface SandboxWorldJson {
@@ -78,6 +79,7 @@ export interface BoardCreaturePlacementJson {
     name?: string | null;
     position: SandboxGridCellJson;
     facing?: SandboxFacing;
+    color?: string;
 }
 
 export interface BoardDefinitionJson {
@@ -107,6 +109,7 @@ export function sandboxStateFromBoardDefinition(def: BoardDefinitionJson): Sandb
             name: c.name ?? null,
             position: c.position,
             facing: c.facing ?? DEFAULT_SANDBOX_FACING,
+            ...(c.color !== undefined ? { color: c.color } : {}),
         })),
         world: { grid: def.grid, items: def.items ?? [] },
         recent_actions: [],

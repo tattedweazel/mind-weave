@@ -1,4 +1,6 @@
-/** Build payloads for sandbox session interaction APIs. */
+/**
+ * Build payloads for sandbox session interaction APIs.
+ */
 
 import type { SandboxFacing, SandboxGridCellJson } from '../domain/sandbox/types';
 
@@ -28,6 +30,7 @@ export type SandboxPlaceCreatureInteraction = {
     type: 'place_creature';
     cell: SandboxGridCellJson;
     workflow_id: string;
+    color: string;
     name?: string;
     facing?: SandboxFacing;
 };
@@ -68,14 +71,15 @@ export function removeRegionAtCellInteraction(cell: SandboxGridCellJson): Sandbo
 export function placeCreatureInteraction(
     cell: SandboxGridCellJson,
     workflowId: string,
-    options?: { name?: string; facing?: SandboxFacing },
+    options: { name?: string; facing?: SandboxFacing; color: string },
 ): SandboxPlaceCreatureInteraction {
     return {
         type: 'place_creature',
         cell,
         workflow_id: workflowId,
-        ...(options?.name !== undefined ? { name: options.name } : {}),
-        ...(options?.facing !== undefined ? { facing: options.facing } : {}),
+        color: options.color,
+        ...(options.name !== undefined ? { name: options.name } : {}),
+        ...(options.facing !== undefined ? { facing: options.facing } : {}),
     };
 }
 

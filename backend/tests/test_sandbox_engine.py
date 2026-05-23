@@ -95,7 +95,28 @@ def test_board_creature_default_facing():
     assert st.creatures[0].facing == "N"
 
 
-def test_place_creature_interaction_respects_facing():
+def test_board_creature_color_roundtrip():
+    from app.domain.schemas.sandbox import BoardCreaturePlacement, BoardDefinition
+    from app.domain.sandbox.engine import board_definition_from_sandbox_state, sandbox_state_from_board
+
+    board = BoardDefinition(
+        grid=WorldGrid(width=4, height=4),
+        creatures=[
+            BoardCreaturePlacement(
+                id="c1",
+                workflow_id="wf",
+                position=GridCell(x=1, y=1),
+                color="#AABBCC",
+            ),
+        ],
+    )
+    st = sandbox_state_from_board(board)
+    assert st.creatures[0].color == "#AABBCC"
+    saved = board_definition_from_sandbox_state(st)
+    assert saved.creatures[0].color == "#AABBCC"
+
+
+def test_place_creature_interaction_respects_facing_and_color():
     st = initial_sandbox_state_clean()
     eng = SandboxEngine()
     eng.apply_interactions(
@@ -106,12 +127,47 @@ def test_place_creature_interaction_respects_facing():
                 "cell": {"x": 2, "y": 2},
                 "workflow_id": "wf1",
                 "facing": "E",
+                "color": "#abc",
             }
         ],
     )
     assert len(st.creatures) == 1
     assert st.creatures[0].facing == "E"
+    assert st.creatures[0].color == "#AABBCC"
     assert st.tick == 0
+
+
+def test_place_creature_skips_invalid_color():
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [
+            {
+                "type": "place_creature",
+                "cell": {"x": 2, "y": 2},
+                "workflow_id": "wf1",
+                "color": "bad",
+            }
+        ],
+    )
+    assert st.creatures == []
+
+
+def test_place_creature_skips_missing_color():
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [
+            {
+                "type": "place_creature",
+                "cell": {"x": 2, "y": 2},
+                "workflow_id": "wf1",
+            }
+        ],
+    )
+    assert st.creatures == []
 
 
 def test_place_region_on_occupied_cell_coexists_with_food():

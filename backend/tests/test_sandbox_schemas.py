@@ -5,7 +5,15 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.domain.schemas.sandbox import PlaceRegionEvent, SandboxItem, default_region_trigger, normalize_hex_color
+from app.domain.schemas.sandbox import (
+    BoardCreaturePlacement,
+    CreatureState,
+    PlaceCreatureEvent,
+    PlaceRegionEvent,
+    SandboxItem,
+    default_region_trigger,
+    normalize_hex_color,
+)
 from app.domain.user_settings import MAX_SANDBOX_FAVORITE_COLORS, normalize_sandbox_favorite_colors
 
 
@@ -31,6 +39,35 @@ def test_food_item_rejects_color():
 def test_place_region_event_normalizes_color():
     ev = PlaceRegionEvent(cell={"x": 1, "y": 2}, color="#abc")
     assert ev.color == "#AABBCC"
+
+
+def test_place_creature_event_normalizes_color():
+    ev = PlaceCreatureEvent(
+        cell={"x": 1, "y": 2},
+        workflow_id="wf-1",
+        color="#abc",
+    )
+    assert ev.color == "#AABBCC"
+
+
+def test_creature_state_normalizes_color():
+    c = CreatureState(
+        id="c1",
+        workflow_id="wf-1",
+        position={"x": 0, "y": 0},
+        color="#f00",
+    )
+    assert c.color == "#FF0000"
+
+
+def test_board_creature_placement_normalizes_color():
+    bp = BoardCreaturePlacement(
+        id="c1",
+        workflow_id="wf-1",
+        position={"x": 0, "y": 0},
+        color="#abc",
+    )
+    assert bp.color == "#AABBCC"
 
 
 def test_default_region_trigger_disabled():

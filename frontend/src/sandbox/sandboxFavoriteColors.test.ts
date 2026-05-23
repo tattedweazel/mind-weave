@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { defaultRegionPlacementColor, parseSandboxFavoriteColors } from './sandboxFavoriteColors';
+import { defaultRegionPlacementColor, defaultSandboxPlacementColor, parseSandboxFavoriteColors } from './sandboxFavoriteColors';
 
 describe('sandboxFavoriteColors', () => {
     it('parses valid favorite colors', () => {
@@ -15,7 +15,8 @@ describe('sandboxFavoriteColors', () => {
     });
 
     it('defaults placement color from first favorite', () => {
+        expect(defaultSandboxPlacementColor(['#FF0000'])).toBe('#FF0000');
+        expect(defaultSandboxPlacementColor([])).toBe('#3B82F6');
         expect(defaultRegionPlacementColor(['#FF0000'])).toBe('#FF0000');
-        expect(defaultRegionPlacementColor([])).toBe('#3B82F6');
     });
 });

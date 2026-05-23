@@ -130,7 +130,7 @@ Adding another resource-backed primitive later (e.g. **Persona** on the canvas) 
 
 ## Sandbox (board-driven multi-creature simulation)
 
-**Sandbox V2.1** is a **server-owned** tick engine with **board templates** (`sandbox_boards`), **document-backed** sessions, and **per-creature workflow brains**. Each tick runs every creature's workflow once and applies **one atomic navigation action** (`move_forward`, `turn_left`, `turn_right`, `idle`). Types: [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) (`schema_version: 2.1.0`, `creatures[]` with `facing`). Full API, utilities, and UI tabs: [SANDBOX.md](SANDBOX.md), [BOARDS.md](BOARDS.md).
+**Sandbox V2.2** is a **server-owned** tick engine with **board templates** (`sandbox_boards`), **document-backed** sessions, and **per-creature workflow brains**. Each tick runs every creature's workflow once and applies **one atomic navigation action** (`move_forward`, `turn_left`, `turn_right`, `idle`). Types: [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) (`schema_version: 2.2.0`, `creatures[]` with `facing` and optional `color`; region underlays with `color`). Full API, utilities, and UI tabs: [SANDBOX.md](SANDBOX.md), [BOARDS.md](BOARDS.md).
 
 ## Database configuration (SQLite)
 

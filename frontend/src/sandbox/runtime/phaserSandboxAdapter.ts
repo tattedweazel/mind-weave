@@ -122,7 +122,7 @@ class SandboxScene extends Phaser.Scene {
             const px = creature.position.x;
             const py = creature.position.y;
             const selected = creature.id === this.selectedCreatureId;
-            const fill = selected ? CREATURE_SELECTED_FILL : creatureColor(idx);
+            const fill = selected ? CREATURE_SELECTED_FILL : (creature.color ?? creatureColor(idx));
             const cx = ox + px * CELL_PX + CELL_PX / 2;
             const cy = oy + py * CELL_PX + CELL_PX / 2;
             const half = (CELL_PX - 8) / 2;

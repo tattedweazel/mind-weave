@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { placeFoodInteraction, placeRegionInteraction, removeItemAtCellInteraction, removeRegionAtCellInteraction } from './sandboxCellInteractions';
+import { placeCreatureInteraction, placeFoodInteraction, placeRegionInteraction, removeItemAtCellInteraction, removeRegionAtCellInteraction } from './sandboxCellInteractions';
 
 describe('sandboxCellInteractions', () => {
     it('builds place_item payload', () => {
@@ -23,6 +23,18 @@ describe('sandboxCellInteractions', () => {
         expect(removeItemAtCellInteraction({ x: 0, y: 1 })).toEqual({
             type: 'remove_item',
             cell: { x: 0, y: 1 },
+        });
+    });
+
+    it('builds place_creature payload', () => {
+        expect(
+            placeCreatureInteraction({ x: 2, y: 3 }, 'wf-1', { facing: 'E', color: '#3B82F6' }),
+        ).toEqual({
+            type: 'place_creature',
+            cell: { x: 2, y: 3 },
+            workflow_id: 'wf-1',
+            facing: 'E',
+            color: '#3B82F6',
         });
     });
 

@@ -78,7 +78,8 @@
         "workflow_id": { "type": "string", "minLength": 1 },
         "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "position": { "$ref": "#/$defs/GridCell" },
-        "facing": { "$ref": "#/$defs/Facing" }
+        "facing": { "$ref": "#/$defs/Facing" },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
       }
     },
     "WorldGrid": {
@@ -142,7 +143,8 @@
         "workflow_id": { "type": "string", "minLength": 1 },
         "name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "position": { "$ref": "#/$defs/GridCell" },
-        "facing": { "$ref": "#/$defs/Facing" }
+        "facing": { "$ref": "#/$defs/Facing" },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
       }
     },
     "BoardDefinition": {
@@ -186,13 +188,14 @@
         },
         {
           "type": "object",
-          "required": ["type", "cell", "workflow_id"],
+          "required": ["type", "cell", "workflow_id", "color"],
           "properties": {
             "type": { "const": "place_creature" },
             "cell": { "$ref": "#/$defs/GridCell" },
             "workflow_id": { "type": "string", "minLength": 1 },
             "name": { "type": "string" },
-            "facing": { "$ref": "#/$defs/Facing" }
+            "facing": { "$ref": "#/$defs/Facing" },
+            "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
           }
         },
         {
