@@ -6,6 +6,7 @@ import {
     nearbyCellKindBadgeClass,
     nearbyCellKindLabel,
     nearbyCellsToRingMap,
+    nearbyRegionChipLabel,
     offsetToRingSlot,
     resolveBallDisplayColor,
 } from './sandboxSensoryProbeDisplay';
@@ -55,5 +56,16 @@ describe('sandboxSensoryProbeDisplay', () => {
         expect(resolveBallDisplayColor('#eaf73b')).toBe('#EAF73B');
         expect(resolveBallDisplayColor(undefined)).toBe('#3B82F6');
         expect(resolveBallDisplayColor('bad')).toBe('#3B82F6');
+    });
+
+    it('nearbyRegionChipLabel returns null without region', () => {
+        expect(nearbyRegionChipLabel(null)).toBeNull();
+        expect(nearbyRegionChipLabel(undefined)).toBeNull();
+    });
+
+    it('nearbyRegionChipLabel returns label text or generic Region', () => {
+        expect(nearbyRegionChipLabel('target')).toBe('target');
+        expect(nearbyRegionChipLabel('')).toBe('Region');
+        expect(nearbyRegionChipLabel('  ')).toBe('Region');
     });
 });

@@ -7,6 +7,8 @@ import {
     nearbyCellKindBadgeClass,
     nearbyCellKindLabel,
     nearbyCellsToRingMap,
+    nearbyRegionChipBadgeClass,
+    nearbyRegionChipLabel,
     NEARBY_RING_LAYOUT,
     PROBE_HINTS,
     PROBE_LABELS,
@@ -179,6 +181,7 @@ function NearbyCellTile({
     cell: NearbyCellJson;
     isForward: boolean;
 }) {
+    const regionChip = nearbyRegionChipLabel(cell.region_label);
     return (
         <div
             className={`flex flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5 min-h-[3.25rem] ${
@@ -192,6 +195,13 @@ function NearbyCellTile({
             >
                 {nearbyCellKindLabel(cell.kind)}
             </span>
+            {regionChip ? (
+                <span
+                    className={`text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border ${nearbyRegionChipBadgeClass()}`}
+                >
+                    {regionChip}
+                </span>
+            ) : null}
             <span className="text-[9px] font-mono tabular-nums text-slate-500 dark:text-slate-400 leading-none">
                 ({cell.x}, {cell.y})
             </span>

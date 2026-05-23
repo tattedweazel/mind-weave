@@ -1,6 +1,6 @@
 # Sandbox (board-driven simulation)
 
-Operational reference for **Sandbox V2.3**: board templates, multi-creature sessions, per-creature workflow brains, **atomic navigation ticks**, creature **inventory**, and Phaser as view-only renderer.
+Operational reference for **Sandbox V2.4**: board templates, multi-creature sessions, per-creature workflow brains, **atomic navigation ticks**, creature **inventory**, and Phaser as view-only renderer.
 
 Related: [BOARDS.md](BOARDS.md), [shared/sandbox_canonical.schema.json](../shared/sandbox_canonical.schema.json).
 
@@ -11,7 +11,7 @@ Related: [BOARDS.md](BOARDS.md), [shared/sandbox_canonical.schema.json](../share
 | **Boards** | `sandbox_boards` table, `BoardDefinition` JSON — see [BOARDS.md](BOARDS.md) |
 | **Domain** | `CreatureState` (position + **facing**), `SandboxState`, engine rules (`backend/app/domain/sandbox/engine.py`) |
 | **Workflows** | Per-creature `workflow_id`; `SandboxTickInput` with focused `creature` + all `creatures` |
-| **Persistence** | Session `Document.body` → `SandboxDocumentEnvelope` (`schema_version: 2.3.0`) |
+| **Persistence** | Session `Document.body` → `SandboxDocumentEnvelope` (`schema_version: 2.4.0`) |
 | **HTTP** | `backend/app/api/v1/sandbox.py` |
 | **SPA** | [SandboxView.tsx](../frontend/src/components/SandboxView.tsx) — **Simulation** + **Board Builder** tabs |
 
@@ -40,7 +40,7 @@ Navigation-focused utilities in the workflow editor (**Sandbox Utilities** secti
 | **Tick input** (`sandbox_tick` primitive) | Full `SandboxTickInput` dict (includes `tick` for scripted sequences) |
 | **Get position** | Focused creature `{x, y}` |
 | **Get facing** | `"N"` \| `"E"` \| `"S"` \| `"W"` |
-| **Get nearby** | Eight neighbors clockwise from facing; each `{x, y, kind}` where `kind` is `empty`, `wall`, `food`, `ball`, `creature`, or `out_of_bounds` |
+| **Get nearby** | Eight neighbors clockwise from facing; each `{x, y, kind, region_label?}` where `kind` is `empty`, `wall`, `food`, `ball`, `creature`, or `out_of_bounds`, and `region_label` is `null` when no region underlay is present or the region’s label string (including `""`) when a region exists on that cell |
 | **Get inventory** | List of held items on the focused creature (`{type, color?}` or `{type, energy?}`) |
 | **Move forward** | Emits `{action: "move_forward"}` for Stop |
 | **Turn left** / **Turn right** | Emits turn action dict for Stop |
@@ -63,7 +63,7 @@ On each **Step** or **Play** tick, the SPA **auto-pauses**, opens a **remote-con
 |---------------|----------|
 | D-pad | **Forward**, **Turn left**, **Turn right**, **Idle** |
 | Secondary | **Pick up item** only when forward cell is **ball** or **food**; **Place item** only when the creature holds at least one item — opens **Inventory** selection (choose a held item; **Confirm** requires an empty forward cell) |
-| Sensory probes | **Nearby**, **Position**, **Facing**, **Inventory** — client-side reads from the current envelope (no extra HTTP). One structured readout at a time (latest click replaces the previous): compass ring for **Nearby**, coordinate rows for **Position**, compass badge for **Facing**, inventory cards for **Inventory** (balls show a colored **Ball** label and matching swatch; food shows **Food** with a separate energy badge; selectable rows when **Place item** is active). Optional collapsible **Raw JSON** for debugging. Re-click the active probe to collapse; cached results restore on re-open for the modal session. |
+| Sensory probes | **Nearby**, **Position**, **Facing**, **Inventory** — client-side reads from the current envelope (no extra HTTP). One structured readout at a time (latest click replaces the previous): compass ring for **Nearby** (primary kind badge plus a separate **Region** chip when `region_label` is present; labeled regions show the label text, unlabeled regions show **Region**), coordinate rows for **Position**, compass badge for **Facing**, inventory cards for **Inventory** (balls show a colored **Ball** label and matching swatch; food shows **Food** with a separate energy badge; selectable rows when **Place item** is active). Optional collapsible **Raw JSON** for debugging. Re-click the active probe to collapse; cached results restore on re-open for the modal session. |
 | Cancel | Aborts the tick; playback stays paused |
 | Confirm | Submits the tick; **Play** resumes if it was active before the modal opened (**Step** stays paused) |
 
@@ -101,9 +101,15 @@ Seeded as `starter_sandbox_behavior` via [`starter_workflow_seed.py`](../backend
 
 **Scripted brute-force path**: use **Tick input** → **Dictionary value by key** (`tick`) → conditionals mapping tick numbers to **Move forward** / **Turn left** / **Turn right** nodes.
 
+## Schema 2.4.0 (region labels)
+
+Each **`region`** item stores a required string **`label`** (may be `""`). **Get nearby** exposes region metadata on each neighbor cell as **`region_label`**: `null` when no region is present, otherwise the region’s label (including empty string). Primary **`kind`** is unchanged — a cell with only a region still reports `kind: "empty"`; food/wall/ball/creature kinds take precedence when stacked. Regions **do not** block movement.
+
+Example brain pattern: **Get nearby** → index `0` (forward) → **Dictionary value by key** `region_label` → **Is?** vs `"target"` → branch to an action.
+
 ## Schema 2.2.0 (regions)
 
-Adds **`region`** items: colored full-cell underlays for visual reference. Regions **coexist** with food, walls, and creatures on the same cell; they do **not** block movement or **Get nearby** sensing (cells with only a region report `kind: "empty"`). Trigger metadata is stored on each region but **not executed** yet — see [Future: region triggers](#future-region-triggers).
+Adds **`region`** items: colored full-cell underlays. Regions **coexist** with food, walls, and creatures on the same cell. Trigger metadata is stored on each region but **not executed** yet — see [Future: region triggers](#future-region-triggers).
 
 ## Breaking change (2.1.0)
 
@@ -132,7 +138,7 @@ Base: `/api/v1/sandbox/`
 |--------|---------|----------|
 | `place_item` | `cell`, `item_type`: `food` \| `wall` \| `ball`, `color` required for `ball` | Place if no creature and no food/wall/ball at cell (regions ignored) |
 | `remove_item` | `cell` | Remove food/wall/ball only (regions remain) |
-| `place_region` | `cell`, `color` (`#RRGGBB`) | Place or replace region at cell (allowed on occupied cells) |
+| `place_region` | `cell`, `color` (`#RRGGBB`), optional `label` (string, default `""`) | Place or replace region at cell (allowed on occupied cells) |
 | `remove_region` | `cell` | Remove region only |
 | `place_creature` | `cell`, `workflow_id`, `color` (`#RRGGBB`), optional `name`, optional `facing` (`N`/`E`/`S`/`W`, default **N**) | Spawn creature if no creature and no food/wall (regions ignored) |
 | `remove_creature` | `cell` | Remove creature at cell |

@@ -98,6 +98,27 @@ def test_sandbox_get_nearby(client: TestClient):
     cells = u_res["output"]["data"]
     assert len(cells) == 8
     assert cells[0]["kind"] == "wall"
+    assert cells[0]["region_label"] is None
+
+
+def test_sandbox_get_nearby_includes_region_label(client: TestClient):
+    tick = _tick_dict(
+        x=2,
+        y=2,
+        items=[
+            {
+                "id": "r1",
+                "type": "region",
+                "position": {"x": 2, "y": 1},
+                "color": "#3B82F6",
+                "label": "target",
+            },
+        ],
+    )
+    u_res = _run_utility_graph(client, utility_type="sandbox_get_nearby", tick=tick, output_kind="list")
+    cells = u_res["output"]["data"]
+    assert cells[0]["kind"] == "empty"
+    assert cells[0]["region_label"] == "target"
 
 
 def test_sandbox_move_forward_action(client: TestClient):

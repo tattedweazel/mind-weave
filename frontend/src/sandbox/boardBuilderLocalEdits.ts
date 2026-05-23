@@ -86,6 +86,7 @@ export function applyBoardBuilderInteraction(
                     type: REGION_ITEM_TYPE,
                     position: { x, y },
                     color: normalized,
+                    label: interaction.label ?? '',
                     trigger: { enabled: false, mode: null, workflow_id: null, inputs: {} },
                 },
             ],
@@ -129,7 +130,7 @@ export function applyBoardBuilderInteraction(
 }
 
 export type BoardItemMetadataPatch = Partial<
-    Pick<SandboxItemJson, SandboxItemEditableFieldKey | 'color' | 'trigger'>
+    Pick<SandboxItemJson, SandboxItemEditableFieldKey | 'color' | 'label' | 'trigger'>
 >;
 
 export function updateBoardItemMetadata(
@@ -154,6 +155,12 @@ export function updateBoardItemMetadata(
                 changed = true;
             }
         }
+        if (patch.label !== undefined && typeof patch.label === 'string') {
+            if (nextItem.label !== patch.label) {
+                nextItem.label = patch.label;
+                changed = true;
+            }
+        }
         if (patch.trigger !== undefined) {
             nextItem.trigger = patch.trigger as RegionTriggerConfigJson;
             changed = true;
@@ -161,7 +168,7 @@ export function updateBoardItemMetadata(
     }
 
     for (const [rawKey, rawValue] of Object.entries(patch)) {
-        if (rawKey === 'color' || rawKey === 'trigger') {
+        if (rawKey === 'color' || rawKey === 'trigger' || rawKey === 'label') {
             continue;
         }
         if (!isEditableItemFieldKey(item.type, rawKey)) {

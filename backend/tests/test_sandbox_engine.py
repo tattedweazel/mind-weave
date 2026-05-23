@@ -221,13 +221,25 @@ def test_place_region_replaces_existing_region():
     eng.apply_interactions(
         st,
         [
-            {"type": "place_region", "cell": {"x": 1, "y": 1}, "color": "#111111"},
-            {"type": "place_region", "cell": {"x": 1, "y": 1}, "color": "#222222"},
+            {"type": "place_region", "cell": {"x": 1, "y": 1}, "color": "#111111", "label": "first"},
+            {"type": "place_region", "cell": {"x": 1, "y": 1}, "color": "#222222", "label": "second"},
         ],
     )
     regions = [it for it in st.world.items if it.type == "region"]
     assert len(regions) == 1
     assert regions[0].color == "#222222"
+    assert regions[0].label == "second"
+
+
+def test_place_region_persists_label():
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [{"type": "place_region", "cell": {"x": 1, "y": 1}, "color": "#3B82F6", "label": "target"}],
+    )
+    region = next(it for it in st.world.items if it.type == "region")
+    assert region.label == "target"
 
 
 def test_move_forward_through_region():

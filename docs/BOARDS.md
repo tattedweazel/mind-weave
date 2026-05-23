@@ -13,11 +13,11 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | **Snapshot** | Starting a session copies a board into session state; the session evolves independently |
 | **Save back** | Paused sessions can **Save as Board** (new row) or **Update Board** (overwrite source) |
 
-## BoardDefinition JSON (`schema_version: 2.3.0`)
+## BoardDefinition JSON (`schema_version: 2.4.0`)
 
 ```json
 {
-  "schema_version": "2.3.0",
+  "schema_version": "2.4.0",
   "grid": { "width": 16, "height": 16 },
   "items": [
     { "id": "w1", "type": "wall", "position": { "x": 3, "y": 3 } },
@@ -27,6 +27,7 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
       "type": "region",
       "position": { "x": 2, "y": 2 },
       "color": "#3B82F6",
+      "label": "target",
       "trigger": {
         "enabled": false,
         "mode": null,
@@ -54,7 +55,7 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | `wall` | Blocks movement and placement | None (read-only Id/Type/Position in Explorer) |
 | `food` | Reported by **Get nearby**; does not block movement; pickable | **Energy** editable in Explorer (default `48`) |
 | `ball` | Reported by **Get nearby** as `ball`; does not block movement; pickable | **Color** at placement (read-only in Explorer after place) |
-| `region` | Visual underlay only; coexists with other occupants; invisible to **Get nearby** | **Color**, **trigger** stub (editable; not executed yet) |
+| `region` | Colored underlay; coexists with other occupants; non-blocking; **`label`** readable via **Get nearby** (`region_label` on each neighbor cell) | **Label**, **Color**, **trigger** stub (editable; not executed yet) |
 
 ### Cell occupancy layers
 
@@ -80,7 +81,7 @@ In **Board Builder**, inspect a cell with an item to open the Explorer. Type-spe
 | `food` | `energy` (integer ≥ 0) |
 | `ball` | — (color chosen at placement) |
 | `wall` | — |
-| `region` | `color`; `trigger.enabled`, `trigger.mode`, `trigger.workflow_id`, `trigger.inputs` |
+| `region` | `label`; `color`; `trigger.enabled`, `trigger.mode`, `trigger.workflow_id`, `trigger.inputs` |
 
 **Adding a new item type:** extend `ItemType` in [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) and backend schemas; engine occupancy + movement in [`engine.py`](../backend/app/domain/sandbox/engine.py); **Get nearby** in [`query.py`](../backend/app/domain/sandbox/query.py); interactions + cell modal; Phaser in [`phaserSandboxAdapter.ts`](../frontend/src/sandbox/runtime/phaserSandboxAdapter.ts); Explorer fields in [`sandboxItemInspectorFields.ts`](../frontend/src/sandbox/sandboxItemInspectorFields.ts); tests in `backend/tests/test_sandbox_*.py` and frontend sandbox unit tests.
 

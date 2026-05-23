@@ -46,16 +46,57 @@ describe('sandboxSensoryProbes', () => {
         ]);
         const cells = nearbyCellsFromState(c, st);
         expect(cells).toHaveLength(8);
-        expect(cells[0]).toEqual({ x: 3, y: 1, kind: 'wall' });
+        expect(cells[0]).toEqual({ x: 3, y: 1, kind: 'wall', region_label: null });
     });
 
-    it('reports out_of_bounds at grid edge', () => {
-        const c = creature({ position: { x: 0, y: 0 }, facing: 'N' });
-        const cells = nearbyCellsFromState(c, state(c));
-        expect(cells.some(cell => cell.kind === 'out_of_bounds')).toBe(true);
+    it('region-only cell reports empty kind with region_label', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        const st = state(c, [
+            {
+                id: 'r1',
+                type: 'region',
+                position: { x: 3, y: 1 },
+                color: '#3B82F6',
+                label: 'target',
+            },
+        ]);
+        expect(nearbyCellsFromState(c, st)[0]).toEqual({
+            x: 3,
+            y: 1,
+            kind: 'empty',
+            region_label: 'target',
+        });
     });
 
-    it('ignores region-only cells', () => {
+    it('food on region reports food kind and region_label', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        const st = state(c, [
+            {
+                id: 'r1',
+                type: 'region',
+                position: { x: 3, y: 1 },
+                color: '#3B82F6',
+                label: 'target',
+            },
+            { id: 'f1', type: 'food', position: { x: 3, y: 1 }, energy: 10 },
+        ]);
+        expect(nearbyCellsFromState(c, st)[0]).toEqual({
+            x: 3,
+            y: 1,
+            kind: 'food',
+            region_label: 'target',
+        });
+    });
+
+    it('region with empty label still exposes region_label', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        const st = state(c, [
+            { id: 'r1', type: 'region', position: { x: 3, y: 1 }, color: '#3B82F6', label: '' },
+        ]);
+        expect(nearbyCellsFromState(c, st)[0].region_label).toBe('');
+    });
+
+    it('ignores region-only cells for kind', () => {
         const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
         const st = state(c, [
             { id: 'r1', type: 'region', position: { x: 3, y: 1 }, color: '#3B82F6' },

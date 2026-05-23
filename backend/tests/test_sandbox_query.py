@@ -99,13 +99,60 @@ def test_nearby_reports_ball():
     assert cells[0].kind == "ball"
 
 
-def test_nearby_ignores_region_only_cell():
+def test_nearby_region_only_cell_reports_empty_kind_with_region_label():
     world = WorldState(
         grid=WorldGrid(width=5, height=5),
         items=[
-            SandboxItem(id="r1", type="region", position=GridCell(x=3, y=1), color="#3B82F6"),
+            SandboxItem(
+                id="r1",
+                type="region",
+                position=GridCell(x=3, y=1),
+                color="#3B82F6",
+                label="target",
+            ),
         ],
     )
     creature = CreatureState(id="c1", workflow_id="wf", position=GridCell(x=3, y=2), facing="N")
     cells = nearby_cells_clockwise("N", creature.position, 5, 5, world, [creature], exclude_creature_id="c1")
     assert cells[0].kind == "empty"
+    assert cells[0].region_label == "target"
+
+
+def test_nearby_region_only_empty_label():
+    world = WorldState(
+        grid=WorldGrid(width=5, height=5),
+        items=[
+            SandboxItem(id="r1", type="region", position=GridCell(x=3, y=1), color="#3B82F6", label=""),
+        ],
+    )
+    creature = CreatureState(id="c1", workflow_id="wf", position=GridCell(x=3, y=2), facing="N")
+    cells = nearby_cells_clockwise("N", creature.position, 5, 5, world, [creature], exclude_creature_id="c1")
+    assert cells[0].kind == "empty"
+    assert cells[0].region_label == ""
+
+
+def test_nearby_food_on_region_reports_both():
+    world = WorldState(
+        grid=WorldGrid(width=5, height=5),
+        items=[
+            SandboxItem(
+                id="r1",
+                type="region",
+                position=GridCell(x=3, y=1),
+                color="#3B82F6",
+                label="target",
+            ),
+            SandboxItem(id="f1", type="food", position=GridCell(x=3, y=1), energy=10),
+        ],
+    )
+    creature = CreatureState(id="c1", workflow_id="wf", position=GridCell(x=3, y=2), facing="N")
+    cells = nearby_cells_clockwise("N", creature.position, 5, 5, world, [creature], exclude_creature_id="c1")
+    assert cells[0].kind == "food"
+    assert cells[0].region_label == "target"
+
+
+def test_nearby_no_region_has_null_region_label():
+    world = WorldState(grid=WorldGrid(width=5, height=5), items=[])
+    creature = CreatureState(id="c1", workflow_id="wf", position=GridCell(x=3, y=2), facing="N")
+    cells = nearby_cells_clockwise("N", creature.position, 5, 5, world, [creature], exclude_creature_id="c1")
+    assert cells[0].region_label is None

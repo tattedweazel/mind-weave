@@ -62,7 +62,7 @@ describe('SandboxSensoryProbePanel', () => {
         render(
             <SandboxSensoryProbePanel
                 kind="nearby"
-                value={[{ x: 3, y: 1, kind: 'wall' }]}
+                value={[{ x: 3, y: 1, kind: 'wall', region_label: null }]}
                 facing="N"
                 origin={{ x: 3, y: 2 }}
             />,
@@ -70,6 +70,44 @@ describe('SandboxSensoryProbePanel', () => {
         expect(screen.getByText('Wall')).toBeInTheDocument();
         expect(screen.getByText('(3, 1)')).toBeInTheDocument();
         expect(screen.getByText('You')).toBeInTheDocument();
+    });
+
+    it('renders region chip for labeled region-only cell', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="nearby"
+                value={[{ x: 3, y: 1, kind: 'empty', region_label: 'target' }]}
+                facing="N"
+                origin={{ x: 3, y: 2 }}
+            />,
+        );
+        expect(screen.getByText('Empty')).toBeInTheDocument();
+        expect(screen.getByText('target')).toBeInTheDocument();
+    });
+
+    it('renders generic Region chip when region_label is empty string', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="nearby"
+                value={[{ x: 3, y: 1, kind: 'empty', region_label: '' }]}
+                facing="N"
+                origin={{ x: 3, y: 2 }}
+            />,
+        );
+        expect(screen.getByText('Region')).toBeInTheDocument();
+    });
+
+    it('renders food and region chips when stacked', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="nearby"
+                value={[{ x: 3, y: 1, kind: 'food', region_label: 'target' }]}
+                facing="N"
+                origin={{ x: 3, y: 2 }}
+            />,
+        );
+        expect(screen.getByText('Food')).toBeInTheDocument();
+        expect(screen.getByText('target')).toBeInTheDocument();
     });
 
     it('selectable inventory rows invoke onInventorySelect', async () => {

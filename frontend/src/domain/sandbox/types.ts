@@ -33,6 +33,7 @@ export interface SandboxItemJson {
     position: SandboxGridCellJson;
     energy?: number;
     color?: string;
+    label?: string;
     trigger?: RegionTriggerConfigJson;
 }
 

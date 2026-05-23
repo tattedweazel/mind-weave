@@ -20,6 +20,7 @@ export type SandboxPlaceRegionInteraction = {
     type: 'place_region';
     cell: SandboxGridCellJson;
     color: string;
+    label?: string;
 };
 
 export type SandboxRemoveRegionInteraction = {
@@ -61,8 +62,12 @@ export function placeBallInteraction(cell: SandboxGridCellJson, color: string): 
     return { type: 'place_item', cell, item_type: 'ball', color };
 }
 
-export function placeRegionInteraction(cell: SandboxGridCellJson, color: string): SandboxPlaceRegionInteraction {
-    return { type: 'place_region', cell, color };
+export function placeRegionInteraction(
+    cell: SandboxGridCellJson,
+    color: string,
+    label = '',
+): SandboxPlaceRegionInteraction {
+    return { type: 'place_region', cell, color, label };
 }
 
 export function removeItemAtCellInteraction(cell: SandboxGridCellJson): SandboxRemoveItemInteraction {

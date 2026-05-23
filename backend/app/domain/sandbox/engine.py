@@ -225,7 +225,7 @@ def _pop_inventory_entry(
     return None
 
 
-def _place_region_at_cell(state: SandboxState, g: GridCell, color: str) -> None:
+def _place_region_at_cell(state: SandboxState, g: GridCell, color: str, label: str = "") -> None:
     normalized = normalize_hex_color(color)
     _remove_region_at_cell(state, g)
     state.world.items.append(
@@ -234,6 +234,7 @@ def _place_region_at_cell(state: SandboxState, g: GridCell, color: str) -> None:
             type="region",
             position=g,
             color=normalized,
+            label=label,
             trigger=default_region_trigger(),
         )
     )
@@ -408,8 +409,10 @@ class SandboxEngine:
                 raw_color = ev.get("color")
                 if not raw_color or not str(raw_color).strip():
                     continue
+                raw_label = ev.get("label")
+                label = "" if raw_label is None else str(raw_label)
                 try:
-                    _place_region_at_cell(state, g, str(raw_color))
+                    _place_region_at_cell(state, g, str(raw_color), label)
                 except ValueError:
                     continue
                 continue

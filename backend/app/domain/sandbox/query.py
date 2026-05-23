@@ -76,8 +76,16 @@ def nearby_cells_clockwise(
     for dx, dy in ordered_offsets:
         x, y = position.x + dx, position.y + dy
         kind = _cell_kind(x, y, width, height, world, creatures, exclude_creature_id)
-        out.append(NearbyCell(x=x, y=y, kind=kind))
+        region_label = _region_label_at_cell(x, y, world)
+        out.append(NearbyCell(x=x, y=y, kind=kind, region_label=region_label))
     return out
+
+
+def _region_label_at_cell(x: int, y: int, world: WorldState) -> str | None:
+    for it in world.items:
+        if it.position.x == x and it.position.y == y and it.type == REGION_ITEM_TYPE:
+            return it.label if it.label is not None else ""
+    return None
 
 
 def _cell_kind(

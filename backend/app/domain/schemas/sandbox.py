@@ -41,7 +41,7 @@ BALL_ITEM_TYPE = "ball"
 DEFAULT_FACING: Facing = "N"
 DEFAULT_REGION_COLOR = "#3B82F6"
 _HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
-SANDBOX_SCHEMA_VERSION = "2.3.0"
+SANDBOX_SCHEMA_VERSION = "2.4.0"
 
 
 def normalize_hex_color(raw: str) -> str:
@@ -70,6 +70,7 @@ class NearbyCell(BaseModel):
     x: int
     y: int
     kind: NearbyCellKind
+    region_label: Optional[str] = None
 
 
 class RegionTriggerConfig(BaseModel):
@@ -106,6 +107,7 @@ class SandboxItem(BaseModel):
     position: GridCell
     energy: Optional[int] = Field(default=None, ge=0)
     color: Optional[str] = None
+    label: Optional[str] = None
     trigger: Optional[RegionTriggerConfig] = None
 
     @model_validator(mode="after")
@@ -114,20 +116,22 @@ class SandboxItem(BaseModel):
             if not self.color:
                 raise ValueError("region items require color")
             self.color = normalize_hex_color(self.color)
+            if self.label is None:
+                self.label = ""
             if self.trigger is None:
                 self.trigger = default_region_trigger()
         elif self.type == BALL_ITEM_TYPE:
             if not self.color:
                 raise ValueError("ball items require color")
             self.color = normalize_hex_color(self.color)
-            if self.energy is not None or self.trigger is not None:
-                raise ValueError("ball items cannot have energy or trigger")
+            if self.energy is not None or self.trigger is not None or self.label is not None:
+                raise ValueError("ball items cannot have energy, trigger, or label")
         elif self.type == "food":
-            if self.color is not None or self.trigger is not None:
-                raise ValueError("color and trigger are not valid for food items")
+            if self.color is not None or self.trigger is not None or self.label is not None:
+                raise ValueError("color, trigger, and label are not valid for food items")
         elif self.type == "wall":
-            if self.color is not None or self.trigger is not None or self.energy is not None:
-                raise ValueError("wall items cannot have color, trigger, or energy")
+            if self.color is not None or self.trigger is not None or self.energy is not None or self.label is not None:
+                raise ValueError("wall items cannot have color, trigger, energy, or label")
         return self
 
 
@@ -272,6 +276,7 @@ class PlaceRegionEvent(BaseModel):
     type: Literal["place_region"] = "place_region"
     cell: GridCell
     color: str = Field(min_length=1)
+    label: str = ""
 
     @model_validator(mode="after")
     def _normalize_color(self) -> PlaceRegionEvent:

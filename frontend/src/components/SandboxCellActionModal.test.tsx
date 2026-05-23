@@ -221,7 +221,7 @@ describe('SandboxCellActionModal', () => {
         });
     });
 
-    it('completes place_region after color is confirmed', async () => {
+    it('completes place_region after color and label steps', async () => {
         const user = userEvent.setup();
         const onComplete = vi.fn();
         renderModal({
@@ -231,11 +231,14 @@ describe('SandboxCellActionModal', () => {
         });
 
         await user.click(screen.getByRole('button', { name: /^Place region/ }));
+        await user.click(screen.getByRole('button', { name: /Next: label/i }));
+        await user.type(screen.getByLabelText('Region label'), 'target');
         await user.click(screen.getByRole('button', { name: /Place region \(#FF0000\)/ }));
         expect(onComplete).toHaveBeenCalledWith({
             type: 'place_region',
             cell: { x: 1, y: 1 },
             color: '#FF0000',
+            label: 'target',
         });
     });
 

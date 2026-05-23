@@ -70,6 +70,19 @@ export function nearbyCellKindBadgeClass(kind: NearbyCellKind): string {
     return NEARBY_CELL_KIND_BADGE_CLASSES[kind];
 }
 
+/** Label for the Region chip in Remote Control nearby tiles; null when no region on cell. */
+export function nearbyRegionChipLabel(regionLabel: string | null | undefined): string | null {
+    if (regionLabel == null) {
+        return null;
+    }
+    const trimmed = regionLabel.trim();
+    return trimmed === '' ? 'Region' : trimmed;
+}
+
+export function nearbyRegionChipBadgeClass(): string {
+    return 'bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-800';
+}
+
 export function offsetToRingSlot(dx: number, dy: number): NearbyRingSlot | null {
     return OFFSET_TO_RING_SLOT[`${dx},${dy}`] ?? null;
 }
@@ -102,7 +115,7 @@ export function forwardRingSlot(facing: 'N' | 'E' | 'S' | 'W'): NearbyRingSlot {
 }
 
 export const PROBE_HINTS: Record<'nearby' | 'position' | 'facing' | 'inventory', string> = {
-    nearby: '8 neighbors, clockwise from forward',
+    nearby: '8 neighbors, clockwise from forward; cells with a region also show a Region badge',
     position: 'Focused creature grid coordinates',
     facing: 'Current heading on the board',
     inventory: 'Items held by this creature',

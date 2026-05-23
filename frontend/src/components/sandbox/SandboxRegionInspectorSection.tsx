@@ -2,7 +2,7 @@ import React from 'react';
 
 import type { WorkflowDefinitionListItem } from '../../api/types';
 import type { RegionTriggerConfigJson, SandboxItemJson } from '../../domain/sandbox/types';
-import { regionTriggerFromItem } from '../../sandbox/sandboxItemInspectorFields';
+import { regionTriggerFromItem, REGION_TRIGGER_MODES } from '../../sandbox/sandboxItemInspectorFields';
 import { SandboxColorPicker } from './SandboxColorPicker';
 import { InspectorSection } from '../workflow-editor/InspectorSection';
 
@@ -13,7 +13,7 @@ export interface SandboxRegionInspectorSectionProps {
     workflows?: WorkflowDefinitionListItem[];
     onItemChange?: (
         itemId: string,
-        patch: Partial<Pick<SandboxItemJson, 'color' | 'trigger'>>,
+        patch: Partial<Pick<SandboxItemJson, 'color' | 'label' | 'trigger'>>,
     ) => void;
 }
 
@@ -26,6 +26,7 @@ export const SandboxRegionInspectorSection: React.FC<SandboxRegionInspectorSecti
 }) => {
     const trigger = regionTriggerFromItem(item);
     const color = item.color ?? '#3B82F6';
+    const label = item.label ?? '';
     const [inputsDraft, setInputsDraft] = React.useState(() => JSON.stringify(trigger.inputs ?? {}, null, 2));
     const [inputsError, setInputsError] = React.useState<string | null>(null);
 
@@ -63,6 +64,26 @@ export const SandboxRegionInspectorSection: React.FC<SandboxRegionInspectorSecti
                 <div className="text-mw-text-primary tabular-nums text-right font-mono">
                     ({item.position.x}, {item.position.y})
                 </div>
+            </div>
+            <div className="mb-4">
+                <label htmlFor={`${item.id}-region-label`} className="text-xs font-medium text-mw-text-secondary block mb-1">
+                    Label
+                </label>
+                {readOnly ? (
+                    <p className="text-xs text-mw-text-primary font-mono">{label.trim() === '' ? '(empty)' : label}</p>
+                ) : (
+                    <input
+                        id={`${item.id}-region-label`}
+                        type="text"
+                        value={label}
+                        onChange={e => onItemChange?.(item.id, { label: e.target.value })}
+                        className="w-full px-2 py-1.5 text-sm border border-mw-border bg-mw-card rounded-lg"
+                        placeholder="e.g. target"
+                    />
+                )}
+                <p className="text-[11px] text-mw-text-secondary mt-1 leading-relaxed">
+                    Readable by creature brains via Get nearby (<code className="font-mono">region_label</code>).
+                </p>
             </div>
             {readOnly ? (
                 <>

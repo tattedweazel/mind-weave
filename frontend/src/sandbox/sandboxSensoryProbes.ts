@@ -21,6 +21,7 @@ export interface NearbyCellJson {
     x: number;
     y: number;
     kind: NearbyCellKind;
+    region_label?: string | null;
 }
 
 const NEIGHBOR_OFFSETS_N: readonly { dx: number; dy: number }[] = [
@@ -84,6 +85,15 @@ function cellKind(
     return 'empty';
 }
 
+function regionLabelAtCell(x: number, y: number, state: SandboxSandboxStateJson): string | null {
+    for (const it of state.world.items) {
+        if (it.position.x === x && it.position.y === y && it.type === REGION_ITEM_TYPE) {
+            return it.label ?? '';
+        }
+    }
+    return null;
+}
+
 export function nearbyCellsFromState(
     creature: SandboxCreatureJson,
     state: SandboxSandboxStateJson,
@@ -99,6 +109,7 @@ export function nearbyCellsFromState(
             x,
             y,
             kind: cellKind(x, y, width, height, state, creature.id),
+            region_label: regionLabelAtCell(x, y, state),
         };
     });
 }

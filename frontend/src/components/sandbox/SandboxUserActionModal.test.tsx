@@ -245,6 +245,38 @@ describe('SandboxUserActionModal', () => {
         expect(screen.getByText('You')).toBeInTheDocument();
     });
 
+    it('shows region chip in nearby probe when forward cell has labeled region', async () => {
+        const user = userEvent.setup();
+        const stateWithRegion: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [
+                    {
+                        id: 'r1',
+                        type: 'region',
+                        position: { x: 2, y: 1 },
+                        color: '#3B82F6',
+                        label: 'target',
+                    },
+                ],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creature}
+                sandboxState={stateWithRegion}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={vi.fn()}
+                onDismiss={vi.fn()}
+            />,
+        );
+        await user.click(screen.getByRole('button', { name: /^nearby$/i }));
+        const panel = screen.getByTestId('sensory-probe-panel');
+        expect(within(panel).getByText('target')).toBeInTheDocument();
+    });
+
     it('replaces probe result when a different probe is clicked', async () => {
         const user = userEvent.setup();
         render(

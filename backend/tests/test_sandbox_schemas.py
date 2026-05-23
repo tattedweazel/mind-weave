@@ -76,6 +76,21 @@ def test_place_region_event_normalizes_color():
     assert ev.color == "#AABBCC"
 
 
+def test_place_region_event_accepts_label():
+    ev = PlaceRegionEvent(cell={"x": 1, "y": 2}, color="#abc", label="target")
+    assert ev.label == "target"
+
+
+def test_region_item_defaults_label_to_empty_string():
+    item = SandboxItem(id="r1", type="region", position={"x": 0, "y": 0}, color="#3B82F6")
+    assert item.label == ""
+
+
+def test_food_item_rejects_label():
+    with pytest.raises(ValidationError):
+        SandboxItem(id="f1", type="food", position={"x": 0, "y": 0}, energy=1, label="x")
+
+
 def test_place_creature_event_normalizes_color():
     ev = PlaceCreatureEvent(
         cell={"x": 1, "y": 2},

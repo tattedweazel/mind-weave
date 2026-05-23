@@ -36,6 +36,7 @@ export type CellActionWizardStep =
     | 'choose_action'
     | 'choose_item_type'
     | 'choose_region_color'
+    | 'choose_region_label'
     | 'choose_project'
     | 'choose_workflow'
     | 'choose_creature_facing'
@@ -91,6 +92,7 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
     const [selectedRegionColor, setSelectedRegionColor] = React.useState(() =>
         defaultSandboxPlacementColor(sandboxFavoriteColors),
     );
+    const [selectedRegionLabel, setSelectedRegionLabel] = React.useState('');
     const [selectedCreatureColor, setSelectedCreatureColor] = React.useState(() =>
         defaultSandboxPlacementColor(sandboxFavoriteColors),
     );
@@ -166,6 +168,10 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
         }
         if (step === 'choose_item_type') {
             setStep('choose_action');
+            return;
+        }
+        if (step === 'choose_region_label') {
+            setStep('choose_region_color');
             return;
         }
         if (step === 'choose_region_color') {
@@ -277,6 +283,7 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                                 }
                                                 if (a.id === 'place_region') {
                                                     setSelectedRegionColor(defaultSandboxPlacementColor(sandboxFavoriteColors));
+                                                    setSelectedRegionLabel('');
                                                     setStep('choose_region_color');
                                                     return;
                                                 }
@@ -345,9 +352,42 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                 value={selectedRegionColor}
                                 favoriteColors={sandboxFavoriteColors}
                                 onChange={setSelectedRegionColor}
-                                onConfirm={color => onComplete(placeRegionInteraction(cell, color))}
-                                confirmLabel={`Place region (${selectedRegionColor})`}
+                                onConfirm={color => {
+                                    setSelectedRegionColor(color);
+                                    setStep('choose_region_label');
+                                }}
+                                confirmLabel="Next: label"
                             />
+                        </>
+                    ) : null}
+
+                    {step === 'choose_region_label' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                Region label
+                            </p>
+                            <input
+                                type="text"
+                                value={selectedRegionLabel}
+                                onChange={e => setSelectedRegionLabel(e.target.value)}
+                                placeholder="e.g. target (leave empty if unlabeled)"
+                                aria-label="Region label"
+                                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Creatures read this via Get nearby (<span className="font-mono">region_label</span>).
+                            </p>
+                            <button
+                                type="button"
+                                className="w-full rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-3 py-2.5"
+                                onClick={() =>
+                                    onComplete(
+                                        placeRegionInteraction(cell, selectedRegionColor, selectedRegionLabel),
+                                    )
+                                }
+                            >
+                                Place region ({selectedRegionColor})
+                            </button>
                         </>
                     ) : null}
 

@@ -32,6 +32,13 @@ describe('sandboxCellInteractions', () => {
             type: 'place_region',
             cell: { x: 1, y: 2 },
             color: '#3B82F6',
+            label: '',
+        });
+        expect(placeRegionInteraction({ x: 1, y: 2 }, '#3B82F6', 'target')).toEqual({
+            type: 'place_region',
+            cell: { x: 1, y: 2 },
+            color: '#3B82F6',
+            label: 'target',
         });
     });
 
