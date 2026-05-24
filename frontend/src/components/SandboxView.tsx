@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Loader2,
+    Maximize2,
     PanelLeft,
     PanelRight,
     Pause,
@@ -12,6 +13,8 @@ import {
     Plus,
     Save,
     StepForward,
+    ZoomIn,
+    ZoomOut,
 } from 'lucide-react';
 
 import { ApiClient } from '../api/client';
@@ -143,6 +146,7 @@ export const SandboxView: React.FC = () => {
     );
     const containerRef = useRef<HTMLDivElement>(null);
     const adapterRef = useRef<PhaserSandboxAdapter | null>(null);
+    const sandboxFitKeyRef = useRef<string | null>(null);
     const envelopeRef = useRef<SandboxEnvelopeJson | null>(null);
 
     const [mainTab, setMainTab] = useState<MainTab>('simulation');
@@ -364,12 +368,24 @@ export const SandboxView: React.FC = () => {
     useEffect(() => {
         const adapter = adapterRef.current;
         if (!adapter) return;
+
+        const fitKey =
+            mainTab === 'simulation' ? `sim:${documentId ?? ''}` : `builder:${builderBoardId ?? ''}`;
+
+        let stateUpdated = false;
         if (mainTab === 'simulation' && envelope) {
             adapter.setState(envelope.sandbox, { selectedCreatureId });
+            stateUpdated = true;
         } else if (mainTab === 'builder') {
             adapter.setState(sandboxStateFromBoardDefinition(localBoardDef), { selectedCreatureId });
+            stateUpdated = true;
         }
-    }, [mainTab, envelope, localBoardDef, selectedCreatureId]);
+
+        if (stateUpdated && sandboxFitKeyRef.current !== fitKey) {
+            sandboxFitKeyRef.current = fitKey;
+            requestAnimationFrame(() => adapter.fitToView());
+        }
+    }, [mainTab, envelope, localBoardDef, selectedCreatureId, documentId, builderBoardId]);
 
     useEffect(() => {
         if (mainTab === 'simulation' && envelope) {
@@ -1200,11 +1216,44 @@ export const SandboxView: React.FC = () => {
                         ) : null}
                     </div>
                 )}
-                <div className="flex-1 min-h-0 overflow-hidden flex items-center justify-center bg-mw-page p-2 relative">
+                <div className="flex-1 min-h-0 overflow-hidden relative bg-mw-page p-2">
                     <div
                         ref={containerRef}
-                        className="rounded-lg border border-mw-border overflow-hidden shrink-0 max-w-full max-h-full touch-none"
+                        className="absolute inset-2 rounded-lg border border-mw-border overflow-hidden touch-none"
                     />
+                    <div
+                        className="sandbox-board-controls absolute bottom-4 right-4 z-10 flex flex-col overflow-hidden rounded-lg border border-mw-border bg-mw-card shadow-sm"
+                        role="toolbar"
+                        aria-label="Board zoom controls"
+                    >
+                        <button
+                            type="button"
+                            className="sandbox-board-controls-button"
+                            aria-label="Zoom in"
+                            title="Zoom in"
+                            onClick={() => adapterRef.current?.zoomIn()}
+                        >
+                            <ZoomIn size={16} aria-hidden />
+                        </button>
+                        <button
+                            type="button"
+                            className="sandbox-board-controls-button"
+                            aria-label="Zoom out"
+                            title="Zoom out"
+                            onClick={() => adapterRef.current?.zoomOut()}
+                        >
+                            <ZoomOut size={16} aria-hidden />
+                        </button>
+                        <button
+                            type="button"
+                            className="sandbox-board-controls-button"
+                            aria-label="Fit board to view"
+                            title="Fit to view"
+                            onClick={() => adapterRef.current?.fitToView()}
+                        >
+                            <Maximize2 size={16} aria-hidden />
+                        </button>
+                    </div>
                     {runMessageToast ? (
                         <div
                             className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 max-w-[min(92vw,32rem)] px-4 py-3 rounded-lg bg-mw-card border border-mw-border shadow-lg text-sm text-mw-text-primary whitespace-pre-wrap"

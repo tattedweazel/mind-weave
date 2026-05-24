@@ -154,6 +154,25 @@ When placing a creature (Simulation or Board Builder), the cell action modal ste
 
 **Tick ms** in Explorer sets the client-side Play interval (200–60000 ms). It does not advance simulation or require pause; commit with Enter or by leaving the field (partial values while typing do not affect playback until committed).
 
+### Viewport (board zoom)
+
+The Phaser board uses a **camera viewport** sized to the center panel (not the full board pixel canvas). Large grids (up to **64×64**) stay usable by zooming out to fit.
+
+| Input | Behavior |
+|-------|----------|
+| **Scroll wheel** over the board | Smooth zoom in/out (cursor-anchored; magnitude-scaled) |
+| **Middle mouse drag** | Pan the board |
+| **Left drag** on the board | Pan (short click without drag still opens the cell menu) |
+| **Pinch** (touch) | Zoom in/out (viewport center) |
+| **+ / − / fit** controls | Bottom-right overlay on the board canvas |
+| **Auto-fit** | When opening or switching boards/sessions, applying a grid resize, or when the center panel resizes |
+
+**Fit** centers the board in the canvas. When the grid is **smaller** than the viewport, the board stays at **native 48px/cell** (no upscale) with even letterboxing on all sides; use **+** or scroll to zoom in. When the grid is **larger**, fit zooms out (with padding) until the whole board is visible, also centered.
+
+Minimum zoom is **dynamic** (fit entire board with padding, capped at **1×** so small boards are not upscaled). Maximum zoom is **2×** native cell size (`SANDBOX_BOARD_MAX_ZOOM` in [`sandboxBoardViewport.ts`](../frontend/src/sandbox/sandboxBoardViewport.ts)). After zooming in, **pan** with middle-mouse or left-drag to inspect a region; use **fit** or zoom out to see the whole board again.
+
+Implementation: [`phaserSandboxAdapter.ts`](../frontend/src/sandbox/runtime/phaserSandboxAdapter.ts), [`sandboxBoardViewport.ts`](../frontend/src/sandbox/sandboxBoardViewport.ts).
+
 ### Run Logs
 
 Each tick runs the creature brain, so **Run Logs** update every tick (no movement-only skip).
