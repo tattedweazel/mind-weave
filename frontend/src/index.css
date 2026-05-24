@@ -110,6 +110,32 @@ html, body, #root {
   color: var(--mw-text-primary) !important;
 }
 
+/* Sandbox board zoom controls — aligned with React Flow Controls */
+.sandbox-board-controls-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  background-color: var(--mw-card-bg);
+  color: var(--mw-text-primary);
+  border: 0;
+  border-bottom: 1px solid var(--mw-border);
+}
+.sandbox-board-controls-button:last-child {
+  border-bottom: 0;
+}
+@media (pointer: coarse) {
+  .sandbox-board-controls-button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+.sandbox-board-controls-button:hover {
+  background-color: var(--mw-card-bg-alt);
+  color: var(--mw-text-primary);
+}
+
 /* Workflow canvas: palette-tinted selection halo (nodes) */
 @keyframes mw-flow-node-glow-pulse {
   0%, 100% {

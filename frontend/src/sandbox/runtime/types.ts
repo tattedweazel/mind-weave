@@ -10,4 +10,7 @@ export interface SandboxRuntimeAdapter {
     destroy(): void;
     setState(state: SandboxSandboxStateJson, options?: SandboxSetStateOptions): void;
     setOnCellClick(handler: (cell: { x: number; y: number }) => void): void;
+    fitToView(): void;
+    zoomIn(): void;
+    zoomOut(): void;
 }

@@ -4,6 +4,19 @@
 import Phaser from 'phaser';
 
 import type { SandboxSandboxStateJson } from '../../domain/sandbox/types';
+import {
+    boardWorldSizePx,
+    computeFitViewport,
+    computeFitZoomLevel,
+    computeStableCameraBounds,
+    SANDBOX_BOARD_FIT_PADDING,
+    SANDBOX_BOARD_MAX_ZOOM,
+    SANDBOX_BOARD_PAN_DRAG_THRESHOLD_PX,
+    SANDBOX_BOARD_ZOOM_STEP,
+    wheelDeltaToZoomFactor,
+    worldPointToGridCell,
+    zoomAtAnchor,
+} from '../sandboxBoardViewport';
 import type { SandboxRuntimeAdapter, SandboxSetStateOptions } from './types';
 import {
     BOARD_BG,
@@ -15,11 +28,11 @@ import {
     FOOD_FILL,
     GRID_LINE,
     REGION_UNDERLAY_ALPHA,
-    SANDBOX_GRID_DEFAULT_HEIGHT,
-    SANDBOX_GRID_DEFAULT_WIDTH,
     WALL_FILL,
     creatureColor,
 } from '../sandboxVisualDefaults';
+
+const VIEWPORT_RESIZE_DEBOUNCE_MS = 120;
 
 function hexToRgbInt(hex: string): number {
     return parseInt(hex.replace('#', ''), 16);
@@ -27,14 +40,40 @@ function hexToRgbInt(hex: string): number {
 
 type CellHandler = (cell: { x: number; y: number }) => void;
 
-class SandboxScene extends Phaser.Scene {
+type ViewportController = {
+    fitToView(): void;
+    zoomIn(): void;
+    zoomOut(): void;
+    zoomAt(anchorX: number, anchorY: number, factor: number): void;
+    updateWorldSize(worldW: number, worldH: number): void;
+    resizeViewport(viewportW: number, viewportH: number): void;
+};
+
+class SandboxScene extends Phaser.Scene implements ViewportController {
     private cellHandler: CellHandler | null = null;
     private graphics: Phaser.GameObjects.Graphics | null = null;
     private lastState: SandboxSandboxStateJson | null = null;
     private selectedCreatureId: string | null = null;
+    private worldW = 0;
+    private worldH = 0;
+    private viewportW = 0;
+    private viewportH = 0;
+    private lastPinchDistance: number | null = null;
+    private readyHandler: (() => void) | null = null;
+    private panActive = false;
+    private panMoved = false;
+    private panPointerStartX = 0;
+    private panPointerStartY = 0;
+    private panScrollStartX = 0;
+    private panScrollStartY = 0;
+    private panTotalDragPx = 0;
 
     constructor() {
         super({ key: 'SandboxScene' });
+    }
+
+    setReadyHandler(handler: (() => void) | null) {
+        this.readyHandler = handler;
     }
 
     setCellHandler(h: CellHandler | null) {
@@ -46,22 +85,199 @@ class SandboxScene extends Phaser.Scene {
         if (this.lastState) this.sync(this.lastState);
     }
 
+    updateWorldSize(worldW: number, worldH: number) {
+        this.worldW = worldW;
+        this.worldH = worldH;
+    }
+
+    resizeViewport(viewportW: number, viewportH: number) {
+        this.viewportW = viewportW;
+        this.viewportH = viewportH;
+    }
+
+    private minZoom(): number {
+        return computeFitZoomLevel(
+            this.viewportW,
+            this.viewportH,
+            this.worldW,
+            this.worldH,
+            SANDBOX_BOARD_FIT_PADDING,
+        );
+    }
+
+    private cameraBounds() {
+        return computeStableCameraBounds({
+            viewportW: this.viewportW,
+            viewportH: this.viewportH,
+            worldW: this.worldW,
+            worldH: this.worldH,
+        });
+    }
+
+    private applyCameraViewport(
+        camera: Phaser.Cameras.Scene2D.Camera,
+        zoom: number,
+        scrollX?: number,
+        scrollY?: number,
+    ) {
+        const viewport = computeFitViewport({
+            viewportW: this.viewportW,
+            viewportH: this.viewportH,
+            worldW: this.worldW,
+            worldH: this.worldH,
+            zoom,
+            scrollX,
+            scrollY,
+        });
+        const bounds = this.cameraBounds();
+        camera.setZoom(zoom);
+        camera.setBounds(bounds.boundsX, bounds.boundsY, bounds.boundsW, bounds.boundsH);
+        camera.setScroll(viewport.scrollX, viewport.scrollY);
+    }
+
+    fitToView() {
+        if (
+            !this.cameras?.main ||
+            this.viewportW <= 0 ||
+            this.viewportH <= 0 ||
+            this.worldW <= 0 ||
+            this.worldH <= 0
+        ) {
+            return;
+        }
+        this.applyCameraViewport(this.cameras.main, this.minZoom());
+    }
+
+    zoomAt(anchorX: number, anchorY: number, factor: number) {
+        if (!this.cameras?.main || this.viewportW <= 0 || this.viewportH <= 0) return;
+        const camera = this.cameras.main;
+        const world = camera.getWorldPoint(anchorX, anchorY);
+        const result = zoomAtAnchor({
+            scrollX: camera.scrollX,
+            scrollY: camera.scrollY,
+            zoom: camera.zoom,
+            anchorWorldX: world.x,
+            anchorWorldY: world.y,
+            screenX: anchorX,
+            screenY: anchorY,
+            viewportW: this.viewportW,
+            viewportH: this.viewportH,
+            factor,
+            minZoom: this.minZoom(),
+            maxZoom: SANDBOX_BOARD_MAX_ZOOM,
+        });
+        this.applyCameraViewport(camera, result.zoom, result.scrollX, result.scrollY);
+    }
+
+    zoomIn() {
+        this.zoomAt(this.viewportW / 2, this.viewportH / 2, SANDBOX_BOARD_ZOOM_STEP);
+    }
+
+    zoomOut() {
+        this.zoomAt(this.viewportW / 2, this.viewportH / 2, 1 / SANDBOX_BOARD_ZOOM_STEP);
+    }
+
+    private beginPan(pointer: Phaser.Input.Pointer, camera: Phaser.Cameras.Scene2D.Camera) {
+        this.panActive = true;
+        this.panMoved = false;
+        this.panTotalDragPx = 0;
+        this.panPointerStartX = pointer.x;
+        this.panPointerStartY = pointer.y;
+        this.panScrollStartX = camera.scrollX;
+        this.panScrollStartY = camera.scrollY;
+    }
+
+    private updatePan(pointer: Phaser.Input.Pointer, camera: Phaser.Cameras.Scene2D.Camera) {
+        if (!this.panActive) return;
+        const dx = pointer.x - this.panPointerStartX;
+        const dy = pointer.y - this.panPointerStartY;
+        this.panTotalDragPx = Math.hypot(dx, dy);
+        if (this.panTotalDragPx >= SANDBOX_BOARD_PAN_DRAG_THRESHOLD_PX) {
+            this.panMoved = true;
+        }
+        const zoom = camera.zoom;
+        this.applyCameraViewport(
+            camera,
+            zoom,
+            this.panScrollStartX - dx / zoom,
+            this.panScrollStartY - dy / zoom,
+        );
+    }
+
+    private endPan(pointer: Phaser.Input.Pointer) {
+        if (!this.panActive) return;
+        const wasPan = this.panMoved;
+        this.panActive = false;
+
+        if (
+            !wasPan &&
+            pointer.leftButtonReleased() &&
+            this.lastState &&
+            this.cellHandler &&
+            this.cameras?.main
+        ) {
+            const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+            const { width, height } = this.lastState.world.grid;
+            const cell = worldPointToGridCell(world.x, world.y, width, height);
+            if (cell) this.cellHandler(cell);
+        }
+    }
+
     create() {
         this.graphics = this.add.graphics();
+        this.input.addPointer(2);
+
         this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-            if (!this.lastState || !this.cellHandler) return;
-            const ox = BOARD_PADDING;
-            const oy = BOARD_PADDING;
-            const lx = pointer.x - ox;
-            const ly = pointer.y - oy;
-            if (lx < 0 || ly < 0) return;
-            const gx = Math.floor(lx / CELL_PX);
-            const gy = Math.floor(ly / CELL_PX);
-            const { width, height } = this.lastState.world.grid;
-            if (gx >= 0 && gx < width && gy >= 0 && gy < height) {
-                this.cellHandler({ x: gx, y: gy });
+            if (!this.cameras?.main) return;
+            if (pointer.middleButtonDown() || pointer.leftButtonDown()) {
+                this.beginPan(pointer, this.cameras.main);
             }
         });
+
+        this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+            if (!this.cameras?.main || !pointer.isDown) return;
+            if (this.panActive) {
+                this.updatePan(pointer, this.cameras.main);
+            }
+        });
+
+        this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+            this.endPan(pointer);
+        });
+
+        this.input.on('wheel', (pointer: Phaser.Input.Pointer) => {
+            const factor = wheelDeltaToZoomFactor(pointer.deltaY);
+            if (factor !== 1) {
+                this.zoomAt(pointer.x, pointer.y, factor);
+            }
+        });
+
+        this.input.on('pinchstart', () => {
+            this.lastPinchDistance = null;
+        });
+
+        this.input.on(
+            'pinch',
+            (
+                _pointer1: Phaser.Input.Pointer,
+                _pointer2: Phaser.Input.Pointer,
+                distance: number,
+            ) => {
+                if (this.lastPinchDistance != null && this.lastPinchDistance > 0) {
+                    const factor = distance / this.lastPinchDistance;
+                    if (Math.abs(factor - 1) > 0.001) {
+                        this.zoomAt(this.viewportW / 2, this.viewportH / 2, factor);
+                    }
+                }
+                this.lastPinchDistance = distance;
+            },
+        );
+
+        this.input.on('pinchend', () => {
+            this.lastPinchDistance = null;
+        });
+
+        this.readyHandler?.();
     }
 
     sync(state: SandboxSandboxStateJson) {
@@ -87,8 +303,6 @@ class SandboxScene extends Phaser.Scene {
         }
 
         for (const it of state.world.items) {
-            const cx = ox + it.position.x * CELL_PX + CELL_PX / 2;
-            const cy = oy + it.position.y * CELL_PX + CELL_PX / 2;
             if (it.type === 'region') {
                 const color = it.color ?? DEFAULT_REGION_COLOR;
                 g.fillStyle(hexToRgbInt(color), REGION_UNDERLAY_ALPHA);
@@ -156,16 +370,24 @@ class SandboxScene extends Phaser.Scene {
 export class PhaserSandboxAdapter implements SandboxRuntimeAdapter {
     private game: Phaser.Game | null = null;
     private scene: SandboxScene | null = null;
+    private container: HTMLElement | null = null;
+    private resizeObserver: ResizeObserver | null = null;
+    private resizeDebounceId: ReturnType<typeof setTimeout> | null = null;
     private lastGridW = -1;
     private lastGridH = -1;
+    private pendingFit = false;
 
     mount(container: HTMLElement): void {
+        this.container = container;
         const scene = new SandboxScene();
         this.scene = scene;
-        const initialW = BOARD_PADDING * 2 + SANDBOX_GRID_DEFAULT_WIDTH * CELL_PX;
-        const initialH = BOARD_PADDING * 2 + SANDBOX_GRID_DEFAULT_HEIGHT * CELL_PX;
-        this.lastGridW = SANDBOX_GRID_DEFAULT_WIDTH;
-        this.lastGridH = SANDBOX_GRID_DEFAULT_HEIGHT;
+
+        const initialW = Math.max(container.clientWidth, 320);
+        const initialH = Math.max(container.clientHeight, 240);
+        const defaultWorld = boardWorldSizePx(16, 16);
+        scene.updateWorldSize(defaultWorld.width, defaultWorld.height);
+        scene.resizeViewport(initialW, initialH);
+
         this.game = new Phaser.Game({
             type: Phaser.AUTO,
             parent: container,
@@ -178,36 +400,106 @@ export class PhaserSandboxAdapter implements SandboxRuntimeAdapter {
                 autoCenter: Phaser.Scale.NO_CENTER,
             },
         });
+        this.game.scale.resize(initialW, initialH);
+
+        scene.setReadyHandler(() => {
+            if (this.pendingFit) {
+                this.pendingFit = false;
+                scene.fitToView();
+            }
+        });
+
+        this.resizeObserver = new ResizeObserver(() => {
+            this.scheduleViewportResize();
+        });
+        this.resizeObserver.observe(container);
     }
 
     destroy(): void {
+        if (this.resizeDebounceId != null) {
+            clearTimeout(this.resizeDebounceId);
+            this.resizeDebounceId = null;
+        }
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = null;
+        this.container = null;
         this.game?.destroy(true);
         this.game = null;
         this.scene = null;
         this.lastGridW = -1;
         this.lastGridH = -1;
+        this.pendingFit = false;
+    }
+
+    fitToView(): void {
+        this.scene?.fitToView();
+    }
+
+    zoomIn(): void {
+        this.scene?.zoomIn();
+    }
+
+    zoomOut(): void {
+        this.scene?.zoomOut();
     }
 
     setState(state: SandboxSandboxStateJson, options?: SandboxSetStateOptions): void {
         const scene = this.scene;
         const game = this.game;
-        if (scene && game) {
-            const { width, height } = state.world.grid;
-            if (width !== this.lastGridW || height !== this.lastGridH) {
-                this.lastGridW = width;
-                this.lastGridH = height;
-                const wpx = BOARD_PADDING * 2 + width * CELL_PX;
-                const hpx = BOARD_PADDING * 2 + height * CELL_PX;
-                game.scale.resize(wpx, hpx);
+        if (!scene || !game) return;
+
+        const { width, height } = state.world.grid;
+        const gridChanged = width !== this.lastGridW || height !== this.lastGridH;
+        if (gridChanged) {
+            this.lastGridW = width;
+            this.lastGridH = height;
+            const world = boardWorldSizePx(width, height);
+            scene.updateWorldSize(world.width, world.height);
+            this.pendingFit = true;
+        }
+
+        if (options?.selectedCreatureId !== undefined) {
+            scene.setSelectedCreatureId(options.selectedCreatureId);
+        }
+        scene.sync(state);
+
+        if (this.pendingFit) {
+            this.pendingFit = false;
+            if (scene.sys?.isActive()) {
+                scene.fitToView();
             }
-            if (options?.selectedCreatureId !== undefined) {
-                scene.setSelectedCreatureId(options.selectedCreatureId);
-            }
-            scene.sync(state);
         }
     }
 
     setOnCellClick(handler: (cell: { x: number; y: number }) => void): void {
         this.scene?.setCellHandler(handler);
+    }
+
+    private scheduleViewportResize(): void {
+        if (this.resizeDebounceId != null) {
+            clearTimeout(this.resizeDebounceId);
+        }
+        this.resizeDebounceId = setTimeout(() => {
+            this.resizeDebounceId = null;
+            this.applyViewportResize(true);
+        }, VIEWPORT_RESIZE_DEBOUNCE_MS);
+    }
+
+    private applyViewportResize(fit: boolean): void {
+        const container = this.container;
+        const game = this.game;
+        const scene = this.scene;
+        if (!container || !game || !scene) return;
+
+        const w = Math.max(container.clientWidth, 1);
+        const h = Math.max(container.clientHeight, 1);
+        if (w === game.scale.width && h === game.scale.height && !fit) {
+            return;
+        }
+        game.scale.resize(w, h);
+        scene.resizeViewport(w, h);
+        if (fit) {
+            scene.fitToView();
+        }
     }
 }
