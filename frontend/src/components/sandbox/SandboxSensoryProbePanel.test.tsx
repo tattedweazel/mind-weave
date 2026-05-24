@@ -5,11 +5,45 @@ import { describe, expect, it, vi } from 'vitest';
 import { SandboxSensoryProbePanel } from './SandboxSensoryProbePanel';
 
 describe('SandboxSensoryProbePanel', () => {
-    it('renders position coordinates', () => {
+    it('renders position coordinates with kind badge', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="position"
+                value={{ x: 4, y: 1, kind: 'empty', region_label: null }}
+            />,
+        );
+        expect(screen.getByText('Empty')).toBeInTheDocument();
+        expect(screen.getByText('(4, 1)')).toBeInTheDocument();
+        expect(screen.getByText('Position')).toBeInTheDocument();
+    });
+
+    it('renders position region chip for labeled region', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="position"
+                value={{ x: 2, y: 2, kind: 'empty', region_label: 'Goal' }}
+            />,
+        );
+        expect(screen.getByText('Empty')).toBeInTheDocument();
+        expect(screen.getByText('Goal')).toBeInTheDocument();
+        expect(screen.getByText('(2, 2)')).toBeInTheDocument();
+    });
+
+    it('renders position food kind when standing on food', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="position"
+                value={{ x: 2, y: 2, kind: 'food', region_label: null }}
+            />,
+        );
+        expect(screen.getByText('Food')).toBeInTheDocument();
+        expect(screen.getByText('(2, 2)')).toBeInTheDocument();
+    });
+
+    it('renders legacy position coordinates without kind', () => {
         render(<SandboxSensoryProbePanel kind="position" value={{ x: 4, y: 1 }} />);
         expect(screen.getByText('4')).toBeInTheDocument();
         expect(screen.getByText('1')).toBeInTheDocument();
-        expect(screen.getByText('Position')).toBeInTheDocument();
     });
 
     it('renders facing compass with active direction', () => {

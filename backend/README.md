@@ -21,6 +21,7 @@ The backend is structured using Domain-Driven Design principles:
   - `workflow_execution_limits.py` — `GET /workflow-execution-limits/` defaults + ceilings for editor/run validation
   - `workflow_run_events.py` — `GET …/workflow-runs/{run_id}` snapshot + `GET …/events` SSE replay/tail + live fan-out
   - `workflow_projects.py` — Workflow project folder CRUD (`GET/POST /` `PATCH/DELETE /{id}`); reserved **Shared** folder per user
+  - `board_projects.py` — Board project folder CRUD (`GET/POST /` `PATCH/DELETE /{id}`); reserved **Shared** folder per user (organizes `sandbox_boards`)
 - **`app/core/`** — Configuration (`config.py`), logging (`logging.py`), security (`security.py`)
 - **`app/domain/`** — Pydantic models in **`schemas/`** (import via `from app.domain.schemas import ...`), domain **`services/`**, and workflow execution:
   - `schemas/` — Request/response and workflow graph models (`GraphNode`, outputs, workflow run DTOs, etc.)
@@ -32,6 +33,7 @@ The backend is structured using Domain-Driven Design principles:
   - `document_metadata_service.py` — Estimated token / character / word / line counts for Document bodies (`tiktoken` `o200k_base`); surfaced via `GET /api/v1/documents/{id}/metadata` in the SPA's **Manage Documents → Metadata** tab
   - `workflow_definition_service.py` — WorkflowDefinition CRUD (list ordered by `updated_at` desc; `project_id` on create/update)
   - `workflow_project_service.py` — Workflow project folder CRUD; `ensure_shared_project`, `touch_project`
+  - `board_project_service.py` — Board project folder CRUD; `ensure_shared_project`, `touch_project`, `count_boards`
   - `workflow_executor/` — DAG validation and execution (`services/workflow_executor.py` re-exports `WorkflowExecutor`)
   - `palette_defaults.py` — **`DEFAULT_PALETTE_COLORS`** and built-in workflow preset definitions; SPA reads effective colors from **palette API** responses (manifest + parity tests—not a dual handwritten hex SSOT). See **`workflow_palette_resolve.py`** / **`workflow_palette_validate.py`**
   - `system_palette_defaults.py` — Built-in app-wide themes (`light`/`dark` token maps; mirror token keys in frontend `theme/defaults.ts`)

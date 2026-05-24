@@ -35,8 +35,44 @@ function state(
 describe('sandboxSensoryProbes', () => {
     it('reads position and facing', () => {
         const c = creature({ position: { x: 4, y: 1 }, facing: 'E' });
-        expect(creaturePositionFromState(c)).toEqual({ x: 4, y: 1 });
+        const st = state(c);
+        expect(creaturePositionFromState(c, st)).toEqual({
+            x: 4,
+            y: 1,
+            kind: 'empty',
+            region_label: null,
+        });
         expect(creatureFacingFromState(c)).toBe('E');
+    });
+
+    it('position includes region_label when standing in labeled region', () => {
+        const c = creature({ position: { x: 2, y: 2 } });
+        const st = state(c, [
+            {
+                id: 'r1',
+                type: 'region',
+                position: { x: 2, y: 2 },
+                color: '#3B82F6',
+                label: 'Goal',
+            },
+        ]);
+        expect(creaturePositionFromState(c, st)).toEqual({
+            x: 2,
+            y: 2,
+            kind: 'empty',
+            region_label: 'Goal',
+        });
+    });
+
+    it('position reports food under creature', () => {
+        const c = creature({ position: { x: 2, y: 2 } });
+        const st = state(c, [{ id: 'f1', type: 'food', position: { x: 2, y: 2 }, energy: 10 }]);
+        expect(creaturePositionFromState(c, st)).toEqual({
+            x: 2,
+            y: 2,
+            kind: 'food',
+            region_label: null,
+        });
     });
 
     it('nearby forward cell is wall when facing N', () => {

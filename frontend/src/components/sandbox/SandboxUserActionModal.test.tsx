@@ -295,8 +295,42 @@ describe('SandboxUserActionModal', () => {
         expect(screen.queryByText('You')).not.toBeInTheDocument();
         const panel = screen.getByTestId('sensory-probe-panel');
         expect(panel).toHaveTextContent('Position');
-        expect(panel).toHaveTextContent('Focused creature grid coordinates');
-        expect(within(panel).getAllByText('2')).toHaveLength(2);
+        expect(panel).toHaveTextContent('Current cell coordinates with kind and Region badges when present');
+        expect(within(panel).getByText('(2, 2)')).toBeInTheDocument();
+        expect(within(panel).getByText('Empty')).toBeInTheDocument();
+    });
+
+    it('position probe shows region chip when standing in labeled region', async () => {
+        const user = userEvent.setup();
+        const stateWithRegion: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [
+                    {
+                        id: 'r1',
+                        type: 'region',
+                        position: { x: 2, y: 2 },
+                        color: '#3B82F6',
+                        label: 'Goal',
+                    },
+                ],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creature}
+                sandboxState={stateWithRegion}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={vi.fn()}
+                onDismiss={vi.fn()}
+            />,
+        );
+        await user.click(screen.getByRole('button', { name: /^position$/i }));
+        const panel = screen.getByTestId('sensory-probe-panel');
+        expect(within(panel).getByText('Goal')).toBeInTheDocument();
+        expect(within(panel).getByText('Empty')).toBeInTheDocument();
     });
 
     it('collapses probe panel when the active probe is clicked again', async () => {

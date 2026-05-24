@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowDefinitionListItem, WorkflowProject } from '../api/types';
 import type { CellOccupants } from '../sandbox/sandboxCellOccupants';
+import { projectsWithSandboxCreatureBrains } from '../domain/workflowProjectMembership';
 import { SandboxCellActionModal } from './SandboxCellActionModal';
 
 const sharedProjectId = 'proj-shared';
@@ -17,6 +18,7 @@ const workflowProjects: WorkflowProject[] = [
         user_id: 'u1',
         name: 'Shared',
         sort_order: 0,
+        sandbox_enabled: false,
         workflow_count: 2,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -26,6 +28,7 @@ const workflowProjects: WorkflowProject[] = [
         user_id: 'u1',
         name: 'Alpha',
         sort_order: 1,
+        sandbox_enabled: true,
         workflow_count: 1,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -35,7 +38,18 @@ const workflowProjects: WorkflowProject[] = [
         user_id: 'u1',
         name: 'Empty',
         sort_order: 2,
+        sandbox_enabled: true,
         workflow_count: 0,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+    },
+    {
+        id: 'proj-gmail',
+        user_id: 'u1',
+        name: 'Gmail',
+        sort_order: 3,
+        sandbox_enabled: false,
+        workflow_count: 1,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
     },
@@ -65,6 +79,14 @@ const creatureBrainWorkflows: WorkflowDefinitionListItem[] = [
         description: null,
         project_id: alphaProjectId,
         updated_at: '2026-04-01T00:00:00Z',
+    },
+    {
+        id: 'wf-gmail',
+        user_id: 'u1',
+        name: 'Gmail Brain',
+        description: null,
+        project_id: 'proj-gmail',
+        updated_at: '2026-04-02T00:00:00Z',
     },
     {
         id: 'wf-skill',
@@ -270,14 +292,12 @@ describe('SandboxCellActionModal', () => {
 
     describe('place creature project → workflow picker', () => {
         const pickerProps = {
-            workflowProjects: workflowProjects.filter(
-                p => p.id === sharedProjectId || p.id === alphaProjectId,
-            ),
+            workflowProjects: projectsWithSandboxCreatureBrains(workflowProjects, sharedProjectId, creatureBrainWorkflows),
             workflows: creatureBrainWorkflows,
             sharedProjectId,
         };
 
-        it('shows project list with counts and omits empty projects', async () => {
+        it('shows project list with counts and omits empty and sandbox-disabled projects', async () => {
             const user = userEvent.setup();
             renderModal(pickerProps);
 
@@ -287,6 +307,7 @@ describe('SandboxCellActionModal', () => {
             expect(screen.getByRole('button', { name: /Shared/ })).toBeTruthy();
             expect(screen.getByRole('button', { name: /Alpha/ })).toBeTruthy();
             expect(screen.queryByRole('button', { name: /Empty/ })).toBeNull();
+            expect(screen.queryByRole('button', { name: /Gmail/ })).toBeNull();
             expect(screen.getByRole('button', { name: /Shared/ }).textContent).toContain('2');
             expect(screen.getByRole('button', { name: /Alpha/ }).textContent).toContain('1');
         });

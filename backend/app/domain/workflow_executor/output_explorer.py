@@ -528,7 +528,7 @@ def build_dictionary_primitive_explorer(data: dict[str, Any]) -> dict[str, Any]:
         items.append(
             {
                 "index": idx,
-                "row_state": "ok",
+                "row_state": "empty" if val is None else "ok",
                 "primary_line": ik,
                 "secondary_line": inf,
                 "teaser": _json_preview(val),

@@ -17,6 +17,9 @@ import {
     WorkflowProject,
     WorkflowProjectCreate,
     WorkflowProjectUpdate,
+    BoardProject,
+    BoardProjectCreate,
+    BoardProjectUpdate,
     WorkflowRunResult, WorkflowRun, NodeRunLog, MyWorkflowRunSummary,
     GoogleWorkflowConnection,
     Companion,
@@ -374,6 +377,27 @@ export class ApiClient {
     static async deleteWorkflowProject(id: string, options?: { deleteWorkflows?: boolean }): Promise<void> {
         const qs = options?.deleteWorkflows ? '?delete_workflows=true' : '';
         await this.request<void>(`/workflow-projects/${id}${qs}`, { method: 'DELETE' });
+    }
+
+    // -------------------------------------------------------------------------
+    // Board Projects (folders)
+    // -------------------------------------------------------------------------
+
+    static getBoardProjects(): Promise<BoardProject[]> {
+        return this.request<BoardProject[]>('/board-projects/');
+    }
+
+    static createBoardProject(data: BoardProjectCreate): Promise<BoardProject> {
+        return this.request<BoardProject>('/board-projects/', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    static updateBoardProject(id: string, data: BoardProjectUpdate): Promise<BoardProject> {
+        return this.request<BoardProject>(`/board-projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+    }
+
+    static async deleteBoardProject(id: string, options?: { deleteBoards?: boolean }): Promise<void> {
+        const qs = options?.deleteBoards ? '?delete_boards=true' : '';
+        await this.request<void>(`/board-projects/${id}${qs}`, { method: 'DELETE' });
     }
 
     // -------------------------------------------------------------------------
@@ -740,6 +764,7 @@ export class ApiClient {
         name: string;
         description?: string;
         definition?: Record<string, unknown>;
+        project_id?: string | null;
     }): Promise<SandboxBoardJson> {
         return this.request('/sandbox/boards', {
             method: 'POST',
@@ -749,7 +774,12 @@ export class ApiClient {
 
     static updateSandboxBoard(
         boardId: string,
-        body: { name?: string; description?: string; definition?: Record<string, unknown> },
+        body: {
+            name?: string;
+            description?: string;
+            definition?: Record<string, unknown>;
+            project_id?: string | null;
+        },
     ): Promise<SandboxBoardJson> {
         return this.request(`/sandbox/boards/${boardId}`, {
             method: 'PATCH',
@@ -818,7 +848,7 @@ export class ApiClient {
 
     static saveSandboxSessionAsBoard(
         documentId: string,
-        body: { mode: 'save_as_new' | 'update_source'; name?: string },
+        body: { mode: 'save_as_new' | 'update_source'; name?: string; project_id?: string | null },
     ): Promise<SandboxBoardJson> {
         return this.request(`/sandbox/sessions/${documentId}/save-board`, {
             method: 'POST',

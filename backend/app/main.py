@@ -67,6 +67,7 @@ from app.api.v1 import (
 )
 from app.api.v1 import workflow_definitions as workflow_definitions_router
 from app.api.v1 import workflow_execution_limits as workflow_execution_limits_router
+from app.api.v1 import board_projects as board_projects_router
 from app.api.v1 import workflow_projects as workflow_projects_router
 from app.core.auth_rate_limit import (
     AuthEndpointRateLimitMiddleware,
@@ -263,3 +264,4 @@ app.include_router(workflow_run_events.router, prefix=f"{api_v1}", tags=["workfl
 app.include_router(transcription_router.router, prefix=f"{api_v1}", tags=["transcription"])
 app.include_router(stt.router, prefix=f"{api_v1}", tags=["stt"])
 app.include_router(workflow_projects_router.router, prefix=f"{api_v1}/workflow-projects", tags=["workflow-projects"])
+app.include_router(board_projects_router.router, prefix=f"{api_v1}/board-projects", tags=["board-projects"])

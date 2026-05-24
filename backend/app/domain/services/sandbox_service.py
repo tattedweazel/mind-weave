@@ -248,6 +248,7 @@ class SandboxService:
         *,
         mode: str,
         name: Optional[str] = None,
+        project_id: Optional[uuid.UUID] = None,
     ) -> SandboxBoard:
         doc = self._docs.get_document(document_id)
         if not doc or doc.user_id != self.user_id:
@@ -274,6 +275,15 @@ class SandboxService:
 
         if mode == "save_as_new":
             board_name = (name or "").strip() or f"Board from session {doc.name}"
-            return self._boards.create_board(name=board_name, definition=defn)
+            resolved_project_id = project_id
+            if resolved_project_id is None and env.board_id:
+                source = self._boards.get_board(uuid.UUID(env.board_id))
+                if source and not source.is_system:
+                    resolved_project_id = source.project_id
+            return self._boards.create_board(
+                name=board_name,
+                definition=defn,
+                project_id=resolved_project_id,
+            )
 
         raise ValueError("mode must be 'save_as_new' or 'update_source'")

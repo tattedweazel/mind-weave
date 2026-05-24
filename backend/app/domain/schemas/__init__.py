@@ -137,6 +137,11 @@ from .workflow_projects import (
     WorkflowProjectRead,
     WorkflowProjectUpdate,
 )
+from .board_projects import (
+    BoardProjectCreate,
+    BoardProjectRead,
+    BoardProjectUpdate,
+)
 from .workflow_run import (
     MyWorkflowRunRead,
     NodeRunResult,
@@ -274,6 +279,9 @@ __all__ = [
     "WorkflowProjectCreate",
     "WorkflowProjectRead",
     "WorkflowProjectUpdate",
+    "BoardProjectCreate",
+    "BoardProjectRead",
+    "BoardProjectUpdate",
     "WorkflowRefNode",
     "WriteObjectToDocumentBodyUtilityNode",
     "WorkflowRunEnqueueResponse",

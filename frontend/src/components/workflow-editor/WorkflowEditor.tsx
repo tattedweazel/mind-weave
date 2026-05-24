@@ -1312,6 +1312,16 @@ export const WorkflowEditor: React.FC<Props> = ({
         }
     };
 
+    const handleProjectSandboxEnabledChange = async (project: WorkflowProject, checked: boolean) => {
+        if (!isDeletableProject(project)) return;
+        try {
+            const updated = await ApiClient.updateWorkflowProject(project.id, { sandbox_enabled: checked });
+            setWorkflowProjects(prev => prev.map(p => (p.id === project.id ? updated : p)));
+        } catch {
+            /* ignore */
+        }
+    };
+
     const handleDeleteProject = async () => {
         if (!selectedProjectId || !selectedProject) return;
         const inProject = workflowsInProject(selectedProjectId, sharedProjectId, workflows);
@@ -3309,20 +3319,44 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 </button>
                             </div>
                             <div className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
-                                {displayedProjects.map(p => (
-                                    <button
-                                        key={p.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedProjectId(p.id);
-                                            setWorkflowNameFilter('');
-                                        }}
-                                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-lg text-left text-mw-text-primary hover:bg-mw-card transition-colors"
-                                    >
-                                        <span className="truncate font-medium">{p.name}</span>
-                                        <span className="shrink-0 text-xs text-mw-text-secondary tabular-nums">{workflowCountForProject(p)}</span>
-                                    </button>
-                                ))}
+                                {displayedProjects.map(p => {
+                                    const sharedAlways = !isDeletableProject(p);
+                                    const sandboxChecked = sharedAlways || Boolean(p.sandbox_enabled);
+                                    return (
+                                        <div
+                                            key={p.id}
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg text-mw-text-primary hover:bg-mw-card transition-colors"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={sandboxChecked}
+                                                disabled={sharedAlways}
+                                                aria-label={`Enable ${p.name} in Sandbox`}
+                                                title={
+                                                    sharedAlways
+                                                        ? 'Shared is always available in Sandbox'
+                                                        : 'Enable in Sandbox'
+                                                }
+                                                className="shrink-0 h-3.5 w-3.5 text-mw-primary focus:ring-mw-primary border-mw-border rounded disabled:opacity-60"
+                                                onClick={e => e.stopPropagation()}
+                                                onChange={e => void handleProjectSandboxEnabledChange(p, e.target.checked)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedProjectId(p.id);
+                                                    setWorkflowNameFilter('');
+                                                }}
+                                                className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left"
+                                            >
+                                                <span className="truncate font-medium">{p.name}</span>
+                                                <span className="shrink-0 text-xs text-mw-text-secondary tabular-nums">
+                                                    {workflowCountForProject(p)}
+                                                </span>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
                                 {displayedProjects.length === 0 && (
                                     <div className="text-xs text-mw-text-secondary text-center py-2">No projects yet</div>
                                 )}

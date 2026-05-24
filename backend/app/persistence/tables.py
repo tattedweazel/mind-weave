@@ -275,6 +275,7 @@ class WorkflowProject(SQLModel, table=True):
     name: str = Field(index=True)
     name_lower: str = Field(index=True)
     sort_order: int = Field(default=0, index=True)
+    sandbox_enabled: bool = Field(default=False, index=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -301,6 +302,21 @@ class WorkflowDefinition(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class BoardProject(SQLModel, table=True):
+    """Single-level folder for organizing sandbox boards per user."""
+
+    __tablename__ = "board_projects"  # type: ignore
+    __table_args__ = (UniqueConstraint("user_id", "name_lower", name="uq_board_projects_user_name_lower"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    name_lower: str = Field(index=True)
+    sort_order: int = Field(default=0, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class SandboxBoard(SQLModel, table=True):
     """Persisted sandbox board template (grid, items, optional creature placements)."""
 
@@ -308,6 +324,7 @@ class SandboxBoard(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    project_id: Optional[uuid.UUID] = Field(default=None, foreign_key="board_projects.id", index=True)
     name: str = Field(index=True)
     description: str = Field(default="")
     body: str = Field(default="", sa_column=Column(Text, nullable=False, server_default=""))

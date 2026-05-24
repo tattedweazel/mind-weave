@@ -109,7 +109,7 @@ Each utility typically includes `data.required_inputs`: `{ "key", "type", "value
 | `min_ints` | two int inputs | `output` | |
 | `max_ints` | two int inputs | `output` | |
 | `sandbox_tick` | (run override or wired tick) | `output` (dictionary) | Full `SandboxTickInput` for sandbox brains. See [SANDBOX.md](SANDBOX.md). |
-| `sandbox_get_position` | `sandbox_tick` | `output` (dictionary) | Creature `{x, y}`. |
+| `sandbox_get_position` | `sandbox_tick` | `output` (dictionary) | Creature `{x, y, kind, region_label}` — current cell with same classification rules as **Get nearby**. |
 | `sandbox_get_facing` | `sandbox_tick` | `output` (string) | Creature facing `N`/`E`/`S`/`W`. |
 | `sandbox_get_nearby` | `sandbox_tick` | `output` (list) | Eight typed neighbor cells clockwise from facing; each `{x, y, kind, region_label}` where `region_label` is `null` or the region label string. |
 | `sandbox_move_forward` | optional `reason` | `output` (dictionary) | `{action: "move_forward"}` for Stop. |

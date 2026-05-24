@@ -237,6 +237,7 @@ export interface WorkflowProject {
     user_id: string;
     name: string;
     sort_order: number;
+    sandbox_enabled: boolean;
     workflow_count: number;
     created_at: string;
     updated_at: string;
@@ -248,6 +249,27 @@ export interface WorkflowProjectCreate {
 }
 
 export interface WorkflowProjectUpdate {
+    name?: string;
+    sort_order?: number | null;
+    sandbox_enabled?: boolean;
+}
+
+export interface BoardProject {
+    id: string;
+    user_id: string;
+    name: string;
+    sort_order: number;
+    board_count: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface BoardProjectCreate {
+    name: string;
+    sort_order?: number | null;
+}
+
+export interface BoardProjectUpdate {
     name?: string;
     sort_order?: number | null;
 }
@@ -1412,7 +1434,7 @@ export interface OutputExplorerSummary {
 
 export interface OutputExplorerItem {
     index: number;
-    row_state: 'ok' | 'error';
+    row_state: 'ok' | 'error' | 'empty';
     primary_line: string;
     secondary_line: string;
     teaser: string;
@@ -1433,7 +1455,7 @@ function isOutputExplorerItem(it: unknown): it is OutputExplorerItem {
     if (!it || typeof it !== 'object') return false;
     const r = it as Record<string, unknown>;
     if (typeof r.index !== 'number') return false;
-    if (r.row_state !== 'ok' && r.row_state !== 'error') return false;
+    if (r.row_state !== 'ok' && r.row_state !== 'error' && r.row_state !== 'empty') return false;
     if (typeof r.primary_line !== 'string') return false;
     if (typeof r.secondary_line !== 'string') return false;
     if (typeof r.teaser !== 'string') return false;

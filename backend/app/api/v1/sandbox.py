@@ -47,18 +47,21 @@ class SandboxResizeGridBody(BaseModel):
 class SandboxSaveBoardBody(BaseModel):
     mode: str = Field(description="'save_as_new' or 'update_source'")
     name: Optional[str] = None
+    project_id: Optional[uuid.UUID] = None
 
 
 class BoardCreateBody(BaseModel):
     name: str
     description: str = ""
     definition: Optional[dict[str, Any]] = None
+    project_id: Optional[uuid.UUID] = None
 
 
 class BoardUpdateBody(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     definition: Optional[dict[str, Any]] = None
+    project_id: Optional[uuid.UUID] = None
 
 
 class BoardDuplicateBody(BaseModel):
@@ -81,6 +84,7 @@ def _board_to_json(row) -> dict[str, Any]:
         "name": row.name,
         "description": row.description,
         "is_system": row.is_system,
+        "project_id": str(row.project_id) if row.project_id else None,
         "definition": defn.model_dump(mode="json"),
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
@@ -112,7 +116,12 @@ async def create_sandbox_board(
             defn = BoardDefinition.model_validate(body.definition)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-    row = svc.create_board(name=body.name, description=body.description, definition=defn)
+    row = svc.create_board(
+        name=body.name,
+        description=body.description,
+        definition=defn,
+        project_id=body.project_id,
+    )
     return _board_to_json(row)
 
 
@@ -145,7 +154,13 @@ async def update_sandbox_board(
             defn = BoardDefinition.model_validate(body.definition)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-    row = svc.update_board(board_id, name=body.name, description=body.description, definition=defn)
+    row = svc.update_board(
+        board_id,
+        name=body.name,
+        description=body.description,
+        definition=defn,
+        project_id=body.project_id,
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Board not found or not editable")
     return _board_to_json(row)
@@ -248,7 +263,12 @@ async def save_sandbox_session_as_board(
     _ensure_sandbox_enabled()
     svc = SandboxService(session, current_user.id)
     try:
-        row = svc.save_session_as_board(document_id, mode=body.mode, name=body.name)
+        row = svc.save_session_as_board(
+            document_id,
+            mode=body.mode,
+            name=body.name,
+            project_id=body.project_id,
+        )
     except ValueError as exc:
         msg = str(exc)
         if "not found" in msg:

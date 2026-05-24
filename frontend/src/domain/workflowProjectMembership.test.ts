@@ -6,11 +6,26 @@ import {
     creatureBrainWorkflows,
     creatureBrainWorkflowsInProject,
     isDeletableProject,
+    isSandboxEnabledProject,
     projectDeleteConfirmMessage,
     projectsWithCreatureBrains,
+    projectsWithSandboxCreatureBrains,
+    sandboxEligibleCreatureBrainWorkflows,
     sharedProjectIdFromProjects,
     workflowsInProject,
 } from './workflowProjectMembership';
+
+function project(overrides: Partial<WorkflowProject> & Pick<WorkflowProject, 'id' | 'name'>): WorkflowProject {
+    return {
+        user_id: 'user-1',
+        sort_order: 0,
+        sandbox_enabled: false,
+        workflow_count: 0,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        ...overrides,
+    };
+}
 
 function wf(overrides: Partial<WorkflowDefinitionListItem> & Pick<WorkflowDefinitionListItem, 'id'>): WorkflowDefinitionListItem {
     return {
@@ -101,9 +116,9 @@ describe('projectsWithCreatureBrains', () => {
     const sharedId = 'shared-id';
     const otherId = 'other-id';
     const projects = [
-        { id: sharedId, name: 'Shared', sort_order: 0 } as WorkflowProject,
-        { id: otherId, name: 'Alpha', sort_order: 1 } as WorkflowProject,
-        { id: 'empty-id', name: 'Empty', sort_order: 2 } as WorkflowProject,
+        project({ id: sharedId, name: 'Shared', sort_order: 0 }),
+        project({ id: otherId, name: 'Alpha', sort_order: 1 }),
+        project({ id: 'empty-id', name: 'Empty', sort_order: 2 }),
     ];
     const workflows = [
         wf({ id: 'a', project_id: sharedId }),
@@ -113,6 +128,68 @@ describe('projectsWithCreatureBrains', () => {
     it('hides empty projects and sorts by sort_order then name', () => {
         const result = projectsWithCreatureBrains(projects, sharedId, workflows);
         expect(result.map(p => p.id)).toEqual([sharedId, otherId]);
+    });
+});
+
+describe('isSandboxEnabledProject', () => {
+    const sharedId = 'shared-id';
+
+    it('returns true for Shared even when sandbox_enabled is false', () => {
+        expect(isSandboxEnabledProject(project({ id: sharedId, name: 'Shared', sandbox_enabled: false }), sharedId)).toBe(
+            true,
+        );
+    });
+
+    it('returns sandbox_enabled for non-Shared projects', () => {
+        expect(
+            isSandboxEnabledProject(project({ id: 'a', name: 'Alpha', sandbox_enabled: true }), sharedId),
+        ).toBe(true);
+        expect(
+            isSandboxEnabledProject(project({ id: 'a', name: 'Alpha', sandbox_enabled: false }), sharedId),
+        ).toBe(false);
+    });
+});
+
+describe('projectsWithSandboxCreatureBrains', () => {
+    const sharedId = 'shared-id';
+    const enabledId = 'enabled-id';
+    const disabledId = 'disabled-id';
+    const projects = [
+        project({ id: sharedId, name: 'Shared', sort_order: 0, sandbox_enabled: false }),
+        project({ id: enabledId, name: 'Sandbox', sort_order: 1, sandbox_enabled: true }),
+        project({ id: disabledId, name: 'Gmail', sort_order: 2, sandbox_enabled: false }),
+    ];
+    const workflows = [
+        wf({ id: 'a', project_id: sharedId }),
+        wf({ id: 'b', project_id: enabledId }),
+        wf({ id: 'c', project_id: disabledId }),
+    ];
+
+    it('includes Shared and sandbox-enabled projects with creature brains', () => {
+        const result = projectsWithSandboxCreatureBrains(projects, sharedId, workflows);
+        expect(result.map(p => p.id)).toEqual([sharedId, enabledId]);
+    });
+});
+
+describe('sandboxEligibleCreatureBrainWorkflows', () => {
+    const sharedId = 'shared-id';
+    const enabledId = 'enabled-id';
+    const disabledId = 'disabled-id';
+    const projects = [
+        project({ id: sharedId, name: 'Shared', sort_order: 0, sandbox_enabled: false }),
+        project({ id: enabledId, name: 'Sandbox', sort_order: 1, sandbox_enabled: true }),
+        project({ id: disabledId, name: 'Gmail', sort_order: 2, sandbox_enabled: false }),
+    ];
+    const workflows = [
+        wf({ id: 'a', project_id: sharedId }),
+        wf({ id: 'b', project_id: enabledId }),
+        wf({ id: 'c', project_id: disabledId }),
+        wf({ id: 'd', project_id: disabledId, expose_as_custom_skill: true }),
+    ];
+
+    it('returns creature brains from Shared and sandbox-enabled projects only', () => {
+        const result = sandboxEligibleCreatureBrainWorkflows(projects, sharedId, workflows);
+        expect(result.map(w => w.id).sort()).toEqual(['a', 'b']);
     });
 });
 

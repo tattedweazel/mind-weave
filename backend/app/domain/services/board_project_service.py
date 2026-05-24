@@ -1,8 +1,8 @@
 """
-Workflow Project Service
-========================
-CRUD for per-user workflow folders. The reserved **Shared** folder is created
-per user and holds default and unassigned workflows.
+Board Project Service
+=====================
+CRUD for per-user board folders. The reserved **Shared** folder is created
+per user and holds default and unassigned boards.
 """
 
 import uuid
@@ -12,8 +12,8 @@ from typing import List, Optional
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
-from app.domain.schemas import WorkflowProjectCreate, WorkflowProjectUpdate
-from app.persistence.tables import WorkflowDefinition, WorkflowProject
+from app.domain.schemas.board_projects import BoardProjectCreate, BoardProjectUpdate
+from app.persistence.tables import BoardProject, SandboxBoard
 
 SHARED_PROJECT_NAME = "Shared"
 SHARED_NAME_LOWER = "shared"
@@ -27,26 +27,25 @@ def project_name_lower(name: str) -> str:
     return normalize_project_name(name).lower()
 
 
-class WorkflowProjectService:
-    """Scoped CRUD for WorkflowProject rows."""
+class BoardProjectService:
+    """Scoped CRUD for BoardProject rows."""
 
     def __init__(self, session: Session, user_id: uuid.UUID):
         self.session = session
         self.user_id = user_id
 
-    def ensure_shared_project(self) -> WorkflowProject:
+    def ensure_shared_project(self) -> BoardProject:
         """Return the user's Shared folder, creating it if missing."""
         row = self.session.exec(
-            select(WorkflowProject).where(
-                WorkflowProject.user_id == self.user_id,
-                WorkflowProject.name_lower == SHARED_NAME_LOWER,
+            select(BoardProject).where(
+                BoardProject.user_id == self.user_id,
+                BoardProject.name_lower == SHARED_NAME_LOWER,
             )
         ).first()
         if row:
             return row
         now = datetime.now(timezone.utc)
-        # Shared is always first in manual order.
-        row = WorkflowProject(
+        row = BoardProject(
             user_id=self.user_id,
             name=SHARED_PROJECT_NAME,
             name_lower=SHARED_NAME_LOWER,
@@ -60,59 +59,69 @@ class WorkflowProjectService:
         return row
 
     def touch_project(self, project_id: uuid.UUID) -> None:
-        """Bump updated_at when a workflow in the folder changes (caller commits)."""
-        proj = self.session.get(WorkflowProject, project_id)
+        """Bump updated_at when a board in the folder changes (caller commits)."""
+        proj = self.session.get(BoardProject, project_id)
         if not proj or proj.user_id != self.user_id:
             return
         proj.updated_at = datetime.now(timezone.utc)
         self.session.add(proj)
 
-    def list_projects(self) -> List[WorkflowProject]:
+    def list_projects(self) -> List[BoardProject]:
         """All folders for this user, including Shared, ordered for display."""
         self.ensure_shared_project()
         return list(
             self.session.exec(
-                select(WorkflowProject)
-                .where(WorkflowProject.user_id == self.user_id)
-                .order_by(col(WorkflowProject.sort_order), col(WorkflowProject.name_lower))
+                select(BoardProject)
+                .where(BoardProject.user_id == self.user_id)
+                .order_by(col(BoardProject.sort_order), col(BoardProject.name_lower))
             ).all()
         )
 
-    def count_workflows(self, project_id: uuid.UUID) -> int:
-        n = self.session.exec(
-            select(func.count(col(WorkflowDefinition.id))).where(WorkflowDefinition.project_id == project_id)
-        ).one()
+    def count_boards(self, project_id: uuid.UUID) -> int:
+        shared = self.ensure_shared_project()
+        if project_id == shared.id:
+            n = self.session.exec(
+                select(func.count(col(SandboxBoard.id))).where(
+                    SandboxBoard.user_id == self.user_id,
+                    SandboxBoard.is_system == False,  # noqa: E712
+                    (SandboxBoard.project_id == project_id) | (SandboxBoard.project_id == None),  # noqa: E711
+                )
+            ).one()
+        else:
+            n = self.session.exec(
+                select(func.count(col(SandboxBoard.id))).where(SandboxBoard.project_id == project_id)
+            ).one()
         return int(n)
 
-    def get_project(self, project_id: uuid.UUID) -> Optional[WorkflowProject]:
-        row = self.session.get(WorkflowProject, project_id)
+    def get_project(self, project_id: uuid.UUID) -> Optional[BoardProject]:
+        row = self.session.get(BoardProject, project_id)
         if not row or row.user_id != self.user_id:
             return None
         return row
 
-    def create_project(self, data: WorkflowProjectCreate) -> WorkflowProject:
+    def create_project(self, data: BoardProjectCreate) -> BoardProject:
         name = normalize_project_name(data.name)
         nl = project_name_lower(name)
         if nl == SHARED_NAME_LOWER:
             raise ValueError("Reserved project name")
         existing = self.session.exec(
-            select(WorkflowProject).where(
-                WorkflowProject.user_id == self.user_id,
-                WorkflowProject.name_lower == nl,
+            select(BoardProject).where(
+                BoardProject.user_id == self.user_id,
+                BoardProject.name_lower == nl,
             )
         ).first()
         if existing:
             raise ValueError("A project with that name already exists")
 
         max_so = self.session.exec(
-            select(func.max(WorkflowProject.sort_order)).where(WorkflowProject.user_id == self.user_id)
+            select(func.max(BoardProject.sort_order)).where(BoardProject.user_id == self.user_id)
         ).one()
         next_order = (max_so if max_so is not None else -1) + 1
         if data.sort_order is not None:
             next_order = data.sort_order
 
         now = datetime.now(timezone.utc)
-        row = WorkflowProject(
+        row = BoardProject(
             user_id=self.user_id,
             name=name,
             name_lower=nl,
@@ -125,12 +134,11 @@ class WorkflowProjectService:
         self.session.refresh(row)
         return row
 
-    def update_project(self, project_id: uuid.UUID, data: WorkflowProjectUpdate) -> Optional[WorkflowProject]:
+    def update_project(self, project_id: uuid.UUID, data: BoardProjectUpdate) -> Optional[BoardProject]:
         row = self.get_project(project_id)
         if not row:
             return None
         if row.name_lower == SHARED_NAME_LOWER:
-            # Allow sort_order only for Shared
             if data.name is not None:
                 raise ValueError("Reserved project name")
         elif data.name is not None:
@@ -139,10 +147,10 @@ class WorkflowProjectService:
             if nl == SHARED_NAME_LOWER:
                 raise ValueError("Reserved project name")
             conflict = self.session.exec(
-                select(WorkflowProject).where(
-                    WorkflowProject.user_id == self.user_id,
-                    WorkflowProject.name_lower == nl,
-                    WorkflowProject.id != project_id,
+                select(BoardProject).where(
+                    BoardProject.user_id == self.user_id,
+                    BoardProject.name_lower == nl,
+                    BoardProject.id != project_id,
                 )
             ).first()
             if conflict:
@@ -152,33 +160,41 @@ class WorkflowProjectService:
 
         if data.sort_order is not None:
             row.sort_order = data.sort_order
-        if data.sandbox_enabled is not None and row.name_lower != SHARED_NAME_LOWER:
-            row.sandbox_enabled = data.sandbox_enabled
         row.updated_at = datetime.now(timezone.utc)
         self.session.add(row)
         self.session.commit()
         self.session.refresh(row)
         return row
 
-    def delete_project(self, project_id: uuid.UUID, *, delete_workflows: bool = False) -> bool:
+    def delete_project(self, project_id: uuid.UUID, *, delete_boards: bool = False) -> bool:
         row = self.get_project(project_id)
         if not row:
             return False
         if row.name_lower == SHARED_NAME_LOWER:
             raise ValueError("Cannot delete Shared folder")
-        wfs = list(
-            self.session.exec(select(WorkflowDefinition).where(WorkflowDefinition.project_id == project_id)).all()
+        boards = list(
+            self.session.exec(select(SandboxBoard).where(SandboxBoard.project_id == project_id)).all()
         )
-        if wfs and not delete_workflows:
+        if boards and not delete_boards:
             raise ValueError(
-                "Project is not empty; pass delete_workflows=true to delete all workflows in this project."
+                "Project is not empty; pass delete_boards=true to delete all boards in this project."
             )
-        if delete_workflows:
-            from app.domain.services.workflow_definition_service import WorkflowDefinitionService
+        if delete_boards:
+            from app.domain.services.board_service import BoardService
 
-            wf_svc = WorkflowDefinitionService(self.session, self.user_id)
-            for wf in wfs:
-                wf_svc.delete_workflow(wf.id)
+            board_svc = BoardService(self.session, self.user_id)
+            for board in boards:
+                board_svc.delete_board(board.id)
         self.session.delete(row)
         self.session.commit()
         return True
+
+    def resolve_project_id(self, project_id: Optional[uuid.UUID]) -> uuid.UUID:
+        """Return a valid owned project id, defaulting to Shared."""
+        shared = self.ensure_shared_project()
+        if project_id is None:
+            return shared.id
+        proj = self.get_project(project_id)
+        if proj:
+            return proj.id
+        return shared.id

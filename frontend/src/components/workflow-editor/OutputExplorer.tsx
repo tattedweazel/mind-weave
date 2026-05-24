@@ -277,6 +277,7 @@ export function OutputExplorer({
                 <div className="max-h-72 overflow-y-auto divide-y divide-mw-border">
                     {explorer.items.map((item) => {
                         const err = item.row_state === 'error';
+                        const empty = item.row_state === 'empty';
                         const secondaryLine =
                             explorer.kind === 'calendar_list_events' ?
                                 formattedCalendarSecondary(nodeOutput, item, calendarDisplayTimeZone) ?? item.secondary_line
@@ -306,7 +307,11 @@ export function OutputExplorer({
                                         :   <span className="w-[14px] shrink-0" />}
                                         <div className="min-w-0 flex-1">
                                             <div
-                                                className={`text-xs font-medium leading-snug ${err ? 'text-amber-800 dark:text-amber-200/90' : 'text-mw-text-primary'}`}
+                                                className={`text-xs font-medium leading-snug ${
+                                                    err ? 'text-amber-800 dark:text-amber-200/90'
+                                                    : empty ? 'text-mw-text-secondary'
+                                                    : 'text-mw-text-primary'
+                                                }`}
                                             >
                                                 {item.primary_line}
                                             </div>

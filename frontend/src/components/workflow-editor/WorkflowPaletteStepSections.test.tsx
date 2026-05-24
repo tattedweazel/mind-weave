@@ -103,6 +103,7 @@ describe('WorkflowPaletteStepSections', () => {
                         id: 'p1',
                         name: 'Shared',
                         sort_order: 0,
+                        sandbox_enabled: false,
                         user_id: 'u1',
                         workflow_count: 0,
                         created_at: '',

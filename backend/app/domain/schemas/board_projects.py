@@ -1,4 +1,4 @@
-"""Workflow project (folder) API models."""
+"""Board project (folder) API models."""
 
 import uuid
 from datetime import datetime
@@ -7,23 +7,22 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class WorkflowProjectCreate(BaseModel):
-    """Request body for creating a workflow project folder."""
+class BoardProjectCreate(BaseModel):
+    """Request body for creating a board project folder."""
 
     name: str = Field(min_length=1, max_length=200)
     sort_order: Optional[int] = None
 
 
-class WorkflowProjectUpdate(BaseModel):
-    """Request body for updating a workflow project folder."""
+class BoardProjectUpdate(BaseModel):
+    """Request body for updating a board project folder."""
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     sort_order: Optional[int] = None
-    sandbox_enabled: Optional[bool] = None
 
 
-class WorkflowProjectRead(BaseModel):
-    """Response body for a persisted workflow project."""
+class BoardProjectRead(BaseModel):
+    """Response body for a persisted board project."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -31,7 +30,6 @@ class WorkflowProjectRead(BaseModel):
     user_id: uuid.UUID
     name: str
     sort_order: int
-    sandbox_enabled: bool
-    workflow_count: int = 0
+    board_count: int = 0
     created_at: datetime
     updated_at: datetime

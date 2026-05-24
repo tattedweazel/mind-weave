@@ -4,6 +4,8 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    ChevronLeft,
+    FolderPlus,
     Loader2,
     Maximize2,
     PanelLeft,
@@ -19,11 +21,26 @@ import {
 
 import { ApiClient } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import type { WorkflowDefinition, WorkflowDefinitionListItem, WorkflowProject, WorkflowRunResult } from '../api/types';
+import type {
+    BoardProject,
+    WorkflowDefinition,
+    WorkflowDefinitionListItem,
+    WorkflowProject,
+    WorkflowRunResult,
+} from '../api/types';
 import type { BoardDefinitionJson, SandboxBoardJson, SandboxCreatureJson, SandboxEnvelopeJson } from '../domain/sandbox/types';
 import { SANDBOX_FACING_VALUES, sandboxStateFromBoardDefinition } from '../domain/sandbox/types';
 import {
-    projectsWithCreatureBrains,
+    boardsInProject,
+    boardCountForProject,
+    isDeletableBoardProject,
+    nextBoardIdAfterDelete,
+    sharedBoardProjectIdFromProjects,
+    sortBoardsForList,
+} from '../domain/boardProjectMembership';
+import {
+    projectsWithSandboxCreatureBrains,
+    sandboxEligibleCreatureBrainWorkflows,
     sharedProjectIdFromProjects,
 } from '../domain/workflowProjectMembership';
 import {
@@ -48,7 +65,7 @@ import {
     planCreatureUserActionPrompts,
 } from '../sandbox/sandboxTickUserActions';
 import type { CreatureUserActionsMap, SandboxCreatureUserAction } from '../sandbox/sandboxPromptUserAction';
-import { SANDBOX_DECISION_ERROR_HINT, shouldShowSandboxDecisionHint } from '../sandbox/sandboxLastErrorHint';
+import { sandboxErrorHintForMessage } from '../sandbox/sandboxLastErrorHint';
 import {
     mergeSandboxWorkflowRuns,
     sandboxTickTranscriptSummary,
@@ -59,6 +76,9 @@ import { SandboxUserActionModal } from './sandbox/SandboxUserActionModal';
 import { SandboxCreatureInventorySection } from './sandbox/SandboxCreatureInventorySection';
 import { SandboxItemInspectorSection } from './sandbox/SandboxItemInspectorSection';
 import { SandboxRegionInspectorSection } from './sandbox/SandboxRegionInspectorSection';
+import { BoardDeleteControl } from './sandbox/BoardDeleteControl';
+import { BoardProjectDeleteControl } from './sandbox/BoardProjectDeleteControl';
+import { filterNamesByPrefix } from './workflow-editor/workflowListFilter';
 import { addBoardCreatureInventoryEntry } from '../sandbox/sandboxCreatureInventory';
 import { parseSandboxFavoriteColors } from '../sandbox/sandboxFavoriteColors';
 import { isRegionItem } from '../sandbox/sandboxCellOccupants';
@@ -166,6 +186,11 @@ export const SandboxView: React.FC = () => {
     const [workflows, setWorkflows] = useState<WorkflowDefinitionListItem[]>([]);
     const [workflowProjects, setWorkflowProjects] = useState<WorkflowProject[]>([]);
     const [boards, setBoards] = useState<SandboxBoardJson[]>([]);
+    const [boardProjects, setBoardProjects] = useState<BoardProject[]>([]);
+    const [selectedBoardProjectId, setSelectedBoardProjectId] = useState<string | null>(null);
+    const [boardListSort, setBoardListSort] = useState<'updated' | 'name'>('updated');
+    const [boardNameFilter, setBoardNameFilter] = useState('');
+    const [newBoardProjectNameDraft, setNewBoardProjectNameDraft] = useState('');
     const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
     const [builderBoardId, setBuilderBoardId] = useState<string | null>(null);
     const [builderBoardName, setBuilderBoardName] = useState('Untitled Board');
@@ -316,26 +341,31 @@ export const SandboxView: React.FC = () => {
         });
     };
 
-    const refreshBoards = useCallback(async () => {
-        const res = await ApiClient.listSandboxBoards();
-        setBoards(res.boards);
-        return res.boards;
+    const refreshBoardCatalog = useCallback(async () => {
+        const [boardList, projects] = await Promise.all([
+            ApiClient.listSandboxBoards(),
+            ApiClient.getBoardProjects().catch(() => [] as BoardProject[]),
+        ]);
+        setBoards(boardList.boards);
+        setBoardProjects(projects);
+        return { boards: boardList.boards, projects };
     }, []);
 
     useEffect(() => {
         let cancelled = false;
         void (async () => {
             try {
-                const [wfs, projs, boardList, created] = await Promise.all([
+                const [wfs, projs, catalog, created] = await Promise.all([
                     ApiClient.getWorkflows(),
                     ApiClient.getWorkflowProjects().catch(() => [] as WorkflowProject[]),
-                    ApiClient.listSandboxBoards(),
+                    refreshBoardCatalog(),
                     ApiClient.createSandboxSession(),
                 ]);
                 if (cancelled) return;
                 setWorkflows(wfs);
                 setWorkflowProjects(projs);
-                setBoards(boardList.boards);
+                setBoards(catalog.boards);
+                setBoardProjects(catalog.projects);
                 setCatalogLoaded(true);
                 setDocumentId(created.document_id);
                 setEnvelope(created.envelope);
@@ -350,7 +380,7 @@ export const SandboxView: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [refreshBoardCatalog]);
 
     useEffect(() => {
         if (!catalogLoaded) return;
@@ -428,8 +458,55 @@ export const SandboxView: React.FC = () => {
         [workflowProjects],
     );
 
+    const sharedBoardProjectId = React.useMemo(
+        () => sharedBoardProjectIdFromProjects(boardProjects),
+        [boardProjects],
+    );
+
+    const displayedBoardProjects = React.useMemo(
+        () =>
+            [...boardProjects].sort(
+                (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name),
+            ),
+        [boardProjects],
+    );
+
+    const selectedBoardProject = React.useMemo(
+        () =>
+            selectedBoardProjectId
+                ? boardProjects.find(p => p.id === selectedBoardProjectId) ?? null
+                : null,
+        [boardProjects, selectedBoardProjectId],
+    );
+
+    const boardsInCurrentProject = React.useMemo(() => {
+        if (!selectedBoardProjectId) return [];
+        return boardsInProject(selectedBoardProjectId, sharedBoardProjectId, boards);
+    }, [boards, selectedBoardProjectId, sharedBoardProjectId]);
+
+    const displayedBoardsInProject = React.useMemo(() => {
+        const sorted = sortBoardsForList(boardsInCurrentProject, boardListSort);
+        return filterNamesByPrefix(sorted, boardNameFilter);
+    }, [boardsInCurrentProject, boardListSort, boardNameFilter]);
+
+    const systemBoards = React.useMemo(() => boards.filter(b => b.is_system), [boards]);
+
+    const resolveBoardProjectIdForCreate = useCallback((): string | null => {
+        return selectedBoardProjectId ?? sharedBoardProjectId;
+    }, [selectedBoardProjectId, sharedBoardProjectId]);
+
+    const selectedBoardProjectDeleteBoardCount = React.useMemo(() => {
+        if (!selectedBoardProjectId) return 0;
+        return boardsInProject(selectedBoardProjectId, sharedBoardProjectId, boards).length;
+    }, [selectedBoardProjectId, sharedBoardProjectId, boards]);
+
     const creatureBrainProjects = React.useMemo(
-        () => projectsWithCreatureBrains(workflowProjects, sharedProjectId, workflows),
+        () => projectsWithSandboxCreatureBrains(workflowProjects, sharedProjectId, workflows),
+        [workflowProjects, sharedProjectId, workflows],
+    );
+
+    const sandboxEligibleWorkflows = React.useMemo(
+        () => sandboxEligibleCreatureBrainWorkflows(workflowProjects, sharedProjectId, workflows),
         [workflowProjects, sharedProjectId, workflows],
     );
 
@@ -670,6 +747,40 @@ export const SandboxView: React.FC = () => {
         [loadBoardIntoBuilder, startSessionFromBoard],
     );
 
+    const handleCreateBoardProject = useCallback(async () => {
+        const name = newBoardProjectNameDraft.trim();
+        if (!name) return;
+        setBusy(true);
+        try {
+            const created = await ApiClient.createBoardProject({ name });
+            setNewBoardProjectNameDraft('');
+            await refreshBoardCatalog();
+            setSelectedBoardProjectId(created.id);
+            setBoardNameFilter('');
+        } catch (e) {
+            setLoadError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    }, [newBoardProjectNameDraft, refreshBoardCatalog]);
+
+    const moveBoardToProject = useCallback(
+        async (boardId: string, projectId: string): Promise<boolean> => {
+            setBusy(true);
+            try {
+                await ApiClient.updateSandboxBoard(boardId, { project_id: projectId });
+                await refreshBoardCatalog();
+                return true;
+            } catch (e) {
+                setLoadError(e instanceof Error ? e.message : String(e));
+                return false;
+            } finally {
+                setBusy(false);
+            }
+        },
+        [refreshBoardCatalog],
+    );
+
     const handleSaveSessionAsBoard = useCallback(async () => {
         const doc = documentId;
         if (!doc) return;
@@ -680,15 +791,16 @@ export const SandboxView: React.FC = () => {
             const board = await ApiClient.saveSandboxSessionAsBoard(doc, {
                 mode: 'save_as_new',
                 name: name.trim(),
+                project_id: resolveBoardProjectIdForCreate(),
             });
-            await refreshBoards();
+            await refreshBoardCatalog();
             setSelectedBoardId(board.id);
         } catch (e) {
             setLoadError(e instanceof Error ? e.message : String(e));
         } finally {
             setBusy(false);
         }
-    }, [documentId, refreshBoards]);
+    }, [documentId, refreshBoardCatalog, resolveBoardProjectIdForCreate]);
 
     const handleUpdateSourceBoard = useCallback(async () => {
         const doc = documentId;
@@ -697,13 +809,13 @@ export const SandboxView: React.FC = () => {
         setBusy(true);
         try {
             await ApiClient.saveSandboxSessionAsBoard(doc, { mode: 'update_source' });
-            await refreshBoards();
+            await refreshBoardCatalog();
         } catch (e) {
             setLoadError(e instanceof Error ? e.message : String(e));
         } finally {
             setBusy(false);
         }
-    }, [documentId, refreshBoards]);
+    }, [documentId, refreshBoardCatalog]);
 
     const handleNewBoard = useCallback(() => {
         setLocalBoardDef(createEmptyBoardDefinition(SANDBOX_GRID_DEFAULT_WIDTH, SANDBOX_GRID_DEFAULT_HEIGHT));
@@ -729,29 +841,137 @@ export const SandboxView: React.FC = () => {
                 const created = await ApiClient.createSandboxBoard({
                     name: builderBoardName,
                     definition: localBoardDef as unknown as Record<string, unknown>,
+                    project_id: resolveBoardProjectIdForCreate(),
                 });
                 setBuilderBoardId(created.id);
                 setSelectedBoardId(created.id);
             }
             setBuilderDirty(false);
-            await refreshBoards();
+            await refreshBoardCatalog();
         } catch (e) {
             setLoadError(e instanceof Error ? e.message : String(e));
         } finally {
             setBusy(false);
         }
-    }, [builderBoardId, builderBoardName, localBoardDef, refreshBoards]);
+    }, [builderBoardId, builderBoardName, localBoardDef, refreshBoardCatalog, resolveBoardProjectIdForCreate]);
 
     const activeBoardId = mainTab === 'simulation' ? selectedBoardId : builderBoardId;
     const activeBoard = boards.find(b => b.id === activeBoardId) ?? null;
     const isActiveSystemBoard = activeBoard?.is_system ?? false;
     const canEditToolbarBoardName =
         mainTab === 'builder' ? !isActiveSystemBoard : Boolean(selectedBoardId && !isActiveSystemBoard);
+    const canDeleteActiveBoard = Boolean(activeBoard && !isActiveSystemBoard);
     const toolbarBoardNameValue = mainTab === 'builder' ? builderBoardName : simulationBoardNameDraft;
     const toolbarBoardNameDisplay =
         mainTab === 'simulation'
             ? activeBoard?.name ?? 'Simulation session'
             : builderBoardName || 'Untitled Board';
+
+    const handleDeleteBoardProject = useCallback(async () => {
+        if (!selectedBoardProjectId || !selectedBoardProject) return;
+        const boardCount = selectedBoardProjectDeleteBoardCount;
+        try {
+            await ApiClient.deleteBoardProject(selectedBoardProjectId, {
+                deleteBoards: boardCount > 0,
+            });
+            if (
+                activeBoardId &&
+                boardsInProject(selectedBoardProjectId, sharedBoardProjectId, boards).some(
+                    b => b.id === activeBoardId,
+                )
+            ) {
+                if (mainTab === 'simulation') {
+                    setDocumentId(null);
+                    setEnvelope(null);
+                    setSelectedBoardId(null);
+                } else {
+                    handleNewBoard();
+                }
+            }
+            setSelectedBoardProjectId(null);
+            setBoardNameFilter('');
+            await refreshBoardCatalog();
+        } catch (e) {
+            setLoadError(e instanceof Error ? e.message : String(e));
+            throw e;
+        }
+    }, [
+        activeBoardId,
+        boards,
+        handleNewBoard,
+        mainTab,
+        refreshBoardCatalog,
+        selectedBoardProject,
+        selectedBoardProjectDeleteBoardCount,
+        selectedBoardProjectId,
+        sharedBoardProjectId,
+    ]);
+
+    const handleDeleteBoard = useCallback(
+        async (boardId: string) => {
+            const board = boards.find(b => b.id === boardId);
+            if (!board || board.is_system) return;
+
+            const projectId =
+                selectedBoardProjectId ?? board.project_id ?? sharedBoardProjectId;
+            const projectBoards = projectId
+                ? sortBoardsForList(
+                      boardsInProject(projectId, sharedBoardProjectId, boards),
+                      boardListSort,
+                  )
+                : [];
+            const sortedIds = filterNamesByPrefix(projectBoards, boardNameFilter).map(b => b.id);
+            const nextId = nextBoardIdAfterDelete(sortedIds, boardId);
+            const wasActive = activeBoardId === boardId;
+
+            if (projectId) {
+                setSelectedBoardProjectId(projectId);
+            }
+
+            setBusy(true);
+            try {
+                await ApiClient.deleteSandboxBoard(boardId);
+                await refreshBoardCatalog();
+
+                if (!wasActive) return;
+
+                if (nextId) {
+                    if (mainTab === 'builder') {
+                        await loadBoardIntoBuilder(nextId);
+                    } else {
+                        await startSessionFromBoard(nextId);
+                    }
+                    return;
+                }
+
+                if (mainTab === 'simulation') {
+                    setDocumentId(null);
+                    setEnvelope(null);
+                    setSelectedBoardId(null);
+                } else {
+                    handleNewBoard();
+                }
+            } catch (e) {
+                setLoadError(e instanceof Error ? e.message : String(e));
+                throw e;
+            } finally {
+                setBusy(false);
+            }
+        },
+        [
+            activeBoardId,
+            boardListSort,
+            boardNameFilter,
+            boards,
+            handleNewBoard,
+            loadBoardIntoBuilder,
+            mainTab,
+            refreshBoardCatalog,
+            selectedBoardProjectId,
+            sharedBoardProjectId,
+            startSessionFromBoard,
+        ],
+    );
 
     useEffect(() => {
         if (mainTab !== 'simulation') return;
@@ -808,7 +1028,7 @@ export const SandboxView: React.FC = () => {
         try {
             await ApiClient.updateSandboxBoard(selectedBoardId, { name: normalized });
             setSimulationBoardNameDraft(normalized);
-            await refreshBoards();
+            await refreshBoardCatalog();
         } catch (e) {
             setSimulationBoardNameDraft(currentName);
             setLoadError(e instanceof Error ? e.message : String(e));
@@ -820,7 +1040,7 @@ export const SandboxView: React.FC = () => {
         activeBoard?.name,
         builderBoardName,
         isActiveSystemBoard,
-        refreshBoards,
+        refreshBoardCatalog,
         selectedBoardId,
         simulationBoardNameDraft,
         toolbarBoardNameValue,
@@ -940,7 +1160,7 @@ export const SandboxView: React.FC = () => {
         );
     }
 
-    if (!catalogLoaded || (mainTab === 'simulation' && (!envelope || !documentId))) {
+    if (!catalogLoaded) {
         return (
             <div className="h-full flex items-center justify-center text-mw-text-secondary gap-2">
                 <Loader2 className="animate-spin" size={24} />
@@ -979,51 +1199,214 @@ export const SandboxView: React.FC = () => {
                 style={compact ? { width: 'min(85vw, 22rem)' } : { width: panelWidths.left }}
             >
                 <div className="flex-1 min-w-0 border-r border-mw-border bg-mw-sidebar flex flex-col min-h-0 overflow-y-auto">
-                    <div className="p-3 border-b border-mw-border shrink-0">
-                        <h2 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide mb-2">
+                    <div className="p-3 border-b border-mw-border shrink-0 space-y-3">
+                        <h2 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide">
                             Boards
                         </h2>
-                        <div className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
-                            {boards.map(board => {
-                                const activeId = mainTab === 'simulation' ? selectedBoardId : builderBoardId;
-                                return (
-                                    <button
-                                        key={board.id}
-                                        type="button"
-                                        disabled={busy}
-                                        onClick={() => void handleBoardListSelect(board.id)}
-                                        className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-lg text-left transition-colors disabled:opacity-50 ${
-                                            activeId === board.id
-                                                ? 'bg-mw-primary-muted text-mw-primary'
-                                                : 'text-mw-text-primary hover:bg-mw-card'
-                                        }`}
-                                    >
-                                        <span className="truncate font-medium">{board.name}</span>
-                                        {board.is_system ? (
+                        {systemBoards.length > 0 ? (
+                            <div className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                {systemBoards.map(board => {
+                                    const activeId = mainTab === 'simulation' ? selectedBoardId : builderBoardId;
+                                    return (
+                                        <button
+                                            key={board.id}
+                                            type="button"
+                                            disabled={busy}
+                                            onClick={() => void handleBoardListSelect(board.id)}
+                                            className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-lg text-left transition-colors disabled:opacity-50 ${
+                                                activeId === board.id
+                                                    ? 'bg-mw-primary-muted text-mw-primary'
+                                                    : 'text-mw-text-primary hover:bg-mw-card'
+                                            }`}
+                                        >
+                                            <span className="truncate font-medium">{board.name}</span>
                                             <span className="shrink-0 text-[10px] text-mw-text-secondary uppercase">
                                                 System
                                             </span>
-                                        ) : null}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
+                        {!selectedBoardProjectId ? (
+                            <>
+                                <div className="flex gap-1">
+                                    <input
+                                        type="text"
+                                        value={newBoardProjectNameDraft}
+                                        onChange={e => setNewBoardProjectNameDraft(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') void handleCreateBoardProject();
+                                        }}
+                                        placeholder="New project…"
+                                        aria-label="New board project name"
+                                        className="min-w-0 flex-1 px-1.5 py-0.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded focus:outline-none focus:ring-1 focus:ring-mw-primary"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleCreateBoardProject()}
+                                        className="shrink-0 p-1 text-mw-primary hover:bg-mw-primary-muted rounded transition-colors"
+                                        title="Create project"
+                                    >
+                                        <FolderPlus size={14} />
                                     </button>
-                                );
-                            })}
-                            {boards.length === 0 && (
-                                <div className="text-xs text-mw-text-secondary text-center py-2">No boards yet</div>
-                            )}
-                        </div>
+                                </div>
+                                <div className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                    {displayedBoardProjects.map(p => (
+                                        <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedBoardProjectId(p.id);
+                                                setBoardNameFilter('');
+                                            }}
+                                            className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-lg text-left text-mw-text-primary hover:bg-mw-card transition-colors"
+                                        >
+                                            <span className="truncate font-medium">{p.name}</span>
+                                            <span className="shrink-0 text-xs text-mw-text-secondary tabular-nums">
+                                                {boardCountForProject(p, sharedBoardProjectId, boards)}
+                                            </span>
+                                        </button>
+                                    ))}
+                                    {displayedBoardProjects.length === 0 && (
+                                        <div className="text-xs text-mw-text-secondary text-center py-2">
+                                            No projects yet
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex items-center gap-1 min-w-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedBoardProjectId(null);
+                                            setBoardNameFilter('');
+                                        }}
+                                        className="shrink-0 p-1 rounded text-mw-text-secondary hover:text-mw-text-primary hover:bg-mw-card"
+                                        title="All projects"
+                                    >
+                                        <ChevronLeft size={16} />
+                                    </button>
+                                    <span
+                                        className="text-xs font-semibold text-mw-text-primary truncate min-w-0 flex-1"
+                                        title={selectedBoardProject?.name ?? ''}
+                                    >
+                                        {selectedBoardProject?.name ?? 'Project'}
+                                    </span>
+                                    {selectedBoardProject ? (
+                                        <BoardProjectDeleteControl
+                                            projectName={selectedBoardProject.name}
+                                            boardCount={selectedBoardProjectDeleteBoardCount}
+                                            disabled={!isDeletableBoardProject(selectedBoardProject)}
+                                            onConfirmDelete={handleDeleteBoardProject}
+                                        />
+                                    ) : null}
+                                </div>
+                                <div
+                                    role="group"
+                                    aria-label="Board list sort"
+                                    className="flex rounded-lg border border-mw-border bg-mw-page p-0.5 gap-0.5"
+                                >
+                                    {(
+                                        [
+                                            ['updated', 'Last updated'],
+                                            ['name', 'Name A–Z'],
+                                        ] as const
+                                    ).map(([key, label]) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => setBoardListSort(key)}
+                                            className={`flex-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
+                                                boardListSort === key
+                                                    ? 'bg-mw-primary-muted text-mw-primary'
+                                                    : 'text-mw-text-secondary hover:text-mw-text-primary hover:bg-mw-card'
+                                            }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <input
+                                    type="text"
+                                    value={boardNameFilter}
+                                    onChange={e => setBoardNameFilter(e.target.value)}
+                                    placeholder="Filter…"
+                                    aria-label="Filter boards by name prefix"
+                                    className="w-full px-1.5 py-0.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded focus:outline-none focus:ring-1 focus:ring-mw-primary"
+                                />
+                                <div className={`space-y-1 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                    {displayedBoardsInProject.map(board => {
+                                        const activeId =
+                                            mainTab === 'simulation' ? selectedBoardId : builderBoardId;
+                                        return (
+                                            <div key={board.id} className="flex items-stretch gap-1 min-w-0">
+                                                <button
+                                                    type="button"
+                                                    disabled={busy}
+                                                    onClick={() => void handleBoardListSelect(board.id)}
+                                                    className={`flex flex-1 min-w-0 items-center gap-2 px-2 py-1.5 text-sm rounded-lg text-left transition-colors disabled:opacity-50 ${
+                                                        activeId === board.id
+                                                            ? 'bg-mw-primary-muted text-mw-primary font-medium'
+                                                            : 'text-mw-text-primary hover:bg-mw-card'
+                                                    }`}
+                                                >
+                                                    <span className="truncate font-medium">{board.name}</span>
+                                                </button>
+                                                <div className="flex items-center gap-0.5 shrink-0">
+                                                    <select
+                                                        value={board.project_id ?? sharedBoardProjectId ?? ''}
+                                                        aria-label={`Move ${board.name} to project`}
+                                                        disabled={busy}
+                                                        onClick={e => e.stopPropagation()}
+                                                        onChange={e => {
+                                                            e.stopPropagation();
+                                                            const v = e.target.value;
+                                                            if (v) void moveBoardToProject(board.id, v);
+                                                        }}
+                                                        className="max-w-[5rem] text-[10px] border border-mw-border bg-mw-card text-mw-text-primary rounded px-1 py-0.5"
+                                                    >
+                                                        {displayedBoardProjects.map(p => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <BoardDeleteControl
+                                                        boardName={board.name}
+                                                        disabled={busy}
+                                                        onConfirmDelete={() => handleDeleteBoard(board.id)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {displayedBoardsInProject.length === 0 && (
+                                        <div className="text-xs text-mw-text-secondary text-center py-2">
+                                            No boards in this project
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                     <div className="p-3 text-[10px] text-mw-text-secondary leading-relaxed space-y-1.5">
                         {mainTab === 'simulation' ? (
                             <>
                                 <p>
-                                    Select a board to start a new simulation session. Use Play / Step in the toolbar to
-                                    advance ticks.
+                                    System boards are always available at the top. Open a project to browse your saved
+                                    boards, or select one to start a new simulation session.
                                 </p>
                                 <p>Pause to edit cells, resize the grid, or save the session back to a board.</p>
                             </>
                         ) : (
                             <>
-                                <p>Select a board to edit its layout, or create a new board from the toolbar.</p>
+                                <p>
+                                    Drill into a project to open a board for editing, or use New Board in the toolbar
+                                    (saved into the open project).
+                                </p>
                                 <p>Place walls, food, and creatures with workflow brains, then save.</p>
                             </>
                         )}
@@ -1103,7 +1486,7 @@ export const SandboxView: React.FC = () => {
                         <>
                             <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || !envelope}
                                 onClick={() => setPaused(p => !p)}
                                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mw-primary text-white text-xs font-medium disabled:opacity-50"
                             >
@@ -1112,7 +1495,7 @@ export const SandboxView: React.FC = () => {
                             </button>
                             <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || !envelope}
                                 onClick={() => void runTickWithUserActions([])}
                                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-mw-card border border-mw-border text-xs"
                             >
@@ -1200,6 +1583,14 @@ export const SandboxView: React.FC = () => {
                             {toolbarBoardNameDisplay}
                         </span>
                     )}
+                    {canDeleteActiveBoard && activeBoard ? (
+                        <BoardDeleteControl
+                            boardName={activeBoard.name}
+                            variant="toolbar"
+                            disabled={busy}
+                            onConfirmDelete={() => handleDeleteBoard(activeBoard.id)}
+                        />
+                    ) : null}
                 </div>
                 {mainTab === 'simulation' && visibleErrors.length > 0 && (
                     <div className="px-4 py-2 text-xs text-mw-error bg-mw-error-muted border-b border-mw-border shrink-0 space-y-1">
@@ -1211,9 +1602,14 @@ export const SandboxView: React.FC = () => {
                                 {message}
                             </div>
                         ))}
-                        {visibleErrors.some(({ message }) => shouldShowSandboxDecisionHint(message)) ? (
-                            <div className="text-mw-text-secondary font-normal">{SANDBOX_DECISION_ERROR_HINT}</div>
-                        ) : null}
+                        {(() => {
+                            const hint = visibleErrors
+                                .map(({ message }) => sandboxErrorHintForMessage(message))
+                                .find((h): h is string => h != null);
+                            return hint ? (
+                                <div className="text-mw-text-secondary font-normal">{hint}</div>
+                            ) : null;
+                        })()}
                     </div>
                 )}
                 <div className="flex-1 min-h-0 overflow-hidden relative bg-mw-page p-2">
@@ -1221,6 +1617,11 @@ export const SandboxView: React.FC = () => {
                         ref={containerRef}
                         className="absolute inset-2 rounded-lg border border-mw-border overflow-hidden touch-none"
                     />
+                    {mainTab === 'simulation' && !envelope ? (
+                        <div className="absolute inset-2 z-[5] flex items-center justify-center rounded-lg border border-dashed border-mw-border bg-mw-page/80 text-sm text-mw-text-secondary px-6 text-center">
+                            Select a board from the sidebar to start a simulation session.
+                        </div>
+                    ) : null}
                     <div
                         className="sandbox-board-controls absolute bottom-4 right-4 z-10 flex flex-col overflow-hidden rounded-lg border border-mw-border bg-mw-card shadow-sm"
                         role="toolbar"
@@ -1475,7 +1876,7 @@ export const SandboxView: React.FC = () => {
                                                             item={it}
                                                             readOnly={mainTab !== 'builder'}
                                                             favoriteColors={sandboxFavoriteColors}
-                                                            workflows={workflows}
+                                                            workflows={sandboxEligibleWorkflows}
                                                             onItemChange={(itemId, patch) => {
                                                                 setLocalBoardDef(prev =>
                                                                     updateBoardItemMetadata(prev, itemId, patch),

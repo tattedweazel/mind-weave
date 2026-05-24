@@ -34,8 +34,49 @@ def _minimal_tick(*, creature_pos: dict, items: list | None = None, facing: str 
 
 def test_creature_position_and_facing_from_tick():
     raw = _minimal_tick(creature_pos={"x": 3, "y": 2}, facing="E")
-    assert creature_position_from_tick_dict(raw) == {"x": 3, "y": 2}
+    assert creature_position_from_tick_dict(raw) == {
+        "x": 3,
+        "y": 2,
+        "kind": "empty",
+        "region_label": None,
+    }
     assert creature_facing_from_tick_dict(raw) == "E"
+
+
+def test_creature_position_includes_region_label():
+    raw = _minimal_tick(
+        creature_pos={"x": 2, "y": 2},
+        items=[
+            {
+                "id": "r1",
+                "type": "region",
+                "position": {"x": 2, "y": 2},
+                "color": "#3B82F6",
+                "label": "Goal",
+            },
+        ],
+    )
+    assert creature_position_from_tick_dict(raw) == {
+        "x": 2,
+        "y": 2,
+        "kind": "empty",
+        "region_label": "Goal",
+    }
+
+
+def test_creature_position_reports_food_under_creature():
+    raw = _minimal_tick(
+        creature_pos={"x": 2, "y": 2},
+        items=[
+            {"id": "f1", "type": "food", "position": {"x": 2, "y": 2}, "energy": 10},
+        ],
+    )
+    assert creature_position_from_tick_dict(raw) == {
+        "x": 2,
+        "y": 2,
+        "kind": "food",
+        "region_label": None,
+    }
 
 
 def test_nearby_cells_clockwise_facing_n():

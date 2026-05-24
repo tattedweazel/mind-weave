@@ -126,6 +126,16 @@ def test_try_build_output_explorer_dictionary_primitive():
     assert keys == {"bar", "foo"}
 
 
+def test_try_build_output_explorer_dictionary_primitive_null_row_state_empty():
+    ex = try_build_output_explorer(
+        {"kind": "dictionary", "node_id": "n1", "data": {"region_label": None, "kind": "empty"}},
+    )
+    assert ex is not None
+    by_key = {row["primary_line"]: row for row in ex["items"]}
+    assert by_key["region_label"]["row_state"] == "empty"
+    assert by_key["kind"]["row_state"] == "ok"
+
+
 def test_try_build_dictionary_with_events_key_not_calendar_shape_uses_primitive():
     """Arbitrary ``events`` lists must not hijack the Calendar explorer."""
     ex = try_build_output_explorer(

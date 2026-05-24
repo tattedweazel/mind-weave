@@ -9,6 +9,7 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | Concept | Description |
 |---------|-------------|
 | **Board** | Saved template in `sandbox_boards` table (`BoardDefinition` JSON in `body`) |
+| **Board project** | Per-user folder in `board_projects` (independent from workflow projects); boards link via `sandbox_boards.project_id` |
 | **Session** | Live simulation document (`SandboxDocumentEnvelope` in `documents.body`) |
 | **Snapshot** | Starting a session copies a board into session state; the session evolves independently |
 | **Save back** | Paused sessions can **Save as Board** (new row) or **Update Board** (overwrite source) |
@@ -55,7 +56,7 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | `wall` | Blocks movement and placement | None (read-only Id/Type/Position in Explorer) |
 | `food` | Reported by **Get nearby**; does not block movement; pickable | **Energy** editable in Explorer (default `48`) |
 | `ball` | Reported by **Get nearby** as `ball`; does not block movement; pickable | **Color** at placement (read-only in Explorer after place) |
-| `region` | Colored underlay; coexists with other occupants; non-blocking; **`label`** readable via **Get nearby** (`region_label` on each neighbor cell) | **Label**, **Color**, **trigger** stub (editable; not executed yet) |
+| `region` | Colored underlay; coexists with other occupants; non-blocking; **`label`** readable via **Get nearby** (`region_label` on each neighbor cell) and **Get position** (`region_label` on the creature’s current cell) | **Label**, **Color**, **trigger** stub (editable; not executed yet) |
 
 ### Cell occupancy layers
 
@@ -91,18 +92,33 @@ Users can save up to **16** favorite hex colors under **My Settings → View Set
 
 ## HTTP API
 
+### Board projects
+
+Base: `/api/v1/board-projects`
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/` | List folders + board counts (includes seeded **Shared**) |
+| `POST` | `/` | Create folder |
+| `PATCH` | `/{id}` | Rename / reorder |
+| `DELETE` | `/{id}?delete_boards=` | Delete folder (non-empty requires `delete_boards=true` to cascade-delete boards) |
+
+### Boards
+
 Base: `/api/v1/sandbox/boards`
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/boards` | List user boards + system boards |
-| `POST` | `/boards` | Create board |
+| `POST` | `/boards` | Create board (optional `project_id`; defaults to **Shared**) |
 | `GET` | `/boards/{id}` | Read board |
-| `PATCH` | `/boards/{id}` | Update board (not system rows) |
+| `PATCH` | `/boards/{id}` | Update board (not system rows); optional `project_id` to move between folders |
 | `DELETE` | `/boards/{id}` | Delete board (not system rows) |
-| `POST` | `/boards/{id}/duplicate` | Duplicate board |
+| `POST` | `/boards/{id}/duplicate` | Duplicate board (copy inherits source `project_id`) |
 
-Session save-back: `POST /api/v1/sandbox/sessions/{id}/save-board` with `{ "mode": "save_as_new" | "update_source", "name"?: string }` (requires paused playback).
+Session save-back: `POST /api/v1/sandbox/sessions/{id}/save-board` with `{ "mode": "save_as_new" | "update_source", "name"?: string, "project_id"?: string }` (requires paused playback; `project_id` applies to **save_as_new** only).
+
+Existing user boards are backfilled into **Shared** on migration. System boards keep `project_id = null`.
 
 ## Built-in Empty Board
 
@@ -115,6 +131,17 @@ Sandbox view has two tabs:
 1. **Simulation** — select a board, run ticks, spawn creatures/items/regions, save layout back to boards
 2. **Board Builder** — edit and save board templates without running simulation
 
+### Board projects (left sidebar)
+
+The **Boards** sidebar mirrors Workflow Editor project organization (independent folders):
+
+- **System boards** (e.g. **Empty Board**) stay pinned at the top, outside any project
+- **Project list** — **New project…**, then folders with board counts (seeded **Shared** row)
+- **Drill-in** — **Back**, folder title, **Delete project** (inline confirm; non-empty warns before cascade), sort (**Last updated** / **Name A–Z**), **Filter…**, board rows with **Move** and **Delete**
+- **Delete board** — trash on each board row and in the toolbar when a user-owned board is active; inline confirm; after deleting the active board, stay in the project and select the next board (or clear the canvas if it was the last)
+
+New boards (**Board Builder → Save**, **Simulation → Save as Board**) land in the currently open project, or **Shared** when no project is drilled in.
+
 ### Renaming boards
 
 The toolbar shows an editable **board name** field when a user-owned board is active (same pattern as the Workflow Editor name field).
@@ -126,4 +153,4 @@ The toolbar shows an editable **board name** field when a user-owned board is ac
 
 System boards (e.g. **Empty Board**) show a read-only name and cannot be renamed or saved from Board Builder.
 
-Implementation: [frontend/src/components/SandboxView.tsx](../frontend/src/components/SandboxView.tsx), [frontend/src/sandbox/boardBuilderLocalEdits.ts](../frontend/src/sandbox/boardBuilderLocalEdits.ts), [frontend/src/sandbox/sandboxBoardRename.ts](../frontend/src/sandbox/sandboxBoardRename.ts).
+Implementation: [frontend/src/components/SandboxView.tsx](../frontend/src/components/SandboxView.tsx), [frontend/src/domain/boardProjectMembership.ts](../frontend/src/domain/boardProjectMembership.ts), [frontend/src/sandbox/boardBuilderLocalEdits.ts](../frontend/src/sandbox/boardBuilderLocalEdits.ts), [frontend/src/sandbox/sandboxBoardRename.ts](../frontend/src/sandbox/sandboxBoardRename.ts).

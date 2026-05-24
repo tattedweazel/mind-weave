@@ -105,6 +105,7 @@ export interface SandboxBoardJson {
     name: string;
     description: string;
     is_system: boolean;
+    project_id?: string | null;
     definition: BoardDefinitionJson;
     created_at: string;
     updated_at: string;

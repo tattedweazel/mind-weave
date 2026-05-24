@@ -116,7 +116,7 @@ export function forwardRingSlot(facing: 'N' | 'E' | 'S' | 'W'): NearbyRingSlot {
 
 export const PROBE_HINTS: Record<'nearby' | 'position' | 'facing' | 'inventory', string> = {
     nearby: '8 neighbors, clockwise from forward; cells with a region also show a Region badge',
-    position: 'Focused creature grid coordinates',
+    position: 'Current cell coordinates with kind and Region badges when present',
     facing: 'Current heading on the board',
     inventory: 'Items held by this creature',
 };

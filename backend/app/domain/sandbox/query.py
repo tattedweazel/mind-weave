@@ -38,8 +38,26 @@ def parse_tick(raw: dict[str, Any]) -> SandboxTickInput:
     return SandboxTickInput.model_validate(raw)
 
 
-def creature_position_from_tick_dict(raw: dict[str, Any]) -> dict[str, int]:
-    return parse_tick(raw).creature.position.model_dump(mode="json")
+def creature_position_from_tick_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    tick = parse_tick(raw)
+    pos = tick.creature.position
+    w, h = tick.world.grid.width, tick.world.grid.height
+    kind = _cell_kind(
+        pos.x,
+        pos.y,
+        w,
+        h,
+        tick.world,
+        tick.creatures,
+        exclude_creature_id=tick.creature.id,
+    )
+    region_label = _region_label_at_cell(pos.x, pos.y, tick.world)
+    return {
+        "x": pos.x,
+        "y": pos.y,
+        "kind": kind,
+        "region_label": region_label,
+    }
 
 
 def creature_facing_from_tick_dict(raw: dict[str, Any]) -> str:

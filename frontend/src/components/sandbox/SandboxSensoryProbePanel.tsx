@@ -15,7 +15,7 @@ import {
     resolveBallDisplayColor,
     type NearbyRingSlot,
 } from '../../sandbox/sandboxSensoryProbeDisplay';
-import type { NearbyCellJson, SandboxSensoryProbeKind } from '../../sandbox/sandboxSensoryProbes';
+import type { CellProbeJson, NearbyCellJson, SandboxSensoryProbeKind } from '../../sandbox/sandboxSensoryProbes';
 
 export interface SandboxSensoryProbePanelProps {
     kind: SandboxSensoryProbeKind;
@@ -34,7 +34,41 @@ function facingCompassHighlight(facing: SandboxFacing, direction: 'N' | 'E' | 'S
     return facing === direction;
 }
 
-function PositionReadout({ value }: { value: { x: number; y: number } }) {
+function CellKindBadges({ cell }: { cell: CellProbeJson }) {
+    const regionChip = nearbyRegionChipLabel(cell.region_label);
+    return (
+        <>
+            <span
+                className={`text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border ${nearbyCellKindBadgeClass(cell.kind)}`}
+            >
+                {nearbyCellKindLabel(cell.kind)}
+            </span>
+            {regionChip ? (
+                <span
+                    className={`text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border ${nearbyRegionChipBadgeClass()}`}
+                >
+                    {regionChip}
+                </span>
+            ) : null}
+        </>
+    );
+}
+
+function PositionReadout({ value }: { value: CellProbeJson | { x: number; y: number } }) {
+    const hasKind = 'kind' in value && typeof value.kind === 'string';
+    if (hasKind) {
+        const cell = value as CellProbeJson;
+        return (
+            <div className="flex justify-center">
+                <div className="flex flex-col items-center justify-center gap-0.5 rounded-lg border border-indigo-300/60 dark:border-indigo-500/50 bg-indigo-50/80 dark:bg-indigo-950/30 px-3 py-2 min-w-[5rem]">
+                    <CellKindBadges cell={cell} />
+                    <span className="text-[9px] font-mono tabular-nums text-slate-500 dark:text-slate-400 leading-none">
+                        ({cell.x}, {cell.y})
+                    </span>
+                </div>
+            </div>
+        );
+    }
     return (
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
             <div className="text-slate-500 dark:text-slate-400">X</div>
@@ -181,7 +215,6 @@ function NearbyCellTile({
     cell: NearbyCellJson;
     isForward: boolean;
 }) {
-    const regionChip = nearbyRegionChipLabel(cell.region_label);
     return (
         <div
             className={`flex flex-col items-center justify-center gap-0.5 rounded-lg border px-1 py-1.5 min-h-[3.25rem] ${
@@ -190,18 +223,7 @@ function NearbyCellTile({
                     : 'border-slate-200/80 dark:border-slate-600/80 bg-white/50 dark:bg-slate-900/30'
             }`}
         >
-            <span
-                className={`text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border ${nearbyCellKindBadgeClass(cell.kind)}`}
-            >
-                {nearbyCellKindLabel(cell.kind)}
-            </span>
-            {regionChip ? (
-                <span
-                    className={`text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border ${nearbyRegionChipBadgeClass()}`}
-                >
-                    {regionChip}
-                </span>
-            ) : null}
+            <CellKindBadges cell={cell} />
             <span className="text-[9px] font-mono tabular-nums text-slate-500 dark:text-slate-400 leading-none">
                 ({cell.x}, {cell.y})
             </span>
@@ -268,7 +290,7 @@ function StructuredReadout({
     switch (kind) {
         case 'position':
             if (value && typeof value === 'object' && 'x' in value && 'y' in value) {
-                return <PositionReadout value={value as { x: number; y: number }} />;
+                return <PositionReadout value={value as CellProbeJson | { x: number; y: number }} />;
             }
             return null;
         case 'facing':

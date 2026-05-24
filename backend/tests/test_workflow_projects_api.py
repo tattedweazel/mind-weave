@@ -35,6 +35,39 @@ def test_workflow_projects_list_includes_shared(client: TestClient):
     assert "Shared" in names
     shared = next(p for p in body if p["name"] == "Shared")
     assert "workflow_count" in shared
+    assert shared["sandbox_enabled"] is False
+
+
+def test_workflow_projects_create_defaults_sandbox_enabled_false(client: TestClient):
+    create = client.post("/api/v1/workflow-projects/", json={"name": "Sandbox Off By Default"})
+    assert create.status_code == 201
+    assert create.json()["sandbox_enabled"] is False
+
+
+def test_workflow_projects_patch_sandbox_enabled(client: TestClient):
+    create = client.post("/api/v1/workflow-projects/", json={"name": "Toggle Me"})
+    assert create.status_code == 201
+    pid = create.json()["id"]
+
+    enabled = client.patch(f"/api/v1/workflow-projects/{pid}", json={"sandbox_enabled": True})
+    assert enabled.status_code == 200
+    assert enabled.json()["sandbox_enabled"] is True
+
+    disabled = client.patch(f"/api/v1/workflow-projects/{pid}", json={"sandbox_enabled": False})
+    assert disabled.status_code == 200
+    assert disabled.json()["sandbox_enabled"] is False
+
+
+def test_workflow_projects_patch_sandbox_enabled_ignored_for_shared(client: TestClient):
+    shared = next(p for p in client.get("/api/v1/workflow-projects/").json() if p["name"] == "Shared")
+    before = shared["sandbox_enabled"]
+
+    patched = client.patch(
+        f"/api/v1/workflow-projects/{shared['id']}",
+        json={"sandbox_enabled": not before},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["sandbox_enabled"] == before
 
 
 def test_workflow_projects_create_rejects_shared_name(client: TestClient):

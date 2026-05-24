@@ -25,6 +25,17 @@ export function projectDeleteConfirmMessage(projectName: string, workflowCount: 
     return `Delete ${projectName}?`;
 }
 
+/** Shared is always eligible; other projects require sandbox_enabled. */
+export function isSandboxEnabledProject(
+    project: Pick<WorkflowProject, 'id' | 'sandbox_enabled'>,
+    sharedProjectId: string | null,
+): boolean {
+    if (sharedProjectId && project.id === sharedProjectId) {
+        return true;
+    }
+    return Boolean(project.sandbox_enabled);
+}
+
 /** Workflows eligible as sandbox creature brains (project drill-in minus custom skills). */
 export function creatureBrainWorkflows(
     workflows: readonly WorkflowDefinitionListItem[],
@@ -59,6 +70,32 @@ export function projectsWithCreatureBrains(
     return [...projects]
         .filter(p => creatureBrainCountForProject(p, sharedProjectId, workflows) > 0)
         .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+}
+
+/** Creature-brain workflows in sandbox-eligible projects only. */
+export function sandboxEligibleCreatureBrainWorkflows(
+    projects: readonly WorkflowProject[],
+    sharedProjectId: string | null,
+    workflows: readonly WorkflowDefinitionListItem[],
+): WorkflowDefinitionListItem[] {
+    const enabledProjectIds = new Set(
+        projects.filter(p => isSandboxEnabledProject(p, sharedProjectId)).map(p => p.id),
+    );
+    return creatureBrainWorkflows(workflows).filter(w => {
+        const projectId = w.project_id ?? sharedProjectId;
+        return projectId != null && enabledProjectIds.has(projectId);
+    });
+}
+
+/** Projects with ≥1 sandbox-eligible creature-brain workflow. */
+export function projectsWithSandboxCreatureBrains(
+    projects: readonly WorkflowProject[],
+    sharedProjectId: string | null,
+    workflows: readonly WorkflowDefinitionListItem[],
+): WorkflowProject[] {
+    return projectsWithCreatureBrains(projects, sharedProjectId, workflows).filter(p =>
+        isSandboxEnabledProject(p, sharedProjectId),
+    );
 }
 
 /** Resolve the seeded Shared project id from a loaded project list. */

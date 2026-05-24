@@ -24,6 +24,9 @@ export interface NearbyCellJson {
     region_label?: string | null;
 }
 
+/** Cell probe shape shared by Position probe and Get position utility output. */
+export type CellProbeJson = NearbyCellJson;
+
 const NEIGHBOR_OFFSETS_N: readonly { dx: number; dy: number }[] = [
     { dx: 0, dy: -1 },
     { dx: 1, dy: -1 },
@@ -46,8 +49,18 @@ const SOLID_ITEM_TYPES = new Set(['wall']);
 const REGION_ITEM_TYPE = 'region';
 const BALL_ITEM_TYPE = 'ball';
 
-export function creaturePositionFromState(creature: SandboxCreatureJson): { x: number; y: number } {
-    return { x: creature.position.x, y: creature.position.y };
+export function creaturePositionFromState(
+    creature: SandboxCreatureJson,
+    state: SandboxSandboxStateJson,
+): CellProbeJson {
+    const { x, y } = creature.position;
+    const { width, height } = state.world.grid;
+    return {
+        x,
+        y,
+        kind: cellKind(x, y, width, height, state, creature.id),
+        region_label: regionLabelAtCell(x, y, state),
+    };
 }
 
 export function creatureFacingFromState(creature: SandboxCreatureJson): SandboxFacing {
@@ -140,7 +153,7 @@ export function runSensoryProbe(
         case 'nearby':
             return nearbyCellsFromState(creature, state);
         case 'position':
-            return creaturePositionFromState(creature);
+            return creaturePositionFromState(creature, state);
         case 'facing':
             return creatureFacingFromState(creature);
         case 'inventory':
