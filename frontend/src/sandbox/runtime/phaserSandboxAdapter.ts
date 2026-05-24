@@ -277,6 +277,11 @@ class SandboxScene extends Phaser.Scene implements ViewportController {
             this.lastPinchDistance = null;
         });
 
+        // React may call setState before Phaser create(); replay deferred draw once graphics exist.
+        if (this.lastState) {
+            this.sync(this.lastState);
+        }
+
         this.readyHandler?.();
     }
 
@@ -463,11 +468,10 @@ export class PhaserSandboxAdapter implements SandboxRuntimeAdapter {
         }
         scene.sync(state);
 
-        if (this.pendingFit) {
+        // Keep pendingFit until the scene is active so mount()'s readyHandler can fit after create().
+        if (this.pendingFit && scene.sys?.isActive()) {
             this.pendingFit = false;
-            if (scene.sys?.isActive()) {
-                scene.fitToView();
-            }
+            scene.fitToView();
         }
     }
 

@@ -122,7 +122,7 @@ Existing user boards are backfilled into **Shared** on migration. System boards 
 
 ## Built-in Empty Board
 
-System row `builtin_slug = empty_sandbox_board` (`EMPTY_SANDBOX_BOARD_ID` in `builtins.py`). Used when `POST /sessions` omits `board_id`.
+System row `builtin_slug = empty_sandbox_board` (`EMPTY_SANDBOX_BOARD_ID` in `builtins.py`). Used when `POST /sessions` omits `board_id`. On first Sandbox load, selecting **Empty Board** shows the default 16×16 grid on the canvas immediately — no **Apply grid** step required.
 
 ## UI
 

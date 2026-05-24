@@ -150,6 +150,8 @@ Paused cell edits in **Simulation** use `/interactions` so layout changes do not
 - **Simulation tab**: board picker, play/pause/step, cell action menu, per-creature Explorer + Run Logs
 - **Board Builder tab**: edit/save boards without ticking; creature **facing** editable in Explorer
 
+On first Sandbox visit after a page load, **Simulation** renders the session grid immediately (including the default **Empty Board** 16×16 grid). **Apply grid** in Explorer is only for intentional resize — not required to see the board on load.
+
 When placing a creature (Simulation or Board Builder), the cell action modal steps through **workflow** → **initial facing** (`N`/`E`/`S`/`W`, default North) → **color** (presets, favorites, or custom hex). Placement does not auto-advance ticks — press **Play** or **Step** to run brains.
 
 **Tick ms** in Explorer sets the client-side Play interval (200–60000 ms). It does not advance simulation or require pause; commit with Enter or by leaving the field (partial values while typing do not affect playback until committed).

@@ -50,6 +50,7 @@ type MockSceneInstance = {
 };
 
 let lastMountedScene: MockSceneInstance | null = null;
+let deferSceneCreate = false;
 
 class MockResizeObserver {
     observe = vi.fn();
@@ -156,7 +157,9 @@ vi.mock('phaser', () => {
         constructor(config: { scene?: MockSceneInstance[] }) {
             for (const scene of config.scene ?? []) {
                 lastMountedScene = scene;
-                scene.create?.();
+                if (!deferSceneCreate) {
+                    scene.create?.();
+                }
             }
         }
     }
@@ -207,6 +210,7 @@ describe('PhaserSandboxAdapter', () => {
         resizeObserverCallback = null;
         lastResizeObserver = null;
         lastMountedScene = null;
+        deferSceneCreate = false;
     });
 
     afterEach(() => {
@@ -391,6 +395,33 @@ describe('PhaserSandboxAdapter', () => {
         firePointerEvent(scene, 'pointerup', mockPointer({ x: 140, y: 100, isDown: false }));
 
         expect(cellHandler).not.toHaveBeenCalled();
+
+        adapter.destroy();
+    });
+
+    it('draws grid and fits view when setState runs before Phaser create()', () => {
+        deferSceneCreate = true;
+        const adapter = new PhaserSandboxAdapter();
+        const el = sizedContainer(640, 480);
+        adapter.mount(el);
+
+        const scene = lastMountedScene!;
+        scene.sys.isActive = () => false;
+
+        expect(scene.add.graphics).not.toHaveBeenCalled();
+
+        adapter.setState(baseState);
+
+        expect(scene.add.graphics).not.toHaveBeenCalled();
+
+        scene.sys.isActive = () => true;
+        scene.create!();
+
+        const graphics = scene.add.graphics.mock.results[0]?.value as ReturnType<typeof mockGraphics>;
+        expect(graphics.clear).toHaveBeenCalled();
+        expect(graphics.fillRect).toHaveBeenCalled();
+        expect(graphics.lineBetween).toHaveBeenCalled();
+        expect(scene.cameras.main.setZoom).toHaveBeenCalled();
 
         adapter.destroy();
     });
