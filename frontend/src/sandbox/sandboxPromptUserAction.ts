@@ -11,7 +11,8 @@ export type SandboxUserDecisionAction =
     | 'turn_right'
     | 'idle'
     | 'pick_up_item'
-    | 'place_item';
+    | 'place_item'
+    | 'use_fixture';
 
 export type SandboxPlaceItemType = 'ball' | 'food';
 

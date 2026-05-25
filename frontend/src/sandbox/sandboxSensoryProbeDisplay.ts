@@ -49,6 +49,7 @@ const NEARBY_CELL_KIND_LABELS: Record<NearbyCellKind, string> = {
     wall: 'Wall',
     food: 'Food',
     ball: 'Ball',
+    fixture: 'Fixture',
     creature: 'Creature',
     out_of_bounds: 'Out of bounds',
 };
@@ -58,6 +59,7 @@ const NEARBY_CELL_KIND_BADGE_CLASSES: Record<NearbyCellKind, string> = {
     wall: 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-600 dark:text-slate-100 dark:border-slate-500',
     food: 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-950/50 dark:text-pink-200 dark:border-pink-800',
     ball: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800',
+    fixture: 'bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-800',
     creature: 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/50 dark:text-sky-200 dark:border-sky-800',
     out_of_bounds: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950/50 dark:text-red-200 dark:border-red-800',
 };

@@ -48,11 +48,14 @@ describe('sandboxPromptUserAction', () => {
             buildCreatureUserActionsPayload({
                 c1: { action: 'turn_left' },
                 c2: { action: 'place_item', item_type: 'food', inventory_index: 1 },
+                c3: { action: 'use_fixture' },
             }),
         ).toEqual({
             c1: { action: 'turn_left' },
             c2: { action: 'place_item', item_type: 'food', inventory_index: 1 },
+            c3: { action: 'use_fixture' },
         });
+        expect(autoReasonForUserAction({ action: 'use_fixture' })).toBe('user: use_fixture');
     });
 
     it('filters creatures requiring user action', () => {

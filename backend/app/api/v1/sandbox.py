@@ -312,7 +312,7 @@ async def tick_sandbox_session(
     _ensure_sandbox_enabled()
     svc = SandboxService(session, current_user.id)
     try:
-        env, ok, last_runs = await svc.run_tick(
+        env, ok, last_runs, simulation_effects, nested_runs = await svc.run_tick(
             document_id,
             interactions=body.interactions,
             client_version=body.state_version,
@@ -327,4 +327,6 @@ async def tick_sandbox_session(
         cid: (run.model_dump(mode="json") if run is not None else None)
         for cid, run in last_runs.items()
     }
+    payload["nested_workflow_runs"] = [entry.model_dump(mode="json") for entry in nested_runs]
+    payload["simulation_effects"] = simulation_effects
     return payload

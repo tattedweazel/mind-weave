@@ -43,6 +43,7 @@ import {
     ListTree,
     ListOrdered,
     Mail,
+    Megaphone,
     MessageSquare,
     Minus,
     MoveUp,
@@ -137,8 +138,8 @@ export function paletteStepIcon(nodeType: string): React.ReactNode {
             return <Type size={size} />;
         case 'stringTrunc':
             return <Type size={size} />;
-        case 'messageUtility':
-            return <MessageSquare size={size} />;
+        case 'broadcastMessage':
+            return <Megaphone size={size} />;
         case 'annotationNote':
             return <StickyNote size={size} />;
         case 'annotationRegion':
@@ -169,6 +170,14 @@ export function paletteStepIcon(nodeType: string): React.ReactNode {
             return <Package size={size} />;
         case 'sandboxPromptUserAction':
             return <Target size={size} />;
+        case 'sandboxForceSimulationPause':
+            return <Pause size={size} />;
+        case 'sandboxGetCellItems':
+            return <Package size={size} />;
+        case 'sandboxRemoveItemAtCell':
+            return <Hand size={size} />;
+        case 'sandboxSpawnItemAtCell':
+            return <ArrowDownToLine size={size} />;
         case 'intToString':
             return <ArrowLeftRight size={size} />;
         case 'listItemByIndex':

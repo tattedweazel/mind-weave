@@ -1,9 +1,10 @@
 import React from 'react';
 
-import type { WorkflowDefinitionListItem } from '../../api/types';
+import type { WorkflowDefinitionListItem, WorkflowProject } from '../../api/types';
 import type { RegionTriggerConfigJson, SandboxItemJson } from '../../domain/sandbox/types';
 import { regionTriggerFromItem, REGION_TRIGGER_MODES } from '../../sandbox/sandboxItemInspectorFields';
 import { SandboxColorPicker } from './SandboxColorPicker';
+import { SandboxWorkflowSelect } from './SandboxWorkflowSelect';
 import { InspectorSection } from '../workflow-editor/InspectorSection';
 
 export interface SandboxRegionInspectorSectionProps {
@@ -11,6 +12,10 @@ export interface SandboxRegionInspectorSectionProps {
     readOnly: boolean;
     favoriteColors?: string[];
     workflows?: WorkflowDefinitionListItem[];
+    workflowProjects?: WorkflowProject[];
+    sharedProjectId?: string | null;
+    /** Board instance inspector (default) vs Definitions catalog editor (trigger fields only). */
+    variant?: 'instance' | 'definition';
     onItemChange?: (
         itemId: string,
         patch: Partial<Pick<SandboxItemJson, 'color' | 'label' | 'trigger'>>,
@@ -22,6 +27,9 @@ export const SandboxRegionInspectorSection: React.FC<SandboxRegionInspectorSecti
     readOnly,
     favoriteColors = [],
     workflows = [],
+    workflowProjects = [],
+    sharedProjectId = null,
+    variant = 'instance',
     onItemChange,
 }) => {
     const trigger = regionTriggerFromItem(item);
@@ -56,58 +64,59 @@ export const SandboxRegionInspectorSection: React.FC<SandboxRegionInspectorSecti
     };
 
     return (
-        <InspectorSection title="Region">
-            <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                <div className="text-mw-text-secondary">Id</div>
-                <div className="text-mw-text-primary text-right font-mono text-[10px] break-all">{item.id}</div>
-                <div className="text-mw-text-secondary">Position</div>
-                <div className="text-mw-text-primary tabular-nums text-right font-mono">
-                    ({item.position.x}, {item.position.y})
-                </div>
-            </div>
-            <div className="mb-4">
-                <label htmlFor={`${item.id}-region-label`} className="text-xs font-medium text-mw-text-secondary block mb-1">
-                    Label
-                </label>
-                {readOnly ? (
-                    <p className="text-xs text-mw-text-primary font-mono">{label.trim() === '' ? '(empty)' : label}</p>
-                ) : (
-                    <input
-                        id={`${item.id}-region-label`}
-                        type="text"
-                        value={label}
-                        onChange={e => onItemChange?.(item.id, { label: e.target.value })}
-                        className="w-full px-2 py-1.5 text-sm border border-mw-border bg-mw-card rounded-lg"
-                        placeholder="e.g. target"
-                    />
-                )}
-                <p className="text-[11px] text-mw-text-secondary mt-1 leading-relaxed">
-                    Readable by creature brains via Get nearby (<code className="font-mono">region_label</code>).
-                </p>
-            </div>
-            {readOnly ? (
+        <InspectorSection title={variant === 'definition' ? 'Trigger' : 'Region'}>
+            {variant === 'instance' ? (
                 <>
-                    <div className="text-xs text-mw-text-secondary mb-1">Color</div>
-                    <div className="flex items-center gap-2 mb-3">
-                        <div className="h-6 w-6 rounded border border-mw-border" style={{ backgroundColor: color }} />
-                        <span className="font-mono text-xs">{color}</span>
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                        <div className="text-mw-text-secondary">Id</div>
+                        <div className="text-mw-text-primary text-right font-mono text-[10px] break-all">{item.id}</div>
+                        <div className="text-mw-text-secondary">Position</div>
+                        <div className="text-mw-text-primary tabular-nums text-right font-mono">
+                            ({item.position.x}, {item.position.y})
+                        </div>
                     </div>
+                    <div className="mb-4">
+                        <label htmlFor={`${item.id}-region-label`} className="text-xs font-medium text-mw-text-secondary block mb-1">
+                            Label
+                        </label>
+                        {readOnly ? (
+                            <p className="text-xs text-mw-text-primary font-mono">{label.trim() === '' ? '(empty)' : label}</p>
+                        ) : (
+                            <input
+                                id={`${item.id}-region-label`}
+                                type="text"
+                                value={label}
+                                onChange={e => onItemChange?.(item.id, { label: e.target.value })}
+                                className="w-full px-2 py-1.5 text-sm border border-mw-border bg-mw-card rounded-lg"
+                                placeholder="e.g. target"
+                            />
+                        )}
+                        <p className="text-[11px] text-mw-text-secondary mt-1 leading-relaxed">
+                            Readable by creature brains via Get nearby (<code className="font-mono">region_label</code>).
+                        </p>
+                    </div>
+                    {readOnly ? (
+                        <>
+                            <div className="text-xs text-mw-text-secondary mb-1">Color</div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="h-6 w-6 rounded border border-mw-border" style={{ backgroundColor: color }} />
+                                <span className="font-mono text-xs">{color}</span>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="mb-4">
+                            <SandboxColorPicker
+                                value={color}
+                                favoriteColors={favoriteColors}
+                                onChange={next => onItemChange?.(item.id, { color: next })}
+                                onConfirm={next => onItemChange?.(item.id, { color: next })}
+                                showConfirmButton={false}
+                            />
+                        </div>
+                    )}
                 </>
-            ) : (
-                <div className="mb-4">
-                    <SandboxColorPicker
-                        value={color}
-                        favoriteColors={favoriteColors}
-                        onChange={next => onItemChange?.(item.id, { color: next })}
-                        onConfirm={next => onItemChange?.(item.id, { color: next })}
-                        showConfirmButton={false}
-                    />
-                </div>
-            )}
-            <p className="text-[11px] text-mw-text-secondary mb-3 leading-relaxed">
-                Trigger behavior is not executed yet; configuration is saved for future use.
-            </p>
-            <div className="space-y-3 border-t border-mw-border pt-3">
+            ) : null}
+            <div className={`space-y-3 ${variant === 'instance' ? 'border-t border-mw-border pt-3' : ''}`}>
                 <div className="flex items-center gap-2">
                     <input
                         id={`${item.id}-trigger-enabled`}
@@ -154,24 +163,20 @@ export const SandboxRegionInspectorSection: React.FC<SandboxRegionInspectorSecti
                             <label htmlFor={`${item.id}-trigger-workflow`} className="text-xs font-medium text-mw-text-secondary block mb-1">
                                 Workflow
                             </label>
-                            <select
+                            <SandboxWorkflowSelect
                                 id={`${item.id}-trigger-workflow`}
                                 value={trigger.workflow_id ?? ''}
                                 disabled={readOnly}
-                                onChange={e =>
+                                workflows={workflows}
+                                workflowProjects={workflowProjects}
+                                sharedProjectId={sharedProjectId}
+                                emptyOptionLabel="None"
+                                onChange={next =>
                                     patchTrigger({
-                                        workflow_id: e.target.value.trim() === '' ? null : e.target.value,
+                                        workflow_id: next.trim() === '' ? null : next,
                                     })
                                 }
-                                className="w-full px-2 py-1.5 text-sm border border-mw-border bg-mw-card rounded-lg"
-                            >
-                                <option value="">None</option>
-                                {workflows.map(wf => (
-                                    <option key={wf.id} value={wf.id}>
-                                        {wf.name}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </div>
                         <div>
                             <label htmlFor={`${item.id}-trigger-inputs`} className="text-xs font-medium text-mw-text-secondary block mb-1">

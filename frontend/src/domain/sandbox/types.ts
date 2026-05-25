@@ -27,14 +27,24 @@ export interface SandboxGridCellJson {
     y: number;
 }
 
+export type SandboxItemType = 'food' | 'wall' | 'region' | 'ball' | 'fixture';
+
+export type SandboxDefinitionKind = 'item' | 'terrain' | 'fixture' | 'region';
+
+export type SandboxItemRole = 'pickable' | 'solid';
+
 export interface SandboxItemJson {
     id: string;
-    type: string;
+    type?: SandboxItemType;
+    definition_id?: string;
+    definition_kind?: SandboxDefinitionKind;
+    role?: SandboxItemRole;
     position: SandboxGridCellJson;
     energy?: number;
     color?: string;
     label?: string;
     trigger?: RegionTriggerConfigJson;
+    builtin_slug?: string;
 }
 
 export type SandboxInventoryItemType = 'ball' | 'food';
@@ -81,11 +91,47 @@ export interface SandboxEnvelopeJson {
     playback: { paused?: boolean; tick_rate_ms?: number };
     state_version: number;
     last_errors?: Record<string, string | null>;
+    last_fixture_errors?: Record<string, string | null>;
+    region_trigger_state?: { enter_once_fired?: Record<string, string[]> };
+    last_region_trigger_errors?: string[];
+}
+
+export type SandboxNestedWorkflowRunKind = 'fixture' | 'region_trigger';
+
+export interface SandboxNestedWorkflowRunMetaJson {
+    kind: SandboxNestedWorkflowRunKind;
+    label: string;
+    creature_id: string;
+    tick: number;
+    workflow_id: string;
+    fixture_id?: string | null;
+    region_id?: string | null;
+    trigger_mode?: string | null;
+    node_labels?: Record<string, string>;
+}
+
+export interface SandboxNestedWorkflowRunJson {
+    meta: SandboxNestedWorkflowRunMetaJson;
+    run: import('../api/types').WorkflowRunResult;
+}
+
+export interface SandboxSimulationEffectsJson {
+    force_pause?: boolean;
+    broadcast_messages?: Array<{
+        node_id: string;
+        body: string;
+        severity?: 'info' | 'notice' | 'success';
+        title?: string;
+        render_markdown?: boolean;
+        source?: string;
+        step_number?: number;
+    }>;
 }
 
 export interface BoardCreaturePlacementJson {
     id: string;
     workflow_id: string;
+    creature_definition_id?: string;
     name?: string | null;
     position: SandboxGridCellJson;
     facing?: SandboxFacing;

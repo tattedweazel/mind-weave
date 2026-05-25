@@ -2,7 +2,7 @@
 
 Boards are persisted playing-field templates for the Sandbox. A board defines grid size, static objects (walls, food, regions), and optional pre-placed creatures (each with a `workflow_id` brain).
 
-See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creature behavior.
+See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creature behavior. [SANDBOX_DEFINITIONS.md](SANDBOX_DEFINITIONS.md) for definition templates and schema 2.5 migration.
 
 ## Concepts
 
@@ -56,15 +56,18 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 | `wall` | Blocks movement and placement | None (read-only Id/Type/Position in Explorer) |
 | `food` | Reported by **Get nearby**; does not block movement; pickable | **Energy** editable in Explorer (default `48`) |
 | `ball` | Reported by **Get nearby** as `ball`; does not block movement; pickable | **Color** at placement (read-only in Explorer after place) |
-| `region` | Colored underlay; coexists with other occupants; non-blocking; **`label`** readable via **Get nearby** (`region_label` on each neighbor cell) and **Get position** (`region_label` on the creature’s current cell) | **Label**, **Color**, **trigger** stub (editable; not executed yet) |
+| `region` | Colored underlay; coexists with other occupants; non-blocking; **`label`** readable via **Get nearby** (`region_label` on each neighbor cell) and **Get position** (`region_label` on the creature’s current cell) | **Label**, **Color**, **trigger** (`enabled`, `mode`, `workflow_id`, `inputs` — executed at runtime; see [SANDBOX.md — Region triggers](SANDBOX.md#region-triggers)) |
 
 ### Cell occupancy layers
 
-- **Region layer** — at most one region per cell; non-blocking; separate **Place region** / **Remove region** actions
-- **Item layer** — at most one food, **ball**, or wall per cell
-- **Creature layer** — at most one creature per cell
+See [SANDBOX_DEFINITIONS.md — Stacked cells](SANDBOX_DEFINITIONS.md#stacked-cells) for the authoritative 2.5 model:
 
-Regions can be placed on cells that already have creatures or items. Food/wall placement still requires an empty item layer (no creature, no food/wall).
+- **Region layer** — 0..1 per cell; non-blocking; separate **Place region** / **Remove region** actions
+- **Solid layer** — 0..1 terrain (wall) **or** fixture; blocks movement
+- **Pickable layer** — 0..N food, ball, or definition-backed items; may stack on a fixture
+- **Creature layer** — 0..1 per cell
+
+Regions can be placed on cells that already have creatures, fixtures, or pickables. Pickables may stack on fixture cells. Terrain (wall) and fixtures are mutually exclusive at the solid layer.
 
 ### Creature placement
 

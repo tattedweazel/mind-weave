@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.domain.sandbox.builtins import STARTER_SANDBOX_WORKFLOW_ID
 from app.domain.sandbox.engine import initial_sandbox_state_clean
-from app.domain.schemas.sandbox import CreatureState, GridCell, SandboxItem, SandboxTickInput
+from app.domain.sandbox.fixture_runner import build_fixture_interaction_input
+from app.domain.schemas.sandbox import (
+    FIXTURE_ITEM_TYPE,
+    CreatureState,
+    GridCell,
+    SandboxItem,
+    SandboxTickInput,
+)
 
 
 def _tick_dict(*, x: int = 2, y: int = 2, facing: str = "N", items: list | None = None):
@@ -25,6 +33,83 @@ def _tick_dict(*, x: int = 2, y: int = 2, facing: str = "N", items: list | None 
     return SandboxTickInput(
         tick=1, creature=c, creatures=[c], world=st.world, recent_actions=[]
     ).model_dump(mode="json")
+
+
+def _fixture_dict(*, actor_x: int = 4, actor_y: int = 3, facing: str = "N") -> dict:
+    st = initial_sandbox_state_clean()
+    creature = CreatureState(
+        id="c1",
+        workflow_id=str(STARTER_SANDBOX_WORKFLOW_ID),
+        position=GridCell(x=actor_x, y=actor_y),
+        facing=facing,  # type: ignore[arg-type]
+    )
+    st.creatures = [creature]
+    st.tick = 1
+    fixture_item = SandboxItem(
+        id="fx1",
+        type=FIXTURE_ITEM_TYPE,
+        definition_kind="fixture",
+        position=GridCell(x=actor_x, y=actor_y - 1),
+        label="Door",
+    )
+    st.world.items.append(fixture_item)
+    return build_fixture_interaction_input(st, creature, fixture_item).model_dump(mode="json")
+
+
+def _run_start_utility_with_overrides(
+    client: TestClient,
+    *,
+    utility_type: str,
+    input_overrides: dict,
+    output_kind: str = "dictionary",
+):
+    u_id, stop_id = "n_util", "n_stop"
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": f"sandbox {utility_type} override {uuid.uuid4().hex[:8]}",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "start",
+                        "kind": "start",
+                        "label": "Start",
+                        "data": {"required_inputs": []},
+                        "position": {"x": 0, "y": 0},
+                    },
+                    {
+                        "id": u_id,
+                        "kind": "utility",
+                        "utility_type": utility_type,
+                        "label": utility_type,
+                        "data": {},
+                        "position": {"x": 200, "y": 0},
+                    },
+                    {
+                        "id": stop_id,
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": output_kind}]},
+                        "position": {"x": 400, "y": 0},
+                    },
+                ],
+                "edges": [
+                    {"source": "start", "target": u_id, "source_handle": "trigger", "target_handle": "trigger"},
+                    {"source": u_id, "target": stop_id, "source_handle": "output", "target_handle": "output"},
+                ],
+            },
+        },
+    )
+    assert workflow_res.status_code == 201
+    wf_id = workflow_res.json()["id"]
+    run_res = client.post(
+        f"/api/v1/workflow-definitions/{wf_id}/run",
+        json={"input_overrides": input_overrides},
+    )
+    assert run_res.status_code == 200
+    result = run_res.json()
+    u_res = next(r for r in result["node_results"] if r["node_id"] == u_id)
+    return result, u_res
 
 
 def _run_utility_graph(client: TestClient, *, utility_type: str, tick: dict, output_kind: str):
@@ -76,6 +161,10 @@ def _run_utility_graph(client: TestClient, *, utility_type: str, tick: dict, out
     return u_res
 
 
+def _empty_probe_tail() -> dict:
+    return {"stack_count": 0, "items": []}
+
+
 def test_sandbox_get_position(client: TestClient):
     tick = _tick_dict(x=4, y=3)
     u_res = _run_utility_graph(client, utility_type="sandbox_get_position", tick=tick, output_kind="dictionary")
@@ -84,6 +173,7 @@ def test_sandbox_get_position(client: TestClient):
         "y": 3,
         "kind": "empty",
         "region_label": None,
+        **_empty_probe_tail(),
     }
 
 
@@ -107,7 +197,284 @@ def test_sandbox_get_position_includes_region_label(client: TestClient):
         "y": 2,
         "kind": "empty",
         "region_label": "Goal",
+        **_empty_probe_tail(),
     }
+
+
+def test_sandbox_get_position_from_fixture_override(client: TestClient):
+    fx = _fixture_dict(actor_x=5, actor_y=2)
+    _, u_res = _run_start_utility_with_overrides(
+        client,
+        utility_type="sandbox_get_position",
+        input_overrides={"sandbox_fixture": fx},
+    )
+    assert u_res["status"] == "ok"
+    assert u_res["output"]["data"] == {
+        "x": 5,
+        "y": 1,
+        "kind": "fixture",
+        "region_label": None,
+        **_empty_probe_tail(),
+    }
+
+
+def test_sandbox_get_position_from_fixture_with_stacked_pickable(client: TestClient):
+    item_def = client.post(
+        "/api/v1/sandbox-definitions/items",
+        json={
+            "name": f"Key item {uuid.uuid4().hex[:8]}",
+            "label": "Key",
+            "pickable": True,
+        },
+    )
+    assert item_def.status_code == 201, item_def.text
+    def_id = item_def.json()["id"]
+
+    st = initial_sandbox_state_clean()
+    creature = CreatureState(
+        id="c1",
+        workflow_id=str(STARTER_SANDBOX_WORKFLOW_ID),
+        position=GridCell(x=4, y=4),
+        facing="N",
+    )
+    st.creatures = [creature]
+    st.tick = 1
+    fixture_item = SandboxItem(
+        id="fx1",
+        type=FIXTURE_ITEM_TYPE,
+        definition_kind="fixture",
+        position=GridCell(x=4, y=3),
+        label="Door",
+    )
+    key_item = SandboxItem(
+        id="k1",
+        type="food",
+        definition_id=def_id,
+        definition_kind="item",
+        role="pickable",
+        position=GridCell(x=4, y=3),
+        energy=10,
+    )
+    st.world.items.extend([fixture_item, key_item])
+    fx = build_fixture_interaction_input(st, creature, fixture_item).model_dump(mode="json")
+    _, u_res = _run_start_utility_with_overrides(
+        client,
+        utility_type="sandbox_get_position",
+        input_overrides={"sandbox_fixture": fx},
+    )
+    data = u_res["output"]["data"]
+    assert data["x"] == 4 and data["y"] == 3
+    assert data["kind"] == "fixture"
+    assert data["stack_count"] == 1
+    assert data["items"][0]["kind"] == "item"
+    assert data["items"][0]["label"] == "Key"
+    assert data["items"][0]["energy"] == 10
+
+
+def test_sandbox_get_cell_items_from_fixture_with_stacked_pickable(client: TestClient):
+    item_def = client.post(
+        "/api/v1/sandbox-definitions/items",
+        json={
+            "name": f"Key item {uuid.uuid4().hex[:8]}",
+            "label": "Key",
+            "pickable": True,
+        },
+    )
+    assert item_def.status_code == 201, item_def.text
+    def_id = item_def.json()["id"]
+
+    st = initial_sandbox_state_clean()
+    creature = CreatureState(
+        id="c1",
+        workflow_id=str(STARTER_SANDBOX_WORKFLOW_ID),
+        position=GridCell(x=4, y=4),
+        facing="N",
+    )
+    st.creatures = [creature]
+    st.tick = 1
+    fixture_item = SandboxItem(
+        id="fx1",
+        type=FIXTURE_ITEM_TYPE,
+        definition_kind="fixture",
+        position=GridCell(x=4, y=3),
+        label="Door",
+    )
+    key_item = SandboxItem(
+        id="k1",
+        type="food",
+        definition_id=def_id,
+        definition_kind="item",
+        role="pickable",
+        position=GridCell(x=4, y=3),
+        energy=10,
+    )
+    st.world.items.extend([fixture_item, key_item])
+    fx = build_fixture_interaction_input(st, creature, fixture_item).model_dump(mode="json")
+    _, u_res = _run_start_utility_with_overrides(
+        client,
+        utility_type="sandbox_get_cell_items",
+        input_overrides={"sandbox_fixture": fx},
+        output_kind="list",
+    )
+    items = u_res["output"]["data"]
+    assert len(items) == 1
+    assert items[0]["id"] == "k1"
+    assert items[0]["definition_id"] == def_id
+    assert items[0]["kind"] == "item"
+
+
+@pytest.mark.asyncio
+async def test_sandbox_remove_and_spawn_item_at_cell_with_mutations(db_session):
+    from sqlmodel import select
+
+    from app.domain.sandbox.fixture_runner import FixtureWorkflowMutations, build_fixture_interaction_input
+    from app.domain.services.workflow_executor import WorkflowExecutor
+    from app.persistence.tables import User, WorkflowDefinition
+
+    user = db_session.exec(select(User)).first()
+    assert user is not None
+
+    reward_def_id = str(uuid.uuid4())
+    st = initial_sandbox_state_clean()
+    creature = CreatureState(
+        id="c1",
+        workflow_id=str(STARTER_SANDBOX_WORKFLOW_ID),
+        position=GridCell(x=4, y=4),
+        facing="N",
+    )
+    st.creatures = [creature]
+    st.tick = 1
+    fixture_item = SandboxItem(
+        id="fx1",
+        type=FIXTURE_ITEM_TYPE,
+        definition_kind="fixture",
+        position=GridCell(x=4, y=3),
+        label="Door",
+    )
+    key_item = SandboxItem(
+        id="k1",
+        type="food",
+        definition_id=str(uuid.uuid4()),
+        definition_kind="item",
+        role="pickable",
+        position=GridCell(x=4, y=3),
+        energy=10,
+    )
+    st.world.items.extend([fixture_item, key_item])
+    fx = build_fixture_interaction_input(st, creature, fixture_item).model_dump(mode="json")
+    mutations = FixtureWorkflowMutations(st)
+
+    remove_id, spawn_id, stop_id = "n_remove", "n_spawn", "n_stop"
+    wf_id = uuid.uuid4()
+    db_session.add(
+        WorkflowDefinition(
+            id=wf_id,
+            user_id=user.id,
+            name="fixture remove spawn",
+            graph={
+                "nodes": [
+                    {
+                        "id": "start",
+                        "kind": "start",
+                        "label": "Start",
+                        "data": {"required_inputs": []},
+                        "position": {"x": 0, "y": 0},
+                    },
+                    {
+                        "id": remove_id,
+                        "kind": "utility",
+                        "utility_type": "sandbox_remove_item_at_cell",
+                        "label": "Remove item",
+                        "data": {
+                            "required_inputs": [
+                                {"key": "item_id", "type": "string", "value": "k1"},
+                            ],
+                        },
+                        "position": {"x": 200, "y": 0},
+                    },
+                    {
+                        "id": spawn_id,
+                        "kind": "utility",
+                        "utility_type": "sandbox_spawn_item_at_cell",
+                        "label": "Spawn item",
+                        "data": {
+                            "required_inputs": [
+                                {"key": "definition_id", "type": "string", "value": reward_def_id},
+                                {"key": "target", "type": "string", "value": "self"},
+                            ],
+                        },
+                        "position": {"x": 400, "y": 0},
+                    },
+                    {
+                        "id": stop_id,
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": "dictionary"}]},
+                        "position": {"x": 600, "y": 0},
+                    },
+                ],
+                "edges": [
+                    {"source": "start", "target": remove_id, "source_handle": "trigger", "target_handle": "trigger"},
+                    {"source": remove_id, "target": spawn_id, "source_handle": "signal_out", "target_handle": "trigger"},
+                    {"source": spawn_id, "target": stop_id, "source_handle": "output", "target_handle": "output"},
+                ],
+            },
+        )
+    )
+    db_session.commit()
+    wf = db_session.get(WorkflowDefinition, wf_id)
+    assert wf is not None
+
+    ex = WorkflowExecutor(db_session, user.id)
+    result = await ex.run(
+        wf,
+        input_overrides={
+            "sandbox_fixture": fx,
+            "_fixture_mutations": mutations,
+        },
+    )
+    assert result.status == "ok"
+    remove_res = next(r for r in result.node_results if r.node_id == remove_id)
+    spawn_res = next(r for r in result.node_results if r.node_id == spawn_id)
+    assert remove_res.output is not None
+    assert spawn_res.output is not None
+    remove_data = remove_res.output.data  # type: ignore[union-attr]
+    spawn_data = spawn_res.output.data  # type: ignore[union-attr]
+    assert remove_data["removed"] is True
+    assert remove_data["item_id"] == "k1"
+    assert spawn_data["position"] == {"x": 4, "y": 3}
+    spawned_id = spawn_data["spawned_id"]
+    item_ids = {it.id for it in st.world.items}
+    assert "k1" not in item_ids
+    assert spawned_id in item_ids
+    spawned = next(it for it in st.world.items if it.id == spawned_id)
+    assert spawned.definition_id == reward_def_id
+    assert spawned.position.x == 4 and spawned.position.y == 3
+
+
+def test_sandbox_get_position_from_sandbox_tick_override(client: TestClient):
+    tick = _tick_dict(x=1, y=7)
+    _, u_res = _run_start_utility_with_overrides(
+        client,
+        utility_type="sandbox_get_position",
+        input_overrides={"sandbox_tick": tick},
+    )
+    assert u_res["status"] == "ok"
+    assert u_res["output"]["data"]["x"] == 1
+    assert u_res["output"]["data"]["y"] == 7
+
+
+def test_tick_dict_from_fixture_dict_unit():
+    from app.domain.sandbox.query import creature_position_from_tick_dict, tick_dict_from_fixture_dict
+
+    fx = _fixture_dict(actor_x=3, actor_y=6, facing="E")
+    tick = tick_dict_from_fixture_dict(fx)
+    assert tick["creature"]["id"] == "c1"
+    assert tick["creature"]["position"] == {"x": 3, "y": 6}
+    cell = creature_position_from_tick_dict(tick)
+    assert cell["x"] == 3
+    assert cell["y"] == 6
+    assert cell["stack_count"] == 0
 
 
 def test_sandbox_get_facing(client: TestClient):
@@ -619,3 +986,51 @@ def test_nearby_region_label_null_dictionary_value_by_key_uses_fallback(client: 
     dvbk_res = next(r for r in run_res.json()["node_results"] if r["node_id"] == dvbk_id)
     assert dvbk_res["status"] == "ok"
     assert dvbk_res["output"]["text"] == ""
+
+
+def test_sandbox_force_simulation_pause_requires_simulation_context(client: TestClient):
+    u_id, stop_id = "n_pause", "n_stop"
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "sandbox force pause",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "start",
+                        "kind": "start",
+                        "label": "Start",
+                        "data": {"required_inputs": []},
+                        "position": {"x": 0, "y": 0},
+                    },
+                    {
+                        "id": u_id,
+                        "kind": "utility",
+                        "utility_type": "sandbox_force_simulation_pause",
+                        "label": "Force Simulation Pause",
+                        "data": {},
+                        "position": {"x": 200, "y": 0},
+                    },
+                    {
+                        "id": stop_id,
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": "dictionary"}]},
+                        "position": {"x": 400, "y": 0},
+                    },
+                ],
+                "edges": [
+                    {"source": "start", "target": u_id, "source_handle": "trigger", "target_handle": "trigger"},
+                    {"source": u_id, "target": stop_id, "source_handle": "output", "target_handle": "output"},
+                ],
+            },
+        },
+    )
+    assert workflow_res.status_code == 201
+    wf_id = workflow_res.json()["id"]
+    run_res = client.post(f"/api/v1/workflow-definitions/{wf_id}/run")
+    assert run_res.status_code == 200
+    u_res = next(r for r in run_res.json()["node_results"] if r["node_id"] == u_id)
+    assert u_res["status"] == "error"
+    assert "simulation" in (u_res.get("error") or "").lower()
+

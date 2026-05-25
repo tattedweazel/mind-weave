@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Edge, Node } from '@xyflow/react';
-import { applyForLoopEndClearOnEdgeRemoved, pairForLoopEndOnConnect } from './forLoopEndPairing';
+import {
+    applyForLoopEndClearOnEdgeRemoved,
+    pairForLoopEndOnConnect,
+    remapForLoopEndExportEdges,
+} from './forLoopEndPairing';
 
 describe('pairForLoopEndOnConnect', () => {
     const forLoop = { type: 'forLoopControl' } as Node;
@@ -83,5 +87,52 @@ describe('applyForLoopEndClearOnEdgeRemoved', () => {
         };
         const next = applyForLoopEndClearOnEdgeRemoved(nodes, [edge]);
         expect((next[0].data as { for_loop_id?: string }).for_loop_id).toBe('fl1');
+    });
+});
+
+describe('remapForLoopEndExportEdges', () => {
+    const mkEdge = (source: string, targetHandle: string): Edge => ({
+        id: `e-${source}-${targetHandle}`,
+        source,
+        target: 'end1',
+        sourceHandle: 'output',
+        targetHandle,
+    });
+
+    it('remaps single export rename odds to milk', () => {
+        const edges = [mkEdge('add1', 'odds')];
+        const next = remapForLoopEndExportEdges(edges, 'end1', ['odds', 'evens'], ['milk']);
+        expect(next[0].targetHandle).toBe('milk');
+    });
+
+    it('remaps two-key positional rename', () => {
+        const edges = [mkEdge('add_o', 'odds'), mkEdge('add_e', 'evens')];
+        const next = remapForLoopEndExportEdges(edges, 'end1', ['odds', 'evens'], ['milk', 'cheese']);
+        expect(next[0].targetHandle).toBe('milk');
+        expect(next[1].targetHandle).toBe('cheese');
+    });
+
+    it('leaves trigger edge untouched', () => {
+        const trigger: Edge = {
+            id: 'e-trigger',
+            source: 'fl1',
+            target: 'end1',
+            sourceHandle: 'signal_out',
+            targetHandle: 'trigger',
+        };
+        const next = remapForLoopEndExportEdges([trigger], 'end1', ['odds'], ['milk']);
+        expect(next[0].targetHandle).toBe('trigger');
+    });
+
+    it('is a no-op when exports unchanged', () => {
+        const edges = [mkEdge('add1', 'milk')];
+        const next = remapForLoopEndExportEdges(edges, 'end1', ['milk'], ['milk']);
+        expect(next).toBe(edges);
+    });
+
+    it('does not remap edges targeting other nodes', () => {
+        const edge: Edge = { id: 'e1', source: 'a', target: 'other', targetHandle: 'odds' };
+        const next = remapForLoopEndExportEdges([edge], 'end1', ['odds'], ['milk']);
+        expect(next[0].targetHandle).toBe('odds');
     });
 });

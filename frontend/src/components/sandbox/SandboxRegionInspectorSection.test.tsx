@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowDefinitionListItem, WorkflowProject } from '../../api/types';
 import type { SandboxItemJson } from '../../domain/sandbox/types';
-import { sandboxEligibleCreatureBrainWorkflows } from '../../domain/workflowProjectMembership';
 import { SandboxRegionInspectorSection } from './SandboxRegionInspectorSection';
 
 const sharedProjectId = 'proj-shared';
@@ -82,24 +81,67 @@ const regionItem: SandboxItemJson = {
     trigger: { enabled: true, mode: 'enter', workflow_id: null, inputs: {} },
 };
 
-describe('SandboxRegionInspectorSection', () => {
-    it('lists only sandbox-eligible workflows in trigger dropdown', () => {
-        const eligible = sandboxEligibleCreatureBrainWorkflows(projects, sharedProjectId, allWorkflows);
+const pickerProps = {
+    workflows: allWorkflows,
+    workflowProjects: projects,
+    sharedProjectId,
+};
 
+describe('SandboxRegionInspectorSection', () => {
+    it('lists only sandbox-eligible workflows grouped by project in trigger dropdown', () => {
         render(
             <SandboxRegionInspectorSection
                 item={regionItem}
                 readOnly={false}
-                workflows={eligible}
+                {...pickerProps}
                 onItemChange={vi.fn()}
             />,
         );
 
         const select = screen.getByLabelText('Workflow') as HTMLSelectElement;
+        const optgroups = Array.from(select.querySelectorAll('optgroup'));
+        expect(optgroups.map(g => g.label)).toEqual(['Shared', 'Sandbox']);
+
         const optionLabels = Array.from(select.options).map(o => o.textContent);
         expect(optionLabels).toContain('None');
         expect(optionLabels).toContain('Shared Brain');
         expect(optionLabels).toContain('Sandbox Brain');
         expect(optionLabels).not.toContain('Gmail Brain');
+    });
+
+    it('shows orphan option when trigger workflow is no longer eligible', () => {
+        render(
+            <SandboxRegionInspectorSection
+                item={{
+                    ...regionItem,
+                    trigger: { enabled: true, mode: 'enter', workflow_id: 'wf-disabled', inputs: {} },
+                }}
+                readOnly
+                {...pickerProps}
+                onItemChange={vi.fn()}
+            />,
+        );
+
+        const select = screen.getByLabelText('Workflow') as HTMLSelectElement;
+        expect(select.value).toBe('wf-disabled');
+        expect(screen.getByRole('option', { name: 'Gmail Brain (unavailable)' })).toBeDisabled();
+    });
+
+    it('definition variant shows trigger fields only', () => {
+        render(
+            <SandboxRegionInspectorSection
+                item={regionItem}
+                readOnly={false}
+                variant="definition"
+                {...pickerProps}
+                onItemChange={vi.fn()}
+            />,
+        );
+
+        expect(screen.getByText('Trigger')).toBeInTheDocument();
+        expect(screen.getByLabelText('Trigger enabled')).toBeInTheDocument();
+        expect(screen.queryByText('Id')).not.toBeInTheDocument();
+        expect(screen.queryByText('Position')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Label')).not.toBeInTheDocument();
     });
 });

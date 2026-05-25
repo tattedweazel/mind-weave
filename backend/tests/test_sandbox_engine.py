@@ -200,6 +200,43 @@ def test_remove_item_leaves_region():
     assert st.world.items[0].type == "region"
 
 
+def test_remove_item_on_fixture_cell_preserves_fixture():
+    from app.domain.schemas.sandbox import FIXTURE_ITEM_TYPE
+
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [
+            {"type": "place_fixture", "cell": {"x": 2, "y": 2}, "definition_id": "fx-1"},
+            {"type": "place_item", "cell": {"x": 2, "y": 2}, "item_type": "food"},
+            {"type": "remove_item", "cell": {"x": 2, "y": 2}},
+        ],
+    )
+    cell_items = [it for it in st.world.items if it.position.x == 2 and it.position.y == 2]
+    assert len(cell_items) == 1
+    assert cell_items[0].type == FIXTURE_ITEM_TYPE
+
+
+def test_remove_item_with_item_id_removes_single_pickable():
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [
+            {"type": "place_item", "cell": {"x": 1, "y": 1}, "item_type": "food"},
+            {"type": "place_item", "cell": {"x": 1, "y": 1}, "item_type": "ball", "color": "#AABBCC"},
+        ],
+    )
+    food = next(it for it in st.world.items if it.type == "food")
+    eng.apply_interactions(
+        st,
+        [{"type": "remove_item", "cell": {"x": 1, "y": 1}, "item_id": food.id}],
+    )
+    types = {it.type for it in st.world.items if it.position.x == 1 and it.position.y == 1}
+    assert types == {"ball"}
+
+
 def test_remove_region_leaves_food():
     st = initial_sandbox_state_clean()
     eng = SandboxEngine()

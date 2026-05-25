@@ -55,7 +55,7 @@ DEFAULT_PALETTE_COLORS: Dict[str, str] = {
     "string_to_list": "#67e8f9",
     "prepend_text": "#f59e0b",
     "string_trunc": "#2dd4bf",
-    "message": "#c026d3",
+    "broadcast_message": "#6366f1",
     "basic_conditional": "#10b981",
     "is_control": "#06b6d4",
     "is_empty": "#06b6d4",

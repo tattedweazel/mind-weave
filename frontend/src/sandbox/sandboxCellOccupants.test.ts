@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SandboxEnvelopeJson } from '../domain/sandbox/types';
-import { cellHasInspectableContent, deriveCellRootActions, getCellOccupants } from './sandboxCellOccupants';
+import { cellHasInspectableContent, deriveCellRootActions, getCellOccupants, getRemovableCellItems } from './sandboxCellOccupants';
 
 function baseEnvelope(overrides: Partial<SandboxEnvelopeJson> = {}): SandboxEnvelopeJson {
     const base: SandboxEnvelopeJson = {
@@ -135,6 +135,7 @@ describe('deriveCellRootActions', () => {
         expect(deriveCellRootActions({ items: [], creatures: [] }, { allowCreatureActions: true }).map(a => a.id)).toEqual([
             'place_region',
             'place_item',
+            'place_fixture',
             'place_creature',
         ]);
     });
@@ -143,13 +144,16 @@ describe('deriveCellRootActions', () => {
         expect(deriveCellRootActions({ items: [], creatures: [] }).map(a => a.id)).toEqual([
             'place_region',
             'place_item',
+            'place_fixture',
         ]);
     });
 
-    it('returns remove_item and place_region for item-only cell', () => {
+    it('returns remove_item, place_item, and place_region for item-only cell', () => {
         expect(deriveCellRootActions({ items: [food], creatures: [] }, { allowCreatureActions: true }).map(a => a.id)).toEqual([
             'place_region',
             'remove_item',
+            'place_item',
+            'place_fixture',
         ]);
     });
 
@@ -180,5 +184,48 @@ describe('deriveCellRootActions', () => {
 
     it('hides remove_creature when creature actions disallowed even if creature present', () => {
         expect(deriveCellRootActions({ items: [], creatures: [creature] }).map(a => a.id)).toEqual(['place_region']);
+    });
+
+    it('shows place_item and remove_fixture for fixture-only cell', () => {
+        const fixture = {
+            id: 'fx1',
+            type: 'fixture' as const,
+            definition_id: 'def-1',
+            definition_kind: 'fixture' as const,
+            role: 'solid' as const,
+            position: { x: 0, y: 0 },
+        };
+        expect(deriveCellRootActions({ items: [fixture], creatures: [] }).map(a => a.id)).toEqual([
+            'place_region',
+            'place_item',
+            'remove_fixture',
+        ]);
+    });
+
+    it('shows place_item and remove_item for fixture with pickables', () => {
+        const fixture = {
+            id: 'fx1',
+            type: 'fixture' as const,
+            definition_id: 'def-1',
+            definition_kind: 'fixture' as const,
+            role: 'solid' as const,
+            position: { x: 0, y: 0 },
+        };
+        expect(
+            deriveCellRootActions({ items: [fixture, food], creatures: [] }).map(a => a.id),
+        ).toEqual(['place_region', 'remove_item', 'place_item', 'remove_fixture']);
+    });
+});
+
+describe('getRemovableCellItems', () => {
+    it('excludes fixtures and regions', () => {
+        const fixture = {
+            id: 'fx1',
+            type: 'fixture' as const,
+            position: { x: 0, y: 0 },
+        };
+        const food = { id: 'f1', type: 'food' as const, position: { x: 0, y: 0 }, energy: 25 };
+        const region = { id: 'r1', type: 'region' as const, position: { x: 0, y: 0 }, color: '#111111' };
+        expect(getRemovableCellItems([fixture, food, region]).map(it => it.id)).toEqual(['f1']);
     });
 });

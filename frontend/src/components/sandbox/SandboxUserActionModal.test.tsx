@@ -403,4 +403,31 @@ describe('SandboxUserActionModal', () => {
         await user.click(screen.getByRole('button', { name: 'Cancel' }));
         expect(onDismiss).toHaveBeenCalled();
     });
+
+    it('shows Use when forward cell has a fixture and confirms use_fixture', async () => {
+        const user = userEvent.setup();
+        const onConfirm = vi.fn();
+        const stateWithFixture: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [{ id: 'fix1', type: 'fixture', position: { x: 2, y: 1 }, color: '#8B5CF6' }],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creature}
+                sandboxState={stateWithFixture}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={onConfirm}
+                onDismiss={vi.fn()}
+            />,
+        );
+        expect(screen.getByRole('button', { name: /^use$/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^pick up$/i })).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: /^use$/i }));
+        await user.click(screen.getByRole('button', { name: /^confirm$/i }));
+        expect(onConfirm).toHaveBeenCalledWith({ action: 'use_fixture' });
+    });
 });

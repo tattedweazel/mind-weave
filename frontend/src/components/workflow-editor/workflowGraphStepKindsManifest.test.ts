@@ -107,6 +107,16 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 position: pos,
             };
         }
+        if (pt === 'sandbox_region') {
+            return {
+                id: nodeId,
+                kind: 'primitive',
+                primitive_type: 'sandbox_region',
+                label,
+                data: {},
+                position: pos,
+            };
+        }
         if (pt === 'gmail') {
             return {
                 id: nodeId,
@@ -381,6 +391,33 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 position: pos,
             };
         }
+        if (ut === 'sandbox_remove_item_at_cell') {
+            return {
+                id: nodeId,
+                kind: 'utility',
+                utility_type: ut,
+                label,
+                data: {
+                    required_inputs: [{ key: 'item_id', type: 'string', value: null }],
+                },
+                position: pos,
+            };
+        }
+        if (ut === 'sandbox_spawn_item_at_cell') {
+            return {
+                id: nodeId,
+                kind: 'utility',
+                utility_type: ut,
+                label,
+                data: {
+                    required_inputs: [
+                        { key: 'definition_id', type: 'string', value: null },
+                        { key: 'target', type: 'string', value: 'self' },
+                    ],
+                },
+                position: pos,
+            };
+        }
         if (
             ut === 'sandbox_move_forward' ||
             ut === 'sandbox_idle' ||
@@ -534,7 +571,7 @@ function minimalAppNodeFromManifestStep(step: ManifestStep): AppGraphNode {
                 kind: 'control',
                 control_type: 'for_loop_end',
                 label,
-                data: { for_loop_id: '', exports: ['odds', 'evens'] },
+                data: { for_loop_id: '', exports: ['export'] },
                 position: pos,
             };
         }

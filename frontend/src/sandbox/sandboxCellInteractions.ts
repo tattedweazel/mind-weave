@@ -7,12 +7,26 @@ import type { SandboxFacing, SandboxGridCellJson } from '../domain/sandbox/types
 export type SandboxPlaceItemInteraction = {
     type: 'place_item';
     cell: SandboxGridCellJson;
-    item_type: 'food' | 'wall' | 'ball';
+    item_type?: 'food' | 'wall' | 'ball';
+    definition_id?: string;
     color?: string;
+    energy?: number;
 };
 
 export type SandboxRemoveItemInteraction = {
     type: 'remove_item';
+    cell: SandboxGridCellJson;
+    item_id?: string;
+};
+
+export type SandboxPlaceFixtureInteraction = {
+    type: 'place_fixture';
+    cell: SandboxGridCellJson;
+    definition_id: string;
+};
+
+export type SandboxRemoveFixtureInteraction = {
+    type: 'remove_fixture';
     cell: SandboxGridCellJson;
 };
 
@@ -21,6 +35,7 @@ export type SandboxPlaceRegionInteraction = {
     cell: SandboxGridCellJson;
     color: string;
     label?: string;
+    definition_id?: string;
 };
 
 export type SandboxRemoveRegionInteraction = {
@@ -35,6 +50,7 @@ export type SandboxPlaceCreatureInteraction = {
     color: string;
     name?: string;
     facing?: SandboxFacing;
+    creature_definition_id?: string;
 };
 
 export type SandboxRemoveCreatureInteraction = {
@@ -45,6 +61,8 @@ export type SandboxRemoveCreatureInteraction = {
 export type SandboxCellInteraction =
     | SandboxPlaceItemInteraction
     | SandboxRemoveItemInteraction
+    | SandboxPlaceFixtureInteraction
+    | SandboxRemoveFixtureInteraction
     | SandboxPlaceRegionInteraction
     | SandboxRemoveRegionInteraction
     | SandboxPlaceCreatureInteraction
@@ -62,16 +80,55 @@ export function placeBallInteraction(cell: SandboxGridCellJson, color: string): 
     return { type: 'place_item', cell, item_type: 'ball', color };
 }
 
+export function placeItemDefinitionInteraction(
+    cell: SandboxGridCellJson,
+    definitionId: string,
+    options?: { color?: string; energy?: number },
+): SandboxPlaceItemInteraction {
+    return {
+        type: 'place_item',
+        cell,
+        definition_id: definitionId,
+        ...(options?.color ? { color: options.color } : {}),
+        ...(options?.energy != null ? { energy: options.energy } : {}),
+    };
+}
+
+export function placeFixtureInteraction(
+    cell: SandboxGridCellJson,
+    definitionId: string,
+): SandboxPlaceFixtureInteraction {
+    return { type: 'place_fixture', cell, definition_id: definitionId };
+}
+
+export function removeFixtureAtCellInteraction(cell: SandboxGridCellJson): SandboxRemoveFixtureInteraction {
+    return { type: 'remove_fixture', cell };
+}
+
 export function placeRegionInteraction(
     cell: SandboxGridCellJson,
     color: string,
     label = '',
+    definitionId?: string,
 ): SandboxPlaceRegionInteraction {
-    return { type: 'place_region', cell, color, label };
+    return {
+        type: 'place_region',
+        cell,
+        color,
+        label,
+        ...(definitionId ? { definition_id: definitionId } : {}),
+    };
 }
 
-export function removeItemAtCellInteraction(cell: SandboxGridCellJson): SandboxRemoveItemInteraction {
-    return { type: 'remove_item', cell };
+export function removeItemAtCellInteraction(
+    cell: SandboxGridCellJson,
+    itemId?: string,
+): SandboxRemoveItemInteraction {
+    return {
+        type: 'remove_item',
+        cell,
+        ...(itemId ? { item_id: itemId } : {}),
+    };
 }
 
 export function removeRegionAtCellInteraction(cell: SandboxGridCellJson): SandboxRemoveRegionInteraction {
@@ -81,7 +138,7 @@ export function removeRegionAtCellInteraction(cell: SandboxGridCellJson): Sandbo
 export function placeCreatureInteraction(
     cell: SandboxGridCellJson,
     workflowId: string,
-    options: { name?: string; facing?: SandboxFacing; color: string },
+    options: { name?: string; facing?: SandboxFacing; color: string; creature_definition_id?: string },
 ): SandboxPlaceCreatureInteraction {
     return {
         type: 'place_creature',
@@ -90,6 +147,7 @@ export function placeCreatureInteraction(
         color: options.color,
         ...(options.name !== undefined ? { name: options.name } : {}),
         ...(options.facing !== undefined ? { facing: options.facing } : {}),
+        ...(options.creature_definition_id ? { creature_definition_id: options.creature_definition_id } : {}),
     };
 }
 

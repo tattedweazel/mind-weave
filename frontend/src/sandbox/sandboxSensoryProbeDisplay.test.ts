@@ -16,6 +16,7 @@ const ALL_KINDS: NearbyCellKind[] = [
     'wall',
     'food',
     'ball',
+    'fixture',
     'creature',
     'out_of_bounds',
 ];

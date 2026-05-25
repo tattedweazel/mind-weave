@@ -208,13 +208,26 @@ class StringTruncUtilityNode(BaseModel):
 
 
 class MessageUtilityNode(BaseModel):
-    """Display a string to the user at run time (client surfaces ``details.user_message``); no data output."""
+    """Legacy display utility (superseded by ``broadcast_message``); kept for saved graphs."""
 
     id: str
     kind: Literal["utility"] = "utility"
     utility_type: Literal["message"] = "message"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)  # required_inputs: message (string)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class BroadcastMessageUtilityNode(BaseModel):
+    """Pause execution and surface a modal message (``details.broadcast_segment``); string output."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["broadcast_message"] = "broadcast_message"
+    label: str
+    data: Dict[str, Any] = Field(
+        default_factory=dict
+    )  # required_inputs: message (any), optional title (string); data.severity
     position: Dict[str, float] = Field(default_factory=dict)
 
 
@@ -356,6 +369,61 @@ class SandboxPromptUserActionUtilityNode(BaseModel):
     id: str
     kind: Literal["utility"] = "utility"
     utility_type: Literal["sandbox_prompt_user_action"] = "sandbox_prompt_user_action"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class SandboxForceSimulationPauseUtilityNode(BaseModel):
+    """Request simulation playback pause during a sandbox tick (region triggers, etc.)."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_force_simulation_pause"] = "sandbox_force_simulation_pause"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class SandboxRegionPrimitiveNode(BaseModel):
+    """Region trigger context from ``sandbox_region`` run override."""
+
+    id: str
+    kind: Literal["primitive"] = "primitive"
+    primitive_type: Literal["sandbox_region"] = "sandbox_region"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class SandboxGetCellItemsUtilityNode(BaseModel):
+    """List pickable items at the fixture cell."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_get_cell_items"] = "sandbox_get_cell_items"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class SandboxRemoveItemAtCellUtilityNode(BaseModel):
+    """Remove an item by id from the fixture cell."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_remove_item_at_cell"] = "sandbox_remove_item_at_cell"
+    label: str
+    data: Dict[str, Any] = Field(default_factory=dict)
+    position: Dict[str, float] = Field(default_factory=dict)
+
+
+class SandboxSpawnItemAtCellUtilityNode(BaseModel):
+    """Spawn a pickable item at the fixture cell or a traversable neighbor."""
+
+    id: str
+    kind: Literal["utility"] = "utility"
+    utility_type: Literal["sandbox_spawn_item_at_cell"] = "sandbox_spawn_item_at_cell"
     label: str
     data: Dict[str, Any] = Field(default_factory=dict)
     position: Dict[str, float] = Field(default_factory=dict)
@@ -959,7 +1027,7 @@ class ForLoopEndControlNode(BaseModel):
     label: str
     data: Dict[str, Any] = Field(
         default_factory=dict,
-    )  # for_loop_id: str (paired For Loop node id); optional exports: list[str] for UI handles
+    )  # for_loop_id: str (paired For Loop node id); optional exports: list[str] for UI handles; runtime dict keys come from edge target_handle
     position: Dict[str, float] = Field(default_factory=dict)
 
 
@@ -992,6 +1060,7 @@ GraphNode = Union[
     PrependTextUtilityNode,
     StringTruncUtilityNode,
     MessageUtilityNode,
+    BroadcastMessageUtilityNode,
     LenFromListUtilityNode,
     RandomItemFromListUtilityNode,
     SandboxGetPositionUtilityNode,
@@ -1005,6 +1074,11 @@ GraphNode = Union[
     SandboxPlaceItemUtilityNode,
     SandboxGetInventoryUtilityNode,
     SandboxPromptUserActionUtilityNode,
+    SandboxForceSimulationPauseUtilityNode,
+    SandboxRegionPrimitiveNode,
+    SandboxGetCellItemsUtilityNode,
+    SandboxRemoveItemAtCellUtilityNode,
+    SandboxSpawnItemAtCellUtilityNode,
     IntToStringUtilityNode,
     ListItemByIndexUtilityNode,
     DictionaryValueByKeyUtilityNode,

@@ -19,16 +19,19 @@ import {
 } from '../sandboxBoardViewport';
 import type { SandboxRuntimeAdapter, SandboxSetStateOptions } from './types';
 import {
+    drawSandboxItem,
+    EMPTY_SANDBOX_ITEM_RENDER_CATALOG,
+    getSandboxItemRenderLayer,
+    SANDBOX_ITEM_RENDER_LAYERS,
+    type SandboxItemRenderCatalog,
+} from '../sandboxItemRender';
+import {
     BOARD_BG,
     BOARD_PADDING,
     CELL_PX,
     CREATURE_FILL,
     CREATURE_SELECTED_FILL,
-    DEFAULT_REGION_COLOR,
-    FOOD_FILL,
     GRID_LINE,
-    REGION_UNDERLAY_ALPHA,
-    WALL_FILL,
     creatureColor,
 } from '../sandboxVisualDefaults';
 
@@ -67,6 +70,7 @@ class SandboxScene extends Phaser.Scene implements ViewportController {
     private panScrollStartX = 0;
     private panScrollStartY = 0;
     private panTotalDragPx = 0;
+    private renderCatalog: SandboxItemRenderCatalog = EMPTY_SANDBOX_ITEM_RENDER_CATALOG;
 
     constructor() {
         super({ key: 'SandboxScene' });
@@ -82,6 +86,11 @@ class SandboxScene extends Phaser.Scene implements ViewportController {
 
     setSelectedCreatureId(id: string | null) {
         this.selectedCreatureId = id;
+        if (this.lastState) this.sync(this.lastState);
+    }
+
+    setRenderCatalog(catalog: SandboxItemRenderCatalog) {
+        this.renderCatalog = catalog;
         if (this.lastState) this.sync(this.lastState);
     }
 
@@ -307,39 +316,11 @@ class SandboxScene extends Phaser.Scene implements ViewportController {
             g.lineBetween(ox, oy + y * CELL_PX, ox + wpx, oy + y * CELL_PX);
         }
 
-        for (const it of state.world.items) {
-            if (it.type === 'region') {
-                const color = it.color ?? DEFAULT_REGION_COLOR;
-                g.fillStyle(hexToRgbInt(color), REGION_UNDERLAY_ALPHA);
-                g.fillRect(
-                    ox + it.position.x * CELL_PX,
-                    oy + it.position.y * CELL_PX,
-                    CELL_PX,
-                    CELL_PX,
-                );
-            }
-        }
-
-        for (const it of state.world.items) {
-            const cx = ox + it.position.x * CELL_PX + CELL_PX / 2;
-            const cy = oy + it.position.y * CELL_PX + CELL_PX / 2;
-            if (it.type === 'wall') {
-                g.fillStyle(hexToRgbInt(WALL_FILL), 1);
-                g.fillRect(
-                    ox + it.position.x * CELL_PX + 2,
-                    oy + it.position.y * CELL_PX + 2,
-                    CELL_PX - 4,
-                    CELL_PX - 4,
-                );
-            } else if (it.type === 'food') {
-                g.fillStyle(hexToRgbInt(FOOD_FILL), 1);
-                g.fillCircle(cx, cy, CELL_PX * 0.28);
-            } else if (it.type === 'ball') {
-                const ballColor = it.color ?? '#F59E0B';
-                g.fillStyle(hexToRgbInt(ballColor), 1);
-                g.fillCircle(cx, cy, CELL_PX * 0.32);
-                g.lineStyle(2, hexToRgbInt('#ffffff'), 0.85);
-                g.strokeCircle(cx, cy, CELL_PX * 0.32);
+        for (const layer of SANDBOX_ITEM_RENDER_LAYERS) {
+            for (const it of state.world.items) {
+                if (getSandboxItemRenderLayer(it) === layer) {
+                    drawSandboxItem(g, it, ox, oy, this.renderCatalog);
+                }
             }
         }
 
@@ -465,6 +446,9 @@ export class PhaserSandboxAdapter implements SandboxRuntimeAdapter {
 
         if (options?.selectedCreatureId !== undefined) {
             scene.setSelectedCreatureId(options.selectedCreatureId);
+        }
+        if (options?.renderCatalog !== undefined) {
+            scene.setRenderCatalog(options.renderCatalog);
         }
         scene.sync(state);
 

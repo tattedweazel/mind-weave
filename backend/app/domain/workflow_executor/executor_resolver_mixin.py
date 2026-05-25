@@ -63,6 +63,7 @@ from app.domain.schemas import (
     LtControlNode,
     LteControlNode,
     MessageUtilityNode,
+    BroadcastMessageUtilityNode,
     NodeOutputUnion,
     NodeRunResult,
     NotControlNode,
@@ -109,7 +110,13 @@ from app.persistence.tables import (
     WorkflowDefinition,
 )
 
+from .broadcast_message import build_broadcast_segment, normalize_broadcast_severity
 from .sandbox_node_resolvers import SandboxNodeResolverMixin
+from .workflow_input_pending import (
+    BroadcastAckWaitKey,
+    cancel_broadcast_ack_wait,
+    register_broadcast_ack_wait,
+)
 from .dispatch import ExecutionNodeContext, dispatch_execute_node
 from .graph import (
     _build_in_degree_and_adjacency,
@@ -2399,26 +2406,119 @@ class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
         outputs: Dict[str, NodeOutputUnion],
         input_overrides: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Surface wired text to the client as ``details.user_message``; no data output (empty string)."""
-        raw_inputs = node.data.get("required_inputs") or []
-        resolved = _resolve_inputs_by_target_handle(
+        """Legacy Message utility — emits ``broadcast_segment`` shape without streaming pause."""
+        return self._build_broadcast_message_result(
             node.id,
-            ["message"],
+            node.data,
+            edges,
+            outputs,
+            input_overrides,
+            severity="info",
+        )
+
+    async def _resolve_broadcast_message_utility_node(
+        self,
+        node: BroadcastMessageUtilityNode,
+        node_id: str,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+        *,
+        stream_run_id: Optional[uuid.UUID],
+        for_loop_id: Optional[str],
+        for_loop_iteration: Optional[int],
+    ) -> Dict[str, Any]:
+        data = node.data or {}
+        severity = normalize_broadcast_severity(data.get("severity"))
+        result = self._build_broadcast_message_result(
+            node.id,
+            data,
+            edges,
+            outputs,
+            input_overrides,
+            severity=severity,
+        )
+        if result.get("status") != "ok":
+            return result
+        if stream_run_id is None:
+            return result
+
+        iter_n = 0 if for_loop_iteration is None else int(for_loop_iteration)
+        key = BroadcastAckWaitKey(
+            run_id=stream_run_id,
+            node_id=node_id,
+            for_loop_id=for_loop_id,
+            iteration=iter_n,
+        )
+        try:
+            fut = register_broadcast_ack_wait(key)
+        except RuntimeError as exc:
+            return {"status": "error", "error": str(exc) or "Duplicate broadcast ack wait"}
+        self._track_broadcast_ack_wait(key)
+        segments = [dict(s) for s in getattr(self, "_broadcast_segments_collected", [])]
+        self._emit_interstitial(
+            {
+                "event": "input_required",
+                "kind": "broadcast_message",
+                "run_id": str(stream_run_id),
+                "node_id": node_id,
+                "for_loop_id": for_loop_id,
+                "for_loop_iteration": for_loop_iteration,
+                "segments": segments,
+            }
+        )
+        try:
+            await asyncio.wait_for(fut, timeout=float(settings.STT_AUDIO_WAIT_TIMEOUT))
+        except asyncio.CancelledError:
+            cancel_broadcast_ack_wait(key)
+            raise
+        except asyncio.TimeoutError:
+            cancel_broadcast_ack_wait(key)
+            return {"status": "error", "error": "Timed out waiting for Broadcast Message acknowledgement"}
+        finally:
+            self._untrack_broadcast_ack_wait(key)
+        return result
+
+    def _build_broadcast_message_result(
+        self,
+        node_id: str,
+        data: Dict[str, Any],
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+        *,
+        severity: str,
+    ) -> Dict[str, Any]:
+        raw_inputs = data.get("required_inputs") or []
+        resolved = _resolve_inputs_by_target_handle(
+            node_id,
+            ["message", "title"],
             edges,
             outputs,
             input_overrides,
             raw_inputs,
         )
-        raw = resolved.get("message")
-        text = _executor_mod()._coerce_message_display_text(raw)
+        raw_message = resolved.get("message")
+        text = _executor_mod()._coerce_message_display_text(raw_message)
         if len(text) > _executor_mod().MESSAGE_UTILITY_MAX_LEN:
             text = text[: _executor_mod().MESSAGE_UTILITY_MAX_LEN]
+        raw_title = resolved.get("title")
+        title = raw_title.strip() if isinstance(raw_title, str) and raw_title.strip() else None
+        seg = build_broadcast_segment(
+            node_id=node_id,
+            body=text,
+            title=title,
+            severity=normalize_broadcast_severity(severity),
+        )
+        collected = getattr(self, "_broadcast_segments_collected", None)
+        if isinstance(collected, list):
+            collected.append(dict(seg))
         return {
             "status": "ok",
-            "output": StringNodeOutput(node_id=node.id, text=""),
+            "output": StringNodeOutput(node_id=node_id, text=text),
             "details": {
-                "resolved_inputs": {"message": raw},
-                "user_message": text,
+                "resolved_inputs": {"message": raw_message, "title": raw_title},
+                "broadcast_segment": seg,
             },
         }
 
@@ -3845,9 +3945,20 @@ class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
             }
 
         wf_input_details: Dict[str, Any] = {"resolved_inputs": {"input_overrides": dict(overrides)}}
+        sub_nodes = sub_wf.graph.get("nodes", [])
+        node_id_to_label = {
+            n["id"]: (n.get("label") or n.get("data", {}).get("label") or n["id"]) for n in sub_nodes
+        }
+        wf_input_details.update(
+            {
+                "sub_workflow_id": str(sub_wf_id),
+                "sub_workflow_name": sub_wf.name,
+                "sub_workflow_node_results": [r.model_dump(mode="json") for r in result.node_results],
+                "sub_workflow_node_labels": node_id_to_label,
+            }
+        )
 
         stop_output_type = "string"
-        sub_nodes = sub_wf.graph.get("nodes", [])
         stop_node_ids = [n["id"] for n in sub_nodes if n.get("kind") == "stop"]
         for n in sub_nodes:
             if n.get("kind") == "stop":

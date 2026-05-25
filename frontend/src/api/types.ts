@@ -586,6 +586,18 @@ export interface StringTruncUtilityNode {
     position: { x: number; y: number };
 }
 
+export interface BroadcastMessageUtilityNode {
+    id: string;
+    kind: 'utility';
+    utility_type: 'broadcast_message';
+    label: string;
+    data: {
+        required_inputs: RequiredInput[];
+        severity?: 'info' | 'notice' | 'success';
+    };
+    position: { x: number; y: number };
+}
+
 export interface MessageUtilityNode {
     id: string;
     kind: 'utility';
@@ -1229,6 +1241,7 @@ export type GraphNode =
     | StringToListUtilityNode
     | PrependTextUtilityNode
     | StringTruncUtilityNode
+    | BroadcastMessageUtilityNode
     | MessageUtilityNode
     | LenFromListUtilityNode
     | RandomItemFromListUtilityNode
@@ -1542,10 +1555,155 @@ export interface WorkflowRunResult {
     error?: string;
 }
 
+// -------------------------------------------------------------------------
+// Sandbox definitions (`/api/v1/sandbox-definitions/*`)
+// -------------------------------------------------------------------------
+
+export type DefinitionShape = 'circle' | 'square' | 'rect';
+
+export interface ItemDefinitionRead {
+    id: string;
+    user_id?: string | null;
+    name: string;
+    label: string;
+    default_energy?: number | null;
+    default_color?: string | null;
+    shape: DefinitionShape;
+    pickable: boolean;
+    is_system: boolean;
+    builtin_slug?: string | null;
+}
+
+export interface ItemDefinitionCreate {
+    name: string;
+    label: string;
+    default_energy?: number | null;
+    default_color?: string | null;
+    shape?: DefinitionShape;
+    pickable?: boolean;
+}
+
+export interface ItemDefinitionUpdate {
+    name?: string;
+    label?: string;
+    default_energy?: number | null;
+    default_color?: string | null;
+    shape?: DefinitionShape;
+    pickable?: boolean;
+}
+
+export interface TerrainDefinitionRead {
+    id: string;
+    user_id?: string | null;
+    name: string;
+    label: string;
+    default_color?: string | null;
+    shape: DefinitionShape;
+    is_system: boolean;
+    builtin_slug?: string | null;
+}
+
+export interface TerrainDefinitionCreate {
+    name: string;
+    label: string;
+    default_color?: string | null;
+    shape?: DefinitionShape;
+}
+
+export interface TerrainDefinitionUpdate {
+    name?: string;
+    label?: string;
+    default_color?: string | null;
+    shape?: DefinitionShape;
+}
+
+export interface FixtureDefinitionRead {
+    id: string;
+    user_id?: string | null;
+    name: string;
+    label: string;
+    workflow_id: string;
+    color?: string | null;
+    is_system: boolean;
+    builtin_slug?: string | null;
+}
+
+export interface FixtureDefinitionCreate {
+    name: string;
+    label: string;
+    workflow_id: string;
+    color?: string | null;
+}
+
+export interface FixtureDefinitionUpdate {
+    name?: string;
+    label?: string;
+    workflow_id?: string;
+    color?: string | null;
+}
+
+export interface CreatureDefinitionRead {
+    id: string;
+    user_id?: string | null;
+    name: string;
+    label: string;
+    workflow_id: string;
+    default_color: string;
+    default_facing: import('../domain/sandbox/types').SandboxFacing;
+    default_inventory: import('../domain/sandbox/types').SandboxInventoryItemJson[];
+    is_system: boolean;
+    builtin_slug?: string | null;
+}
+
+export interface CreatureDefinitionCreate {
+    name: string;
+    label: string;
+    workflow_id: string;
+    default_color: string;
+    default_facing?: import('../domain/sandbox/types').SandboxFacing;
+    default_inventory?: import('../domain/sandbox/types').SandboxInventoryItemJson[];
+}
+
+export interface CreatureDefinitionUpdate {
+    name?: string;
+    label?: string;
+    workflow_id?: string;
+    default_color?: string;
+    default_facing?: import('../domain/sandbox/types').SandboxFacing;
+    default_inventory?: import('../domain/sandbox/types').SandboxInventoryItemJson[];
+}
+
+export interface RegionDefinitionRead {
+    id: string;
+    user_id?: string | null;
+    name: string;
+    label: string;
+    color: string;
+    trigger: import('../domain/sandbox/types').RegionTriggerConfigJson;
+    is_system: boolean;
+    builtin_slug?: string | null;
+}
+
+export interface RegionDefinitionCreate {
+    name: string;
+    label: string;
+    color: string;
+    trigger: import('../domain/sandbox/types').RegionTriggerConfigJson;
+}
+
+export interface RegionDefinitionUpdate {
+    name?: string;
+    label?: string;
+    color?: string;
+    trigger?: import('../domain/sandbox/types').RegionTriggerConfigJson;
+}
+
 /** `POST /api/v1/sandbox/sessions/{id}/tick` — envelope plus per-creature workflow traces. */
 export interface SandboxTickResponseJson {
     envelope: import('../domain/sandbox/types').SandboxEnvelopeJson;
     last_workflow_runs: Record<string, WorkflowRunResult | null>;
+    nested_workflow_runs?: import('../domain/sandbox/types').SandboxNestedWorkflowRunJson[];
+    simulation_effects?: import('../domain/sandbox/types').SandboxSimulationEffectsJson;
 }
 
 // Run log records returned from the history API.

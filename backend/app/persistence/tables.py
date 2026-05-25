@@ -549,6 +549,95 @@ class TtsModelArtifact(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ItemDefinition(SQLModel, table=True):
+    """Pickable sandbox item template (e.g. food, ball)."""
+
+    __tablename__ = "item_definitions"  # type: ignore
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    label: str = Field(default="")
+    default_energy: Optional[int] = Field(default=48)
+    default_color: Optional[str] = Field(default=None)
+    shape: str = Field(default="circle")
+    pickable: bool = Field(default=True)
+    is_system: bool = Field(default=False, index=True)
+    builtin_slug: Optional[str] = Field(default=None, unique=True, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class TerrainDefinition(SQLModel, table=True):
+    """Solid terrain template (e.g. wall)."""
+
+    __tablename__ = "terrain_definitions"  # type: ignore
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    label: str = Field(default="")
+    default_color: Optional[str] = Field(default=None)
+    shape: str = Field(default="rect")
+    is_system: bool = Field(default=False, index=True)
+    builtin_slug: Optional[str] = Field(default=None, unique=True, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class FixtureDefinition(SQLModel, table=True):
+    """Workflow-powered solid interactable template."""
+
+    __tablename__ = "fixture_definitions"  # type: ignore
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    label: str = Field(default="")
+    workflow_id: str = Field(default="")
+    color: Optional[str] = Field(default=None)
+    is_system: bool = Field(default=False, index=True)
+    builtin_slug: Optional[str] = Field(default=None, unique=True, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class CreatureDefinition(SQLModel, table=True):
+    """Full creature placement template."""
+
+    __tablename__ = "creature_definitions"  # type: ignore
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    label: str = Field(default="")
+    workflow_id: str = Field(default="")
+    default_color: str = Field(default="#3B82F6")
+    default_facing: str = Field(default="N")
+    default_inventory: list = Field(default_factory=list, sa_column=Column(JSON))
+    is_system: bool = Field(default=False, index=True)
+    builtin_slug: Optional[str] = Field(default=None, unique=True, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class RegionDefinition(SQLModel, table=True):
+    """Region underlay template with trigger config."""
+
+    __tablename__ = "region_definitions"  # type: ignore
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    name: str = Field(index=True)
+    label: str = Field(default="")
+    color: str = Field(default="#3B82F6")
+    trigger: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    is_system: bool = Field(default=False, index=True)
+    builtin_slug: Optional[str] = Field(default=None, unique=True, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class VoiceSample(SQLModel, table=True):
     """Reference audio + transcript for Qwen3-TTS Base voice clone; created from Voice Design previews."""
 

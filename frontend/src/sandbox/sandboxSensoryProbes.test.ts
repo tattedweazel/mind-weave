@@ -41,6 +41,8 @@ describe('sandboxSensoryProbes', () => {
             y: 1,
             kind: 'empty',
             region_label: null,
+            stack_count: 0,
+            items: [],
         });
         expect(creatureFacingFromState(c)).toBe('E');
     });
@@ -61,6 +63,8 @@ describe('sandboxSensoryProbes', () => {
             y: 2,
             kind: 'empty',
             region_label: 'Goal',
+            stack_count: 0,
+            items: [],
         });
     });
 
@@ -72,6 +76,8 @@ describe('sandboxSensoryProbes', () => {
             y: 2,
             kind: 'food',
             region_label: null,
+            stack_count: 1,
+            items: [{ id: 'f1', kind: 'food', definition_id: null, energy: 10, color: null, label: 'Food (10)' }],
         });
     });
 
@@ -82,7 +88,14 @@ describe('sandboxSensoryProbes', () => {
         ]);
         const cells = nearbyCellsFromState(c, st);
         expect(cells).toHaveLength(8);
-        expect(cells[0]).toEqual({ x: 3, y: 1, kind: 'wall', region_label: null });
+        expect(cells[0]).toEqual({
+            x: 3,
+            y: 1,
+            kind: 'wall',
+            region_label: null,
+            stack_count: 0,
+            items: [],
+        });
     });
 
     it('region-only cell reports empty kind with region_label', () => {
@@ -101,6 +114,8 @@ describe('sandboxSensoryProbes', () => {
             y: 1,
             kind: 'empty',
             region_label: 'target',
+            stack_count: 0,
+            items: [],
         });
     });
 
@@ -121,6 +136,8 @@ describe('sandboxSensoryProbes', () => {
             y: 1,
             kind: 'food',
             region_label: 'target',
+            stack_count: 1,
+            items: [{ id: 'f1', kind: 'food', definition_id: null, energy: 10, color: null, label: 'Food (10)' }],
         });
     });
 
@@ -138,6 +155,27 @@ describe('sandboxSensoryProbes', () => {
             { id: 'r1', type: 'region', position: { x: 3, y: 1 }, color: '#3B82F6' },
         ]);
         expect(nearbyCellsFromState(c, st)[0].kind).toBe('empty');
+    });
+
+    it('resolves pickable label from item definition context', () => {
+        const c = creature({ position: { x: 2, y: 2 } });
+        const st = state(c, [
+            {
+                id: 'i1',
+                type: 'food',
+                definition_id: 'def-1',
+                definition_kind: 'item',
+                role: 'pickable',
+                position: { x: 2, y: 2 },
+                energy: 48,
+            },
+        ]);
+        const probe = creaturePositionFromState(c, st, {
+            itemDefinitions: [{ id: 'def-1', name: 'golden_key', label: 'Golden Key', default_energy: 48 }],
+        });
+        expect(probe.items[0]?.label).toBe('Golden Key');
+        expect(probe.items[0]?.kind).toBe('item');
+        expect(probe.items[0]?.energy).toBe(48);
     });
 
     it('inventory from creature', () => {
@@ -195,5 +233,31 @@ describe('sandboxSensoryProbes', () => {
 
         const edgeCreature = creature({ position: { x: 0, y: 0 }, facing: 'W' });
         expect(forwardCellPickable(edgeCreature, state(edgeCreature))).toBe(false);
+    });
+
+    it('forwardCellKind reports fixture and stack_count on stacked pickables', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        const fixtureState = state(c, [
+            {
+                id: 'fix1',
+                type: 'fixture',
+                position: { x: 3, y: 1 },
+                color: '#8B5CF6',
+            },
+        ]);
+        expect(forwardCellKind(c, fixtureState)).toBe('fixture');
+
+        const stackedState = state(c, [
+            {
+                id: 'fix1',
+                type: 'fixture',
+                position: { x: 3, y: 1 },
+            },
+            { id: 'f1', type: 'food', position: { x: 3, y: 1 }, energy: 10 },
+        ]);
+        const nearby = nearbyCellsFromState(c, stackedState);
+        expect(nearby[0]?.kind).toBe('fixture');
+        expect(nearby[0]?.stack_count).toBe(1);
+        expect(nearby[0]?.items).toHaveLength(1);
     });
 });

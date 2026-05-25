@@ -46,6 +46,30 @@ describe('boardBuilderLocalEdits', () => {
         expect(updated.items[0]?.energy).toBeUndefined();
     });
 
+    it('remove_item preserves fixture and removes pickables', () => {
+        let def = createEmptyBoardDefinition(4, 4);
+        def = applyBoardBuilderInteraction(def, {
+            type: 'place_fixture',
+            cell: { x: 1, y: 1 },
+            definition_id: 'fx-1',
+        });
+        def = applyBoardBuilderInteraction(def, placeFoodInteraction({ x: 1, y: 1 }));
+        def = applyBoardBuilderInteraction(def, { type: 'remove_item', cell: { x: 1, y: 1 } });
+        const cellItems = def.items.filter(it => it.position.x === 1 && it.position.y === 1);
+        expect(cellItems).toHaveLength(1);
+        expect(cellItems[0]?.type).toBe('fixture');
+    });
+
+    it('remove_item with item_id removes only the targeted pickable', () => {
+        let def = createEmptyBoardDefinition(4, 4);
+        def = applyBoardBuilderInteraction(def, placeFoodInteraction({ x: 0, y: 0 }));
+        def = applyBoardBuilderInteraction(def, placeBallInteraction({ x: 0, y: 0 }, '#AABBCC'));
+        const foodId = def.items.find(it => it.type === 'food')?.id;
+        expect(foodId).toBeTruthy();
+        def = applyBoardBuilderInteraction(def, { type: 'remove_item', cell: { x: 0, y: 0 }, item_id: foodId });
+        expect(def.items.filter(it => it.position.x === 0 && it.position.y === 0).map(it => it.type)).toEqual(['ball']);
+    });
+
     it('coexists region with food and remove_item keeps region', () => {
         let def = applyBoardBuilderInteraction(createEmptyBoardDefinition(4, 4), placeRegionInteraction({ x: 1, y: 1 }, '#FF0000'));
         def = applyBoardBuilderInteraction(def, placeFoodInteraction({ x: 1, y: 1 }));

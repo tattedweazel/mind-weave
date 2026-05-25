@@ -1,8 +1,8 @@
 # Sandbox (board-driven simulation)
 
-Operational reference for **Sandbox V2.4**: board templates, multi-creature sessions, per-creature workflow brains, **atomic navigation ticks**, creature **inventory**, and Phaser as view-only renderer.
+Operational reference for **Sandbox V2.5**: board templates, multi-creature sessions, per-creature workflow brains, **Definitions**-backed placeables, fixture workflows, **atomic navigation ticks**, creature **inventory**, and Phaser as view-only renderer.
 
-Related: [BOARDS.md](BOARDS.md), [shared/sandbox_canonical.schema.json](../shared/sandbox_canonical.schema.json).
+Related: [BOARDS.md](BOARDS.md), [SANDBOX_DEFINITIONS.md](SANDBOX_DEFINITIONS.md), [shared/sandbox_canonical.schema.json](../shared/sandbox_canonical.schema.json).
 
 ## Architecture
 
@@ -13,7 +13,7 @@ Related: [BOARDS.md](BOARDS.md), [shared/sandbox_canonical.schema.json](../share
 | **Workflows** | Per-creature `workflow_id`; `SandboxTickInput` with focused `creature` + all `creatures` |
 | **Persistence** | Session `Document.body` → `SandboxDocumentEnvelope` (`schema_version: 2.4.0`) |
 | **HTTP** | `backend/app/api/v1/sandbox.py` |
-| **SPA** | [SandboxView.tsx](../frontend/src/components/SandboxView.tsx) — **Simulation** + **Board Builder** tabs |
+| **SPA** | [SandboxView.tsx](../frontend/src/components/SandboxView.tsx) — **Simulation**, **Board Builder**, and **Definitions** tabs |
 
 **Phaser is not the simulation engine.** It renders grid state and forwards cell clicks only.
 
@@ -25,11 +25,13 @@ Each HTTP tick:
 2. Advance global tick counter once
 3. For each creature in **array order**:
    - **Always** run that creature's `workflow_id` graph with tick input scoped to that creature
-   - Apply the resulting **one** action (`move_forward`, `turn_left`, `turn_right`, `idle`, `pick_up_item`, or `place_item`)
+   - Apply the resulting **one** action (`move_forward`, `turn_left`, `turn_right`, `idle`, `pick_up_item`, `place_item`, or `use_fixture`)
 
 There is no multi-tick `move_to` or intent continuation. Every tick is a fresh brain execution.
 
-Response includes `last_workflow_runs: Record<creatureId, WorkflowRunResult | null>` and `envelope.last_errors`.
+Response includes `last_workflow_runs: Record<creatureId, WorkflowRunResult | null>`, `nested_workflow_runs` (fixture and region-trigger runs from the tick, each with `meta` + full `WorkflowRunResult`), `envelope.last_errors` (brain/decision failures), `envelope.last_fixture_errors`, `envelope.last_region_trigger_errors`, and optional `simulation_effects` (e.g. `{ "force_pause": true }` when a region trigger workflow requests pause).
+
+Nested sandbox runs are **ephemeral** tick payloads only — they are not persisted to `workflow_runs` / Explore history.
 
 ## Sandbox Utilities (palette)
 
@@ -38,18 +40,40 @@ Navigation-focused utilities in the workflow editor (**Sandbox Utilities** secti
 | Utility | Role |
 |---------|------|
 | **Tick input** (`sandbox_tick` primitive) | Full `SandboxTickInput` dict (includes `tick` for scripted sequences) |
-| **Get position** | Focused creature `{x, y}` |
+| **Get position** | Cell probe for the focused creature's current cell, or the **fixture cell** in fixture workflows — see [Cell probe shape](#cell-probe-shape) |
 | **Get facing** | `"N"` \| `"E"` \| `"S"` \| `"W"` |
-| **Get nearby** | Eight neighbors clockwise from facing; each `{x, y, kind, region_label?}` where `kind` is `empty`, `wall`, `food`, `ball`, `creature`, or `out_of_bounds`, and `region_label` is `null` when no region underlay is present or the region’s label string (including `""`) when a region exists on that cell |
+| **Get nearby** | Eight neighbors clockwise from facing; each cell uses the [cell probe shape](#cell-probe-shape) |
 | **Get inventory** | List of held items on the focused creature (`{type, color?}` or `{type, energy?}`) |
+| **Get cell items** | List of pickables at the **fixture cell** — **simulation-only** during fixture `use_fixture` workflows |
+| **Remove item** | Remove a pickable by instance **`item_id`** at the fixture cell — fixture workflows only; set `item_id` in Explorer or wire from a loop |
+| **Spawn item** | Spawn a pickable at the fixture cell (or neighbor via `target`) — fixture workflows only; set `definition_id`, `target`, optional `energy`/`color` in Explorer or wire handles |
 | **Move forward** | Emits `{action: "move_forward"}` for Stop |
 | **Turn left** / **Turn right** | Emits turn action dict for Stop |
 | **Idle** | Emits `{action: "idle"}` for Stop |
 | **Pick up item** | Emits `{action: "pick_up_item"}` — picks up **ball** or **food** in the **forward adjacent** cell into inventory |
 | **Place item** | Emits `{action: "place_item", item_type?: "ball" \| "food", inventory_index?: number}` — places the chosen inventory entry (by index, or first / first matching `item_type`) on the **forward adjacent** cell |
 | **Prompt for User Action** | Emits a `DecisionIntent` chosen in the **Simulation** remote-control modal (see below) |
+| **Force Simulation Pause** | Emits `{ "pause": true }` and sets tick `simulation_effects.force_pause` — **simulation-only** (region trigger workflows, etc.) |
+
+**Broadcast Message** (`broadcast_message` utility) is available in the general **Utilities** palette (not Sandbox-only). During a tick, creature brains, region triggers, and fixture workflows may emit segments collected server-side into `simulation_effects.broadcast_messages`. After the tick completes, the SPA shows **one combined modal** (numbered sections, optional source chips) and **pauses playback** until **Continue** — blocking the next auto-tick until dismissed.
 
 Wire one action node (or a conditional that picks one) to **Stop** `output` (dictionary).
+
+### Cell probe shape
+
+**Get position**, **Get nearby** (each neighbor), and the Simulation **Position** / **Nearby** sensory probes share this dictionary shape:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `x`, `y` | int | Cell coordinates |
+| `kind` | string | `empty`, `wall`, `food`, `ball`, `fixture`, `creature`, or `out_of_bounds` |
+| `region_label` | string \| null | Region underlay label; `null` when no region; `""` when region exists but is unlabeled |
+| `stack_count` | int | Number of pickables at the cell (0 when none) |
+| `items` | list | Pickable summaries at the cell (excludes fixture, region, wall, creatures) |
+
+Each item summary: `{ id, kind, definition_id?, energy?, color?, label }`. **`kind`** is `item` for definition-backed pickables, or legacy built-in types (`food`, `ball`) when no definition is linked. **`energy`** and **`color`** use instance values when set, otherwise fall back to the item definition defaults. **`label`** is resolved for display: instance `label` when set, else the item definition's label, else a built-in fallback (`Food (48)`, `Ball (#RRGGBB)`, etc.).
+
+In **creature brain** / `sandbox_tick` context, **Get position** probes the focused creature's cell. In **fixture workflows** (server-injected `sandbox_fixture` run override), **Get position** probes the **fixture cell** (where stacked pickables live). **Get facing**, **Get nearby**, and **Get inventory** still use the interacting actor's position/facing in fixture workflows. **Get cell items**, **Remove item**, and **Spawn item** run during fixture `use_fixture` workflows only; see [SANDBOX_DEFINITIONS.md — Fixture interaction](SANDBOX_DEFINITIONS.md#fixture-interaction-use_fixture).
 
 ### Manual control brain (Prompt for User Action)
 
@@ -109,7 +133,7 @@ Example brain pattern: **Get nearby** → index `0` (forward) → **Dictionary v
 
 ## Schema 2.2.0 (regions)
 
-Adds **`region`** items: colored full-cell underlays. Regions **coexist** with food, walls, and creatures on the same cell. Trigger metadata is stored on each region but **not executed** yet — see [Future: region triggers](#future-region-triggers).
+Adds **`region`** items: colored full-cell underlays. Regions **coexist** with food, walls, and creatures on the same cell. Each region stores optional **trigger** metadata (`enabled`, `mode`, `workflow_id`, `inputs`) — see [Region triggers](#region-triggers).
 
 ## Breaking change (2.1.0)
 
@@ -136,8 +160,10 @@ Base: `/api/v1/sandbox/`
 
 | `type` | Payload | Behavior |
 |--------|---------|----------|
-| `place_item` | `cell`, `item_type`: `food` \| `wall` \| `ball`, `color` required for `ball` | Place if no creature and no food/wall/ball at cell (regions ignored) |
-| `remove_item` | `cell` | Remove food/wall/ball only (regions remain) |
+| `place_item` | `cell`, `item_type`: `food` \| `wall` \| `ball`, optional `definition_id`, `color` required for `ball` | Place pickable or terrain if no creature; pickables may stack on fixture cells (0..N pickables); terrain blocked when any solid exists (regions ignored) |
+| `remove_item` | `cell`, optional `item_id` | Remove pickables and non-fixture solids at cell; fixtures and regions remain; omit `item_id` to clear all removable items at once |
+| `place_fixture` | `cell`, `definition_id` | Place solid fixture if no creature and no existing solid |
+| `remove_fixture` | `cell` | Remove fixture only; pickables at cell remain |
 | `place_region` | `cell`, `color` (`#RRGGBB`), optional `label` (string, default `""`) | Place or replace region at cell (allowed on occupied cells) |
 | `remove_region` | `cell` | Remove region only |
 | `place_creature` | `cell`, `workflow_id`, `color` (`#RRGGBB`), optional `name`, optional `facing` (`N`/`E`/`S`/`W`, default **N**) | Spawn creature if no creature and no food/wall (regions ignored) |
@@ -148,11 +174,13 @@ Paused cell edits in **Simulation** use `/interactions` so layout changes do not
 ## UI
 
 - **Simulation tab**: board picker, play/pause/step, cell action menu, per-creature Explorer + Run Logs
-- **Board Builder tab**: edit/save boards without ticking; creature **facing** editable in Explorer
+- **Board Builder tab**: edit/save boards without ticking; creature **facing** editable in Explorer. After **Save**, switching to **Simulation** starts a fresh session from the saved board so the grid matches your edits.
 
 On first Sandbox visit after a page load, **Simulation** renders the session grid immediately (including the default **Empty Board** 16×16 grid). **Apply grid** in Explorer is only for intentional resize — not required to see the board on load.
 
 When placing a creature (Simulation or Board Builder), the cell action modal steps through **workflow** → **initial facing** (`N`/`E`/`S`/`W`, default North) → **color** (presets, favorites, or custom hex). Placement does not auto-advance ticks — press **Play** or **Step** to run brains.
+
+**Place item** on an empty cell opens **Item** (user item definitions from Definitions) → **Terrain** (user terrain definitions) → **Built-ins** (legacy food, wall, and ball placement). Seeded system definitions (`is_system`) are excluded from the Item/Terrain pickers; use **Built-ins** for Food/Wall/Ball.
 
 **Tick ms** in Explorer sets the client-side Play interval (200–60000 ms). It does not advance simulation or require pause; commit with Enter or by leaving the field (partial values while typing do not affect playback until committed).
 
@@ -179,7 +207,11 @@ Implementation: [`phaserSandboxAdapter.ts`](../frontend/src/sandbox/runtime/phas
 
 Each tick runs the creature brain, so **Run Logs** update every tick (no movement-only skip).
 
-Implementation: [`SandboxView.tsx`](../frontend/src/components/SandboxView.tsx), [`sandboxWorkflowRunMerge.ts`](../frontend/src/sandbox/sandboxWorkflowRunMerge.ts).
+When fixture or region-trigger workflows fire during a tick, their full node logs appear under **Triggered workflows** in the same Run Logs tab (latest run per source, sticky across ticks). Sub-workflows invoked inside those graphs expose step details on Workflow nodes when present. The tick transcript summarizes brain, fixture, and region-trigger activity counts.
+
+Simulation error banners surface **brain** errors (`last_errors`), **fixture** errors (`last_fixture_errors`), and **region trigger** errors (`last_region_trigger_errors`).
+
+Implementation: [`SandboxView.tsx`](../frontend/src/components/SandboxView.tsx), [`sandboxWorkflowRunMerge.ts`](../frontend/src/sandbox/sandboxWorkflowRunMerge.ts), [`sandboxNestedWorkflowRunMerge.ts`](../frontend/src/sandbox/sandboxNestedWorkflowRunMerge.ts).
 
 ## Placeholder visuals
 
@@ -190,16 +222,37 @@ Implementation: [`SandboxView.tsx`](../frontend/src/components/SandboxView.tsx),
 | Food | Pink circle |
 | Ball | Colored circle (placement color) |
 | Wall | Gray square |
+| Fixture | Purple inset square with white stroke |
+| Definition item | Circle or square from ItemDefinition `shape`; color from instance or definition `default_color` |
 | Region | Full-cell colored underlay (~35% opacity), drawn under other items |
 | Cell | 48px |
+
+**Draw order (bottom → top):** region → solid (wall or fixture) → pickable (food, ball, definition-backed items) → creature.
 
 Constants: `frontend/src/sandbox/sandboxVisualDefaults.ts`, `backend/app/domain/sandbox/constants.py`.
 
 Favorite placement colors: **My Settings → View Settings → Favorite colors** (`User.settings.sandbox_favorite_colors`, up to 16 hex swatches). The first favorite is the default when placing a new region or creature.
 
-## Future: region triggers
+## Region triggers
 
-Each region may store a **trigger** stub (`enabled`, `mode`, `workflow_id`, `inputs`). Modes: `enter`, `exit`, `while_inside`, `on_enter_once`. When implemented, the engine will track creature overlap and run the configured workflow with static inputs (e.g. “reach the blue square” → `enter` trigger fires an end-state workflow). Configuration is editable in Board Builder Explorer today; simulation does not evaluate triggers yet.
+Each **board instance** region may store a **trigger** (`enabled`, `mode`, `workflow_id`, `inputs`). Configure triggers in the Simulation or Board Builder region inspector (per instance; definition catalog triggers are authoring templates only). The workflow picker lists workflows from **Shared** and **sandbox-enabled** projects, **grouped by project folder** (same eligibility rules as creature brains).
+
+| Mode | When it fires |
+|------|----------------|
+| `enter` | Creature **moves onto** the region cell |
+| `exit` | Creature **leaves** the region cell |
+| `while_inside` | **Every tick** while a creature stands on the cell (after all creature brains act) |
+| `on_enter_once` | First **enter** per creature per session (`region_trigger_state.enter_once_fired`) |
+
+When a trigger fires, the engine runs its `workflow_id` graph with run override **`sandbox_region`** (`RegionTriggerInput`: tick, mode, region, actor, trigger_inputs, world) and merges `trigger.inputs` into Start overrides. Failures append to `envelope.last_region_trigger_errors`.
+
+### Goal region + pause example
+
+1. Place a region labeled **Goal** on the board; enable trigger, mode **Enter**, pick a workflow.
+2. Workflow: **Start** → **Force Simulation Pause** → **Stop** (`output` = dictionary).
+3. When a creature moves onto Goal during a tick, the trigger workflow runs; the tick response includes `simulation_effects.force_pause: true` and the SPA stops **Play**.
+
+Implementation: [`region_triggers.py`](../backend/app/domain/sandbox/region_triggers.py), [`region_trigger_runner.py`](../backend/app/domain/sandbox/region_trigger_runner.py).
 
 ## Feature flags
 

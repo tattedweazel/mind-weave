@@ -2,14 +2,28 @@
 
 from __future__ import annotations
 
+from app.domain.sandbox.item_helpers import ItemDefinitionDefaults
 from app.domain.sandbox.query import (
     creature_facing_from_tick_dict,
     creature_position_from_tick_dict,
+    fixture_cell_probe_from_fixture_dict,
     nearby_cells_clockwise,
     nearby_cells_from_tick_dict,
     parse_tick,
+    tick_dict_from_fixture_dict,
 )
-from app.domain.schemas.sandbox import CreatureState, GridCell, SandboxItem, WorldGrid, WorldState
+from app.domain.schemas.sandbox import (
+    FIXTURE_ITEM_TYPE,
+    CreatureState,
+    GridCell,
+    SandboxItem,
+    WorldGrid,
+    WorldState,
+)
+
+
+def _empty_items() -> dict:
+    return {"stack_count": 0, "items": []}
 
 
 def _creature_dict(*, x: int, y: int, facing: str = "N") -> dict:
@@ -39,6 +53,7 @@ def test_creature_position_and_facing_from_tick():
         "y": 2,
         "kind": "empty",
         "region_label": None,
+        **_empty_items(),
     }
     assert creature_facing_from_tick_dict(raw) == "E"
 
@@ -61,6 +76,7 @@ def test_creature_position_includes_region_label():
         "y": 2,
         "kind": "empty",
         "region_label": "Goal",
+        **_empty_items(),
     }
 
 
@@ -76,7 +92,105 @@ def test_creature_position_reports_food_under_creature():
         "y": 2,
         "kind": "food",
         "region_label": None,
+        "stack_count": 1,
+        "items": [
+            {
+                "id": "f1",
+                "kind": "food",
+                "definition_id": None,
+                "energy": 10,
+                "color": None,
+                "label": "Food (10)",
+            }
+        ],
     }
+
+
+def test_creature_position_includes_pickable_label_from_definition_map():
+    raw = _minimal_tick(
+        creature_pos={"x": 2, "y": 2},
+            items=[
+                {
+                    "id": "i1",
+                    "definition_id": "def-key",
+                    "definition_kind": "item",
+                    "role": "pickable",
+                    "position": {"x": 2, "y": 2},
+                },
+            ],
+    )
+    probe = creature_position_from_tick_dict(
+        raw,
+        definition_labels={"def-key": "Golden Key"},
+        definition_defaults={
+            "def-key": ItemDefinitionDefaults(default_energy=25, default_color="#AABBCC"),
+        },
+    )
+    assert probe["stack_count"] == 1
+    assert probe["items"][0]["kind"] == "item"
+    assert probe["items"][0]["label"] == "Golden Key"
+    assert probe["items"][0]["energy"] == 25
+    assert probe["items"][0]["color"] == "#AABBCC"
+
+
+def test_fixture_cell_probe_from_fixture_dict():
+    creature = _creature_dict(x=4, y=4, facing="N")
+    fx_pos = {"x": 4, "y": 3}
+    raw = {
+        "tick": 1,
+        "fixture": {
+            "id": "fx1",
+            "position": fx_pos,
+            "label": "Door",
+        },
+        "actor": creature,
+        "cell_items": [],
+        "world": {
+            "grid": {"width": 8, "height": 8},
+            "items": [
+                {
+                    "id": "fx1",
+                    "type": FIXTURE_ITEM_TYPE,
+                    "definition_kind": "fixture",
+                    "position": fx_pos,
+                    "label": "Door",
+                },
+                {
+                    "id": "k1",
+                    "type": "food",
+                    "definition_id": "def-key",
+                    "definition_kind": "item",
+                    "role": "pickable",
+                    "position": fx_pos,
+                    "energy": 10,
+                },
+            ],
+        },
+    }
+    probe = fixture_cell_probe_from_fixture_dict(
+        raw,
+        definition_labels={"def-key": "Key"},
+        definition_defaults={"def-key": ItemDefinitionDefaults(default_energy=25)},
+    )
+    assert probe["x"] == 4 and probe["y"] == 3
+    assert probe["kind"] == "fixture"
+    assert probe["stack_count"] == 1
+    assert probe["items"][0]["kind"] == "item"
+    assert probe["items"][0]["label"] == "Key"
+    assert probe["items"][0]["energy"] == 10
+
+
+def test_tick_dict_from_fixture_dict_still_maps_actor_for_nearby():
+    creature = _creature_dict(x=3, y=6, facing="E")
+    raw = {
+        "tick": 1,
+        "fixture": {"id": "fx1", "position": {"x": 3, "y": 5}},
+        "actor": creature,
+        "cell_items": [],
+        "world": {"grid": {"width": 8, "height": 8}, "items": []},
+    }
+    tick = tick_dict_from_fixture_dict(raw)
+    assert tick["creature"]["position"] == {"x": 3, "y": 6}
 
 
 def test_nearby_cells_clockwise_facing_n():

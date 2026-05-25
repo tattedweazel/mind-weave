@@ -176,7 +176,7 @@ def test_list_palettes(client: TestClient):
     assert "add_to_list" in default["colors"]
     assert "prepend_text" in default["colors"]
     assert "string_trunc" in default["colors"]
-    assert "message" in default["colors"]
+    assert "broadcast_message" in default["colors"]
     assert "sandbox_get_position" in default["colors"]
     assert "sandbox_move_forward" in default["colors"]
     assert "basic_conditional" in default["colors"]

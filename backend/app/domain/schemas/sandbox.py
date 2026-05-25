@@ -14,10 +14,15 @@ DecisionAction = Literal[
     "idle",
     "pick_up_item",
     "place_item",
+    "use_fixture",
 ]
 Facing = Literal["N", "E", "S", "W"]
-NearbyCellKind = Literal["empty", "wall", "food", "ball", "creature", "out_of_bounds"]
-ItemType = Literal["food", "wall", "region", "ball"]
+NearbyCellKind = Literal[
+    "empty", "wall", "food", "ball", "fixture", "creature", "out_of_bounds"
+]
+ItemType = Literal["food", "wall", "region", "ball", "fixture"]
+DefinitionKind = Literal["item", "terrain", "fixture", "region"]
+ItemRole = Literal["pickable", "solid"]
 PlaceableItemType = Literal["food", "wall", "ball"]
 InventoryItemType = Literal["ball", "food"]
 PlaceItemFilterType = Literal["ball", "food"]
@@ -31,17 +36,20 @@ InteractionType = Literal[
     "remove_creature",
     "place_region",
     "remove_region",
+    "place_fixture",
+    "remove_fixture",
 ]
 
-SOLID_ITEM_TYPES = frozenset({"wall"})
-BLOCKING_ITEM_TYPES = frozenset({"food", "wall", "ball"})
+SOLID_ITEM_TYPES = frozenset({"wall", "fixture"})
+BLOCKING_ITEM_TYPES = frozenset({"food", "wall", "ball", "fixture"})
 PICKABLE_ITEM_TYPES = frozenset({"food", "ball"})
 REGION_ITEM_TYPE = "region"
 BALL_ITEM_TYPE = "ball"
+FIXTURE_ITEM_TYPE = "fixture"
 DEFAULT_FACING: Facing = "N"
 DEFAULT_REGION_COLOR = "#3B82F6"
 _HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
-SANDBOX_SCHEMA_VERSION = "2.4.0"
+SANDBOX_SCHEMA_VERSION = "2.5.0"
 
 
 def normalize_hex_color(raw: str) -> str:
@@ -71,6 +79,8 @@ class NearbyCell(BaseModel):
     y: int
     kind: NearbyCellKind
     region_label: Optional[str] = None
+    stack_count: int = 0
+    items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RegionTriggerConfig(BaseModel):
@@ -103,16 +113,32 @@ class InventoryItem(BaseModel):
 
 class SandboxItem(BaseModel):
     id: str = Field(min_length=1)
-    type: ItemType
+    type: Optional[ItemType] = None
+    definition_id: Optional[str] = None
+    definition_kind: Optional[DefinitionKind] = None
+    role: Optional[ItemRole] = None
     position: GridCell
     energy: Optional[int] = Field(default=None, ge=0)
     color: Optional[str] = None
     label: Optional[str] = None
     trigger: Optional[RegionTriggerConfig] = None
+    builtin_slug: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_item_fields(self) -> SandboxItem:
-        if self.type == REGION_ITEM_TYPE:
+        if self.type is None and self.definition_kind is None:
+            raise ValueError("item requires type or definition_kind")
+        effective = self.type
+        if effective is None:
+            if self.definition_kind == "terrain":
+                effective = "wall"
+            elif self.definition_kind == "fixture":
+                effective = FIXTURE_ITEM_TYPE
+            elif self.definition_kind == "region":
+                effective = REGION_ITEM_TYPE
+            elif self.definition_kind == "item":
+                effective = BALL_ITEM_TYPE if self.color else "food"
+        if effective == REGION_ITEM_TYPE:
             if not self.color:
                 raise ValueError("region items require color")
             self.color = normalize_hex_color(self.color)
@@ -120,18 +146,23 @@ class SandboxItem(BaseModel):
                 self.label = ""
             if self.trigger is None:
                 self.trigger = default_region_trigger()
-        elif self.type == BALL_ITEM_TYPE:
+        elif effective == BALL_ITEM_TYPE:
             if not self.color:
                 raise ValueError("ball items require color")
             self.color = normalize_hex_color(self.color)
             if self.energy is not None or self.trigger is not None or self.label is not None:
                 raise ValueError("ball items cannot have energy, trigger, or label")
-        elif self.type == "food":
+        elif effective == "food":
             if self.color is not None or self.trigger is not None or self.label is not None:
                 raise ValueError("color, trigger, and label are not valid for food items")
-        elif self.type == "wall":
-            if self.color is not None or self.trigger is not None or self.energy is not None or self.label is not None:
-                raise ValueError("wall items cannot have color, trigger, energy, or label")
+        elif effective == "wall":
+            if self.trigger is not None or self.energy is not None:
+                raise ValueError("wall items cannot have trigger or energy")
+        elif effective == FIXTURE_ITEM_TYPE:
+            if self.energy is not None or self.trigger is not None:
+                raise ValueError("fixture items cannot have energy or trigger")
+        if self.type is None and effective is not None:
+            self.type = effective  # type: ignore[assignment]
         return self
 
 
@@ -196,6 +227,57 @@ class SandboxTickInput(BaseModel):
     recent_actions: list[RecentAction] = Field(default_factory=list)
 
 
+class FixtureActorContext(BaseModel):
+    id: str
+    kind: Literal["creature"] = "creature"
+    position: GridCell
+    facing: Facing
+
+
+class FixtureContext(BaseModel):
+    id: str
+    definition_id: Optional[str] = None
+    label: Optional[str] = None
+    position: GridCell
+    workflow_id: Optional[str] = None
+
+
+class FixtureInteractionInput(BaseModel):
+    tick: Annotated[int, Field(ge=0)]
+    fixture: FixtureContext
+    actor: FixtureActorContext
+    cell_items: list[dict[str, Any]] = Field(default_factory=list)
+    world: WorldState
+
+
+class RegionContext(BaseModel):
+    id: str
+    label: Optional[str] = None
+    position: GridCell
+    definition_id: Optional[str] = None
+
+
+class RegionTriggerInput(BaseModel):
+    tick: Annotated[int, Field(ge=0)]
+    mode: RegionTriggerMode
+    region: RegionContext
+    actor: FixtureActorContext
+    trigger_inputs: dict[str, Any] = Field(default_factory=dict)
+    world: WorldState
+
+
+class RegionTriggerSessionState(BaseModel):
+    enter_once_fired: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class SimulationEffects:
+    """Mutable accumulator for sandbox simulation side effects during trigger workflows."""
+
+    def __init__(self) -> None:
+        self.force_pause: bool = False
+        self.broadcast_segments: list[dict] = []
+
+
 class BoardCreaturePlacement(BaseModel):
     id: str = Field(min_length=1)
     workflow_id: str = Field(min_length=1)
@@ -234,11 +316,14 @@ class ItemClickEvent(BaseModel):
 class PlaceItemEvent(BaseModel):
     type: Literal["place_item"] = "place_item"
     cell: GridCell
-    item_type: PlaceableItemType
+    item_type: Optional[PlaceableItemType] = None
+    definition_id: Optional[str] = None
     color: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_place_item(self) -> PlaceItemEvent:
+        if not self.item_type and not self.definition_id:
+            raise ValueError("place_item requires item_type or definition_id")
         if self.item_type == BALL_ITEM_TYPE:
             if not self.color:
                 raise ValueError("ball placement requires color")
@@ -248,9 +333,21 @@ class PlaceItemEvent(BaseModel):
         return self
 
 
+class PlaceFixtureEvent(BaseModel):
+    type: Literal["place_fixture"] = "place_fixture"
+    cell: GridCell
+    definition_id: str = Field(min_length=1)
+
+
+class RemoveFixtureEvent(BaseModel):
+    type: Literal["remove_fixture"] = "remove_fixture"
+    cell: GridCell
+
+
 class RemoveItemEvent(BaseModel):
     type: Literal["remove_item"] = "remove_item"
     cell: GridCell
+    item_id: Optional[str] = None
 
 
 class PlaceCreatureEvent(BaseModel):
@@ -298,7 +395,28 @@ SandboxInteractionEvent = Union[
     RemoveCreatureEvent,
     PlaceRegionEvent,
     RemoveRegionEvent,
+    PlaceFixtureEvent,
+    RemoveFixtureEvent,
 ]
+
+
+class SandboxNestedWorkflowRunMeta(BaseModel):
+    """Metadata for a fixture or region-trigger workflow run during simulation."""
+
+    kind: Literal["fixture", "region_trigger"]
+    label: str
+    creature_id: str
+    tick: int
+    workflow_id: str
+    fixture_id: Optional[str] = None
+    region_id: Optional[str] = None
+    trigger_mode: Optional[str] = None
+    node_labels: dict[str, str] = Field(default_factory=dict)
+
+
+class SandboxNestedWorkflowRun(BaseModel):
+    meta: SandboxNestedWorkflowRunMeta
+    run: "WorkflowRunResult"
 
 
 class SandboxDocumentEnvelope(BaseModel):
@@ -310,8 +428,16 @@ class SandboxDocumentEnvelope(BaseModel):
     playback: dict[str, Any] = Field(default_factory=dict)
     state_version: int = 0
     last_errors: dict[str, Optional[str]] = Field(default_factory=dict)
+    last_fixture_errors: dict[str, Optional[str]] = Field(default_factory=dict)
+    region_trigger_state: RegionTriggerSessionState = Field(default_factory=RegionTriggerSessionState)
+    last_region_trigger_errors: list[str] = Field(default_factory=list)
 
 
 class SandboxPlaybackState(BaseModel):
     paused: bool = True
     tick_rate_ms: int = Field(default=1000, ge=200, le=60_000)
+
+
+from app.domain.schemas.workflow_run import WorkflowRunResult  # noqa: E402
+
+SandboxNestedWorkflowRun.model_rebuild()

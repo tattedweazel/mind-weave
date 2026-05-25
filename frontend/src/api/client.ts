@@ -42,6 +42,21 @@ import {
     VoiceSampleListItem,
     WorkflowExecutionLimitsEnvelope,
     WorkflowExecutionLimitsOverrides,
+    ItemDefinitionRead,
+    ItemDefinitionCreate,
+    ItemDefinitionUpdate,
+    TerrainDefinitionRead,
+    TerrainDefinitionCreate,
+    TerrainDefinitionUpdate,
+    FixtureDefinitionRead,
+    FixtureDefinitionCreate,
+    FixtureDefinitionUpdate,
+    CreatureDefinitionRead,
+    CreatureDefinitionCreate,
+    CreatureDefinitionUpdate,
+    RegionDefinitionRead,
+    RegionDefinitionCreate,
+    RegionDefinitionUpdate,
 } from './types';
 import { API_BASE } from './baseUrl';
 import { apiErrorFromResponse, fetchWithCredentials, readJsonBody } from './http';
@@ -546,6 +561,30 @@ export class ApiClient {
         return this.request<void>(`/workflow-runs/${runId}/cancel`, { method: 'POST' });
     }
 
+    static async postWorkflowBroadcastAck(
+        runId: string,
+        params: {
+            nodeId: string;
+            forLoopId?: string | null;
+            forLoopIteration: number;
+        },
+    ): Promise<void> {
+        const form = new FormData();
+        form.append('node_id', params.nodeId);
+        if (params.forLoopId) {
+            form.append('for_loop_id', params.forLoopId);
+        }
+        form.append('for_loop_iteration', String(params.forLoopIteration));
+        const response = await fetchWithCredentials(`${API_BASE}/workflow-runs/${runId}/broadcast-ack`, {
+            method: 'POST',
+            body: form,
+        });
+        if (!response.ok) {
+            const errBody = await readJsonBody(response);
+            throw apiErrorFromResponse(response, errBody);
+        }
+    }
+
     /**
      * Upload recorded audio for a `transcribe_audio` node during an async Build run (`GET …/workflow-runs/…/events`) (multipart).
      * Completes the server-side wait; transcription runs on the API after the upload.
@@ -858,6 +897,110 @@ export class ApiClient {
 
     static getStarterSandboxWorkflowId(): Promise<{ workflow_id: string }> {
         return this.request('/sandbox/starter-workflow-id');
+    }
+
+    // -------------------------------------------------------------------------
+    // Sandbox definitions
+    // -------------------------------------------------------------------------
+
+    static listItemDefinitions(): Promise<ItemDefinitionRead[]> {
+        return this.request('/sandbox-definitions/items');
+    }
+
+    static getItemDefinition(id: string): Promise<ItemDefinitionRead> {
+        return this.request(`/sandbox-definitions/items/${id}`);
+    }
+
+    static createItemDefinition(data: ItemDefinitionCreate): Promise<ItemDefinitionRead> {
+        return this.request('/sandbox-definitions/items', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    static updateItemDefinition(id: string, data: ItemDefinitionUpdate): Promise<ItemDefinitionRead> {
+        return this.request(`/sandbox-definitions/items/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    }
+
+    static async deleteItemDefinition(id: string): Promise<void> {
+        await this.request<void>(`/sandbox-definitions/items/${id}`, { method: 'DELETE' });
+    }
+
+    static listTerrainDefinitions(): Promise<TerrainDefinitionRead[]> {
+        return this.request('/sandbox-definitions/terrain');
+    }
+
+    static getTerrainDefinition(id: string): Promise<TerrainDefinitionRead> {
+        return this.request(`/sandbox-definitions/terrain/${id}`);
+    }
+
+    static createTerrainDefinition(data: TerrainDefinitionCreate): Promise<TerrainDefinitionRead> {
+        return this.request('/sandbox-definitions/terrain', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    static updateTerrainDefinition(id: string, data: TerrainDefinitionUpdate): Promise<TerrainDefinitionRead> {
+        return this.request(`/sandbox-definitions/terrain/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    }
+
+    static async deleteTerrainDefinition(id: string): Promise<void> {
+        await this.request<void>(`/sandbox-definitions/terrain/${id}`, { method: 'DELETE' });
+    }
+
+    static listFixtureDefinitions(): Promise<FixtureDefinitionRead[]> {
+        return this.request('/sandbox-definitions/fixtures');
+    }
+
+    static getFixtureDefinition(id: string): Promise<FixtureDefinitionRead> {
+        return this.request(`/sandbox-definitions/fixtures/${id}`);
+    }
+
+    static createFixtureDefinition(data: FixtureDefinitionCreate): Promise<FixtureDefinitionRead> {
+        return this.request('/sandbox-definitions/fixtures', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    static updateFixtureDefinition(id: string, data: FixtureDefinitionUpdate): Promise<FixtureDefinitionRead> {
+        return this.request(`/sandbox-definitions/fixtures/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    }
+
+    static async deleteFixtureDefinition(id: string): Promise<void> {
+        await this.request<void>(`/sandbox-definitions/fixtures/${id}`, { method: 'DELETE' });
+    }
+
+    static listCreatureDefinitions(): Promise<CreatureDefinitionRead[]> {
+        return this.request('/sandbox-definitions/creatures');
+    }
+
+    static getCreatureDefinition(id: string): Promise<CreatureDefinitionRead> {
+        return this.request(`/sandbox-definitions/creatures/${id}`);
+    }
+
+    static createCreatureDefinition(data: CreatureDefinitionCreate): Promise<CreatureDefinitionRead> {
+        return this.request('/sandbox-definitions/creatures', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    static updateCreatureDefinition(id: string, data: CreatureDefinitionUpdate): Promise<CreatureDefinitionRead> {
+        return this.request(`/sandbox-definitions/creatures/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    }
+
+    static async deleteCreatureDefinition(id: string): Promise<void> {
+        await this.request<void>(`/sandbox-definitions/creatures/${id}`, { method: 'DELETE' });
+    }
+
+    static listRegionDefinitions(): Promise<RegionDefinitionRead[]> {
+        return this.request('/sandbox-definitions/regions');
+    }
+
+    static getRegionDefinition(id: string): Promise<RegionDefinitionRead> {
+        return this.request(`/sandbox-definitions/regions/${id}`);
+    }
+
+    static createRegionDefinition(data: RegionDefinitionCreate): Promise<RegionDefinitionRead> {
+        return this.request('/sandbox-definitions/regions', { method: 'POST', body: JSON.stringify(data) });
+    }
+
+    static updateRegionDefinition(id: string, data: RegionDefinitionUpdate): Promise<RegionDefinitionRead> {
+        return this.request(`/sandbox-definitions/regions/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    }
+
+    static async deleteRegionDefinition(id: string): Promise<void> {
+        await this.request<void>(`/sandbox-definitions/regions/${id}`, { method: 'DELETE' });
     }
 
     // -------------------------------------------------------------------------

@@ -4,21 +4,32 @@
 import React from 'react';
 import { ChevronLeft, X } from 'lucide-react';
 
-import type { WorkflowDefinitionListItem, WorkflowProject } from '../api/types';
+import type {
+    CreatureDefinitionRead,
+    FixtureDefinitionRead,
+    ItemDefinitionRead,
+    RegionDefinitionRead,
+    TerrainDefinitionRead,
+    WorkflowDefinitionListItem,
+    WorkflowProject,
+} from '../api/types';
 import type { SandboxGridCellJson, SandboxFacing } from '../domain/sandbox/types';
 import { DEFAULT_SANDBOX_FACING, SANDBOX_FACING_VALUES } from '../domain/sandbox/types';
 import {
     creatureBrainCountForProject,
     creatureBrainWorkflowsInProject,
 } from '../domain/workflowProjectMembership';
-import { deriveCellRootActions, type CellOccupants } from '../sandbox/sandboxCellOccupants';
+import { deriveCellRootActions, describeRemovableCellItem, getRemovableCellItems, type CellOccupants } from '../sandbox/sandboxCellOccupants';
 import {
     placeCreatureInteraction,
     placeBallInteraction,
     placeFoodInteraction,
     placeRegionInteraction,
     placeWallInteraction,
+    placeFixtureInteraction,
+    placeItemDefinitionInteraction,
     removeCreatureAtCellInteraction,
+    removeFixtureAtCellInteraction,
     removeItemAtCellInteraction,
     removeRegionAtCellInteraction,
     type SandboxCellInteraction,
@@ -35,13 +46,20 @@ import {
 export type CellActionWizardStep =
     | 'choose_action'
     | 'choose_item_type'
+    | 'choose_item_definition'
+    | 'choose_terrain_definition'
+    | 'choose_builtin_item'
+    | 'choose_fixture_definition'
+    | 'choose_region_definition'
     | 'choose_region_color'
     | 'choose_region_label'
     | 'choose_project'
+    | 'choose_creature_definition'
     | 'choose_workflow'
     | 'choose_creature_facing'
     | 'choose_creature_color'
-    | 'choose_ball_color';
+    | 'choose_ball_color'
+    | 'choose_item_to_remove';
 
 const PLACE_ITEM_TYPES = [
     { id: 'food' as const, label: 'Food', description: 'Energy for creatures' },
@@ -63,6 +81,11 @@ export interface SandboxCellActionModalProps {
     sharedProjectId?: string | null;
     /** User favorite hex colors from View Settings. */
     sandboxFavoriteColors?: string[];
+    itemDefinitions?: ItemDefinitionRead[];
+    terrainDefinitions?: TerrainDefinitionRead[];
+    fixtureDefinitions?: FixtureDefinitionRead[];
+    regionDefinitions?: RegionDefinitionRead[];
+    creatureDefinitions?: CreatureDefinitionRead[];
     initialStep?: CellActionWizardStep;
     onComplete: (interaction: SandboxCellInteraction) => void;
     onDismiss: () => void;
@@ -78,6 +101,11 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
     workflows = [],
     sharedProjectId = null,
     sandboxFavoriteColors = [],
+    itemDefinitions = [],
+    terrainDefinitions = [],
+    fixtureDefinitions = [],
+    regionDefinitions = [],
+    creatureDefinitions = [],
     initialStep = 'choose_action',
     onComplete,
     onDismiss,
@@ -129,6 +157,16 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
         return sortWorkflowListItems(filtered, workflowListSort);
     }, [workflowsInSelectedProject, workflowNameFilter, workflowListSort]);
 
+    const userItemDefinitions = React.useMemo(
+        () => itemDefinitions.filter(def => !def.is_system),
+        [itemDefinitions],
+    );
+
+    const userTerrainDefinitions = React.useMemo(
+        () => terrainDefinitions.filter(def => !def.is_system),
+        [terrainDefinitions],
+    );
+
     const title = React.useMemo(() => {
         if (step === 'choose_workflow' && selectedProject) {
             return selectedProject.name;
@@ -170,6 +208,22 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
             setStep('choose_action');
             return;
         }
+        if (step === 'choose_item_definition' || step === 'choose_terrain_definition' || step === 'choose_builtin_item') {
+            setStep('choose_item_type');
+            return;
+        }
+        if (step === 'choose_fixture_definition') {
+            setStep('choose_action');
+            return;
+        }
+        if (step === 'choose_region_definition') {
+            setStep('choose_action');
+            return;
+        }
+        if (step === 'choose_creature_definition') {
+            setStep('choose_action');
+            return;
+        }
         if (step === 'choose_region_label') {
             setStep('choose_region_color');
             return;
@@ -179,7 +233,11 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
             return;
         }
         if (step === 'choose_ball_color') {
-            setStep('choose_item_type');
+            setStep('choose_builtin_item');
+            return;
+        }
+        if (step === 'choose_item_to_remove') {
+            setStep('choose_action');
             return;
         }
         onDismiss();
@@ -211,6 +269,11 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
     };
 
     const rootActions = deriveCellRootActions(occupants, { allowCreatureActions });
+    const removableCellItems = React.useMemo(() => getRemovableCellItems(occupants.items), [occupants.items]);
+    const removableItemLabelContext = React.useMemo(
+        () => ({ itemDefinitions, terrainDefinitions }),
+        [itemDefinitions, terrainDefinitions],
+    );
 
     return (
         <div
@@ -265,7 +328,20 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                             className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500 dark:hover:border-sky-500 hover:bg-sky-50/50 dark:hover:bg-sky-950/30"
                                             onClick={() => {
                                                 if (a.id === 'remove_item') {
-                                                    onComplete(removeItemAtCellInteraction(cell));
+                                                    if (removableCellItems.length <= 1) {
+                                                        onComplete(
+                                                            removeItemAtCellInteraction(
+                                                                cell,
+                                                                removableCellItems[0]?.id,
+                                                            ),
+                                                        );
+                                                        return;
+                                                    }
+                                                    setStep('choose_item_to_remove');
+                                                    return;
+                                                }
+                                                if (a.id === 'remove_fixture') {
+                                                    onComplete(removeFixtureAtCellInteraction(cell));
                                                     return;
                                                 }
                                                 if (a.id === 'remove_region') {
@@ -277,14 +353,26 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                                     return;
                                                 }
                                                 if (a.id === 'place_creature') {
+                                                    if (creatureDefinitions.length > 0) {
+                                                        setStep('choose_creature_definition');
+                                                        return;
+                                                    }
                                                     resetCreatureWizard();
                                                     setStep('choose_project');
                                                     return;
                                                 }
                                                 if (a.id === 'place_region') {
+                                                    if (regionDefinitions.length > 0) {
+                                                        setStep('choose_region_definition');
+                                                        return;
+                                                    }
                                                     setSelectedRegionColor(defaultSandboxPlacementColor(sandboxFavoriteColors));
                                                     setSelectedRegionLabel('');
                                                     setStep('choose_region_color');
+                                                    return;
+                                                }
+                                                if (a.id === 'place_fixture') {
+                                                    setStep('choose_fixture_definition');
                                                     return;
                                                 }
                                                 setStep('choose_item_type');
@@ -301,7 +389,51 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
 
                     {step === 'choose_item_type' ? (
                         <>
-                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Item type</p>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Place item</p>
+                            <ul className="space-y-2">
+                                <li>
+                                    <button
+                                        type="button"
+                                        className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500 hover:bg-sky-50/50"
+                                        onClick={() => setStep('choose_item_definition')}
+                                    >
+                                        <span className="block text-sm font-medium">Item</span>
+                                        <span className="block text-xs text-slate-500 mt-0.5">
+                                            Pickable templates from Definitions
+                                        </span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        type="button"
+                                        className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500 hover:bg-sky-50/50"
+                                        onClick={() => setStep('choose_terrain_definition')}
+                                    >
+                                        <span className="block text-sm font-medium">Terrain</span>
+                                        <span className="block text-xs text-slate-500 mt-0.5">
+                                            Solid templates from Definitions
+                                        </span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        type="button"
+                                        className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500 hover:bg-sky-50/50"
+                                        onClick={() => setStep('choose_builtin_item')}
+                                    >
+                                        <span className="block text-sm font-medium">Built-ins</span>
+                                        <span className="block text-xs text-slate-500 mt-0.5">
+                                            Legacy food, wall, and ball
+                                        </span>
+                                    </button>
+                                </li>
+                            </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_builtin_item' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Built-ins</p>
                             <ul className="space-y-2">
                                 {PLACE_ITEM_TYPES.map(t => (
                                     <li key={t.id}>
@@ -324,6 +456,189 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                         </button>
                                     </li>
                                 ))}
+                            </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_item_definition' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Item</p>
+                            <ul className={`space-y-2 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                {userItemDefinitions.length === 0 ? (
+                                    <li className="text-xs text-slate-500">No item definitions available.</li>
+                                ) : (
+                                    userItemDefinitions.map(def => (
+                                        <li key={def.id}>
+                                            <button
+                                                type="button"
+                                                className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500"
+                                                onClick={() =>
+                                                    onComplete(
+                                                        placeItemDefinitionInteraction(cell, def.id, {
+                                                            color: def.default_color ?? undefined,
+                                                            energy: def.default_energy ?? undefined,
+                                                        }),
+                                                    )
+                                                }
+                                            >
+                                                <span className="block text-sm font-medium">{def.name}</span>
+                                                <span className="block text-xs text-slate-500 mt-0.5">{def.label}</span>
+                                            </button>
+                                        </li>
+                                    ))
+                                )}
+                            </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_terrain_definition' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Terrain</p>
+                            <ul className={`space-y-2 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                {userTerrainDefinitions.length === 0 ? (
+                                    <li className="text-xs text-slate-500">No terrain definitions available.</li>
+                                ) : (
+                                    userTerrainDefinitions.map(def => (
+                                        <li key={def.id}>
+                                            <button
+                                                type="button"
+                                                className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500"
+                                                onClick={() =>
+                                                    onComplete({
+                                                        type: 'place_item',
+                                                        cell,
+                                                        definition_id: def.id,
+                                                        item_type: 'wall',
+                                                    })
+                                                }
+                                            >
+                                                <span className="block text-sm font-medium">{def.name}</span>
+                                                <span className="block text-xs text-slate-500 mt-0.5">{def.label}</span>
+                                            </button>
+                                        </li>
+                                    ))
+                                )}
+                            </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_fixture_definition' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Fixture definition</p>
+                            <ul className={`space-y-2 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                {fixtureDefinitions.length === 0 ? (
+                                    <li className="text-xs text-slate-500">No fixture definitions available.</li>
+                                ) : (
+                                    fixtureDefinitions.map(def => (
+                                        <li key={def.id}>
+                                            <button
+                                                type="button"
+                                                className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-violet-500"
+                                                onClick={() => onComplete(placeFixtureInteraction(cell, def.id))}
+                                            >
+                                                <span className="block text-sm font-medium">{def.name}</span>
+                                                <span className="block text-xs text-slate-500 mt-0.5">{def.label}</span>
+                                            </button>
+                                        </li>
+                                    ))
+                                )}
+                            </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_region_definition' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Region definition</p>
+                            <ul className={`space-y-2 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                {regionDefinitions.map(def => (
+                                    <li key={def.id}>
+                                        <button
+                                            type="button"
+                                            className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500"
+                                            onClick={() =>
+                                                onComplete(
+                                                    placeRegionInteraction(
+                                                        cell,
+                                                        def.color,
+                                                        def.label,
+                                                        def.id,
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            <span className="block text-sm font-medium">{def.name}</span>
+                                            <span className="block text-xs text-slate-500 mt-0.5">{def.label}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_creature_definition' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Creature definition</p>
+                            <ul className={`space-y-2 min-h-0 ${PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS} overflow-y-auto`}>
+                                {creatureDefinitions.length === 0 ? (
+                                    <li className="text-xs text-slate-500">No creature definitions available.</li>
+                                ) : (
+                                    creatureDefinitions.map(def => (
+                                        <li key={def.id}>
+                                            <button
+                                                type="button"
+                                                className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-violet-500"
+                                                onClick={() =>
+                                                    onComplete(
+                                                        placeCreatureInteraction(cell, def.workflow_id, {
+                                                            name: def.label,
+                                                            facing: def.default_facing,
+                                                            color: def.default_color,
+                                                            creature_definition_id: def.id,
+                                                        }),
+                                                    )
+                                                }
+                                            >
+                                                <span className="block text-sm font-medium">{def.name}</span>
+                                                <span className="block text-xs text-slate-500 mt-0.5">{def.label}</span>
+                                            </button>
+                                        </li>
+                                    ))
+                                )}
+                            </ul>
+                        </>
+                    ) : null}
+
+                    {step === 'choose_item_to_remove' ? (
+                        <>
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Remove item</p>
+                            <ul className="space-y-2">
+                                {removableCellItems.map(item => (
+                                    <li key={item.id}>
+                                        <button
+                                            type="button"
+                                            className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500 hover:bg-sky-50/50"
+                                            onClick={() =>
+                                                onComplete(removeItemAtCellInteraction(cell, item.id))
+                                            }
+                                        >
+                                            <span className="block text-sm font-medium">
+                                                {describeRemovableCellItem(item, removableItemLabelContext)}
+                                            </span>
+                                        </button>
+                                    </li>
+                                ))}
+                                <li>
+                                    <button
+                                        type="button"
+                                        className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-red-500 hover:bg-red-50/50 dark:hover:bg-red-950/20"
+                                        onClick={() => onComplete(removeItemAtCellInteraction(cell))}
+                                    >
+                                        <span className="block text-sm font-medium">Remove all</span>
+                                        <span className="block text-xs text-slate-500 mt-0.5">
+                                            Clear all pickables and terrain from this cell
+                                        </span>
+                                    </button>
+                                </li>
                             </ul>
                         </>
                     ) : null}

@@ -23,6 +23,11 @@ import { ApiClient } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import type {
     BoardProject,
+    CreatureDefinitionRead,
+    FixtureDefinitionRead,
+    ItemDefinitionRead,
+    RegionDefinitionRead,
+    TerrainDefinitionRead,
     WorkflowDefinition,
     WorkflowDefinitionListItem,
     WorkflowProject,
@@ -40,7 +45,6 @@ import {
 } from '../domain/boardProjectMembership';
 import {
     projectsWithSandboxCreatureBrains,
-    sandboxEligibleCreatureBrainWorkflows,
     sharedProjectIdFromProjects,
 } from '../domain/workflowProjectMembership';
 import {
@@ -58,6 +62,7 @@ import {
     PALETTE_SECTION_LIST_MAX_HEIGHT_CLASS,
 } from '../sandbox/SandboxLayoutConstants';
 import { PhaserSandboxAdapter } from '../sandbox/runtime/phaserSandboxAdapter';
+import { buildSandboxItemRenderCatalog } from '../sandbox/sandboxItemRender';
 import type { SandboxGridCellJson } from '../domain/sandbox/types';
 import type { SandboxCellInteraction } from '../sandbox/sandboxCellInteractions';
 import {
@@ -68,10 +73,23 @@ import type { CreatureUserActionsMap, SandboxCreatureUserAction } from '../sandb
 import { sandboxErrorHintForMessage } from '../sandbox/sandboxLastErrorHint';
 import {
     mergeSandboxWorkflowRuns,
-    sandboxTickTranscriptSummary,
 } from '../sandbox/sandboxWorkflowRunMerge';
-import { collectUserMessagesFromNodeResults } from '../sandbox/userMessageFromRun';
+import {
+    filterNestedWorkflowRunsForCreature,
+    mergeSandboxNestedWorkflowRuns,
+    nestedWorkflowRunKey,
+    sandboxTickTranscriptSummaryWithNested,
+} from '../sandbox/sandboxNestedWorkflowRunMerge';
+import { collectSandboxVisibleErrors } from '../sandbox/sandboxSimulationErrors';
+import type { SandboxNestedWorkflowRunJson } from '../domain/sandbox/types';
+import {
+    collectBroadcastSegmentsFromRuns,
+    parseBroadcastSegmentsFromEffects,
+    type BroadcastSegment,
+} from '../domain/broadcastMessage';
+import { BroadcastMessageModal } from './workflow/BroadcastMessageModal';
 import { SandboxCellActionModal } from './SandboxCellActionModal';
+import { SandboxDefinitionsView } from './sandbox/SandboxDefinitionsView';
 import { SandboxUserActionModal } from './sandbox/SandboxUserActionModal';
 import { SandboxCreatureInventorySection } from './sandbox/SandboxCreatureInventorySection';
 import { SandboxItemInspectorSection } from './sandbox/SandboxItemInspectorSection';
@@ -102,7 +120,13 @@ import {
 
 const SANDBOX_PANEL_WIDTHS_KEY = 'sandbox_panel_widths';
 
-type MainTab = 'simulation' | 'builder';
+type MainTab = 'simulation' | 'builder' | 'definitions';
+
+const MAIN_TAB_LABELS: Record<MainTab, string> = {
+    simulation: 'Simulation',
+    builder: 'Board Builder',
+    definitions: 'Definitions',
+};
 
 function readStoredSandboxPanelWidths(): { left: number; right: number } | null {
     try {
@@ -145,17 +169,8 @@ function formatRecentAction(
     return latest.reason ? `${latest.action} — ${latest.reason}` : latest.action;
 }
 
-function collectVisibleErrors(
-    lastErrors: Record<string, string | null> | undefined,
-    selectedCreatureId: string | null,
-): { creatureId: string; message: string }[] {
-    if (!lastErrors) return [];
-    const entries = Object.entries(lastErrors).filter((entry): entry is [string, string] => Boolean(entry[1]));
-    if (selectedCreatureId) {
-        const selected = entries.filter(([id]) => id === selectedCreatureId);
-        if (selected.length > 0) return selected.map(([creatureId, message]) => ({ creatureId, message }));
-    }
-    return entries.map(([creatureId, message]) => ({ creatureId, message }));
+function nestedRunNodeLabels(meta: SandboxNestedWorkflowRunJson['meta']): Map<string, string> {
+    return new Map(Object.entries(meta.node_labels ?? {}));
 }
 
 export const SandboxView: React.FC = () => {
@@ -185,6 +200,15 @@ export const SandboxView: React.FC = () => {
 
     const [workflows, setWorkflows] = useState<WorkflowDefinitionListItem[]>([]);
     const [workflowProjects, setWorkflowProjects] = useState<WorkflowProject[]>([]);
+    const [itemDefinitions, setItemDefinitions] = useState<ItemDefinitionRead[]>([]);
+    const [terrainDefinitions, setTerrainDefinitions] = useState<TerrainDefinitionRead[]>([]);
+    const [fixtureDefinitions, setFixtureDefinitions] = useState<FixtureDefinitionRead[]>([]);
+    const [creatureDefinitions, setCreatureDefinitions] = useState<CreatureDefinitionRead[]>([]);
+    const [regionDefinitions, setRegionDefinitions] = useState<RegionDefinitionRead[]>([]);
+    const renderCatalog = React.useMemo(
+        () => buildSandboxItemRenderCatalog(itemDefinitions),
+        [itemDefinitions],
+    );
     const [boards, setBoards] = useState<SandboxBoardJson[]>([]);
     const [boardProjects, setBoardProjects] = useState<BoardProject[]>([]);
     const [selectedBoardProjectId, setSelectedBoardProjectId] = useState<string | null>(null);
@@ -202,11 +226,11 @@ export const SandboxView: React.FC = () => {
 
     const [inspectorTab, setInspectorTab] = useState<'explorer' | 'logs'>('explorer');
     const [lastWorkflowRuns, setLastWorkflowRuns] = useState<Record<string, WorkflowRunResult | null>>({});
+    const [lastNestedWorkflowRuns, setLastNestedWorkflowRuns] = useState<SandboxNestedWorkflowRunJson[]>([]);
     const [selectedCreatureId, setSelectedCreatureId] = useState<string | null>(null);
     const [creatureWorkflow, setCreatureWorkflow] = useState<WorkflowDefinition | null>(null);
     const [tickTranscript, setTickTranscript] = useState<string[]>([]);
-    const [runMessageToast, setRunMessageToast] = useState<string | null>(null);
-    const runMessageToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [broadcastPromptSegments, setBroadcastPromptSegments] = useState<BroadcastSegment[]>([]);
 
     const compact = useCompactViewport();
     const [compactPaletteOpen, setCompactPaletteOpen] = useState(false);
@@ -248,21 +272,17 @@ export const SandboxView: React.FC = () => {
     const pausedRef = useRef(paused);
     pausedRef.current = paused;
     const cellActionModalOpenRef = useRef(false);
-    cellActionModalOpenRef.current = cellActionCell !== null || userActionPrompt !== null;
+    cellActionModalOpenRef.current = cellActionCell !== null || userActionPrompt !== null || broadcastPromptSegments.length > 0;
     const mainTabRef = useRef(mainTab);
     mainTabRef.current = mainTab;
+    const pendingSimulationBoardReloadIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         envelopeRef.current = envelope;
     }, [envelope]);
 
-    useEffect(() => {
-        return () => {
-            if (runMessageToastTimerRef.current) {
-                clearTimeout(runMessageToastTimerRef.current);
-            }
-        };
-    }, []);
+    const broadcastPromptOpenRef = useRef(false);
+    broadcastPromptOpenRef.current = broadcastPromptSegments.length > 0;
 
     useEffect(() => {
         const onResize = () => {
@@ -351,6 +371,21 @@ export const SandboxView: React.FC = () => {
         return { boards: boardList.boards, projects };
     }, []);
 
+    const refreshDefinitionCatalog = useCallback(async () => {
+        const [items, terrain, fixtures, creatures, regions] = await Promise.all([
+            ApiClient.listItemDefinitions().catch(() => [] as ItemDefinitionRead[]),
+            ApiClient.listTerrainDefinitions().catch(() => [] as TerrainDefinitionRead[]),
+            ApiClient.listFixtureDefinitions().catch(() => [] as FixtureDefinitionRead[]),
+            ApiClient.listCreatureDefinitions().catch(() => [] as CreatureDefinitionRead[]),
+            ApiClient.listRegionDefinitions().catch(() => [] as RegionDefinitionRead[]),
+        ]);
+        setItemDefinitions(items);
+        setTerrainDefinitions(terrain);
+        setFixtureDefinitions(fixtures);
+        setCreatureDefinitions(creatures);
+        setRegionDefinitions(regions);
+    }, []);
+
     useEffect(() => {
         let cancelled = false;
         void (async () => {
@@ -366,6 +401,8 @@ export const SandboxView: React.FC = () => {
                 setWorkflowProjects(projs);
                 setBoards(catalog.boards);
                 setBoardProjects(catalog.projects);
+                await refreshDefinitionCatalog();
+                if (cancelled) return;
                 setCatalogLoaded(true);
                 setDocumentId(created.document_id);
                 setEnvelope(created.envelope);
@@ -380,10 +417,10 @@ export const SandboxView: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [refreshBoardCatalog]);
+    }, [refreshBoardCatalog, refreshDefinitionCatalog]);
 
     useEffect(() => {
-        if (!catalogLoaded) return;
+        if (!catalogLoaded || mainTab === 'definitions') return;
         const el = containerRef.current;
         if (!el) return;
         const adapter = new PhaserSandboxAdapter();
@@ -392,22 +429,26 @@ export const SandboxView: React.FC = () => {
         return () => {
             adapter.destroy();
             adapterRef.current = null;
+            sandboxFitKeyRef.current = '';
         };
-    }, [catalogLoaded]);
+    }, [catalogLoaded, mainTab]);
 
     useEffect(() => {
         const adapter = adapterRef.current;
-        if (!adapter) return;
+        if (!adapter || mainTab === 'definitions') return;
 
         const fitKey =
             mainTab === 'simulation' ? `sim:${documentId ?? ''}` : `builder:${builderBoardId ?? ''}`;
 
         let stateUpdated = false;
         if (mainTab === 'simulation' && envelope) {
-            adapter.setState(envelope.sandbox, { selectedCreatureId });
+            adapter.setState(envelope.sandbox, { selectedCreatureId, renderCatalog });
             stateUpdated = true;
         } else if (mainTab === 'builder') {
-            adapter.setState(sandboxStateFromBoardDefinition(localBoardDef), { selectedCreatureId });
+            adapter.setState(sandboxStateFromBoardDefinition(localBoardDef), {
+                selectedCreatureId,
+                renderCatalog,
+            });
             stateUpdated = true;
         }
 
@@ -415,7 +456,7 @@ export const SandboxView: React.FC = () => {
             sandboxFitKeyRef.current = fitKey;
             requestAnimationFrame(() => adapter.fitToView());
         }
-    }, [mainTab, envelope, localBoardDef, selectedCreatureId, documentId, builderBoardId]);
+    }, [mainTab, envelope, localBoardDef, selectedCreatureId, documentId, builderBoardId, renderCatalog]);
 
     useEffect(() => {
         if (mainTab === 'simulation' && envelope) {
@@ -505,17 +546,13 @@ export const SandboxView: React.FC = () => {
         [workflowProjects, sharedProjectId, workflows],
     );
 
-    const sandboxEligibleWorkflows = React.useMemo(
-        () => sandboxEligibleCreatureBrainWorkflows(workflowProjects, sharedProjectId, workflows),
-        [workflowProjects, sharedProjectId, workflows],
-    );
-
     const selectedCreature = React.useMemo(() => {
         if (!selectedCreatureId || !envelope) return null;
         return envelope.sandbox.creatures.find(c => c.id === selectedCreatureId) ?? null;
     }, [selectedCreatureId, envelope]);
 
     const selectedCreatureRun = selectedCreatureId ? (lastWorkflowRuns[selectedCreatureId] ?? null) : null;
+    const visibleNestedRuns = filterNestedWorkflowRunsForCreature(lastNestedWorkflowRuns, selectedCreatureId);
     const nodeLabels = creatureWorkflow ? nodeIdToLabel(creatureWorkflow.graph) : new Map<string, string>();
 
     const applyGridResize = useCallback(async () => {
@@ -563,6 +600,9 @@ export const SandboxView: React.FC = () => {
                         : {}),
                 });
                 setEnvelope(res.envelope);
+                if (res.simulation_effects?.force_pause) {
+                    setPaused(true);
+                }
                 setLastWorkflowRuns(prev =>
                     mergeSandboxWorkflowRuns(
                         prev,
@@ -570,28 +610,28 @@ export const SandboxView: React.FC = () => {
                         res.envelope.sandbox.creatures.map(c => c.id),
                     ),
                 );
+                setLastNestedWorkflowRuns(prev =>
+                    mergeSandboxNestedWorkflowRuns(prev, res.nested_workflow_runs ?? []),
+                );
                 const runs = Object.values(res.last_workflow_runs).filter(
                     (run): run is WorkflowRunResult => run != null,
                 );
-                const toastSource =
-                    selectedCreatureId && res.last_workflow_runs[selectedCreatureId]
-                        ? res.last_workflow_runs[selectedCreatureId]
-                        : runs[0] ?? null;
-                const toastText = collectUserMessagesFromNodeResults(toastSource?.node_results);
-                if (toastText) {
-                    if (runMessageToastTimerRef.current) {
-                        clearTimeout(runMessageToastTimerRef.current);
-                        runMessageToastTimerRef.current = null;
-                    }
-                    setRunMessageToast(toastText);
-                    runMessageToastTimerRef.current = setTimeout(() => {
-                        setRunMessageToast(null);
-                        runMessageToastTimerRef.current = null;
-                    }, 4500);
+                const effectSegments = parseBroadcastSegmentsFromEffects(
+                    res.simulation_effects?.broadcast_messages,
+                );
+                const fallbackSegments = collectBroadcastSegmentsFromRuns(runs);
+                const broadcastSegments =
+                    effectSegments.length > 0 ? effectSegments : fallbackSegments;
+                if (broadcastSegments.length > 0) {
+                    setBroadcastPromptSegments(broadcastSegments);
+                    setPaused(true);
                 }
                 setTickTranscript(prev => {
                     const tick = res.envelope.sandbox.tick;
-                    const runSummary = sandboxTickTranscriptSummary(res.last_workflow_runs);
+                    const runSummary = sandboxTickTranscriptSummaryWithNested(
+                        res.last_workflow_runs,
+                        res.nested_workflow_runs ?? [],
+                    );
                     return [...prev, `Tick ${tick}: ${runSummary}`].slice(-120);
                 });
                 setTickError(null);
@@ -611,7 +651,7 @@ export const SandboxView: React.FC = () => {
                 setBusy(false);
             }
         },
-        [documentId, selectedCreatureId],
+        [documentId],
     );
 
     const runTickWithUserActions = useCallback(
@@ -686,6 +726,7 @@ export const SandboxView: React.FC = () => {
             setTickRateMsInput(sessionTickRate);
             setSelectedBoardId(boardId);
             setLastWorkflowRuns({});
+            setLastNestedWorkflowRuns([]);
             setTickTranscript([]);
             setSelectedCreatureId(null);
             setInspectedCell(null);
@@ -832,6 +873,7 @@ export const SandboxView: React.FC = () => {
         setBusy(true);
         setLoadError(null);
         try {
+            let savedBoardId = builderBoardId;
             if (builderBoardId) {
                 await ApiClient.updateSandboxBoard(builderBoardId, {
                     name: builderBoardName,
@@ -843,8 +885,12 @@ export const SandboxView: React.FC = () => {
                     definition: localBoardDef as unknown as Record<string, unknown>,
                     project_id: resolveBoardProjectIdForCreate(),
                 });
+                savedBoardId = created.id;
                 setBuilderBoardId(created.id);
                 setSelectedBoardId(created.id);
+            }
+            if (savedBoardId) {
+                pendingSimulationBoardReloadIdRef.current = savedBoardId;
             }
             setBuilderDirty(false);
             await refreshBoardCatalog();
@@ -854,6 +900,21 @@ export const SandboxView: React.FC = () => {
             setBusy(false);
         }
     }, [builderBoardId, builderBoardName, localBoardDef, refreshBoardCatalog, resolveBoardProjectIdForCreate]);
+
+    const handleMainTabChange = useCallback(
+        (tab: MainTab) => {
+            if (tab === 'simulation') {
+                const reloadBoardId = pendingSimulationBoardReloadIdRef.current;
+                if (reloadBoardId) {
+                    pendingSimulationBoardReloadIdRef.current = null;
+                    void startSessionFromBoard(reloadBoardId);
+                    return;
+                }
+            }
+            setMainTab(tab);
+        },
+        [startSessionFromBoard],
+    );
 
     const activeBoardId = mainTab === 'simulation' ? selectedBoardId : builderBoardId;
     const activeBoard = boards.find(b => b.id === activeBoardId) ?? null;
@@ -1101,7 +1162,7 @@ export const SandboxView: React.FC = () => {
     );
 
     useEffect(() => {
-        if (!catalogLoaded) return;
+        if (!catalogLoaded || mainTab === 'definitions') return;
         const adapter = adapterRef.current;
         if (!adapter) return;
         adapter.setOnCellClick(cell => {
@@ -1114,12 +1175,12 @@ export const SandboxView: React.FC = () => {
             setCellActionNonce(n => n + 1);
             setCellActionCell(cell);
         });
-    }, [catalogLoaded]);
+    }, [catalogLoaded, mainTab]);
 
     useEffect(() => {
         if (mainTab !== 'simulation' || paused || !documentId) return;
         const id = window.setInterval(() => {
-            if (busyRef.current) return;
+            if (busyRef.current || broadcastPromptOpenRef.current) return;
             void runTickWithUserActions([]);
         }, tickRateMs);
         return () => clearInterval(id);
@@ -1148,7 +1209,7 @@ export const SandboxView: React.FC = () => {
         return getCellOccupantsFromSandboxState(builderPreviewState, inspectedCell);
     }, [mainTab, envelope, inspectedCell, builderPreviewState]);
 
-    const visibleErrors = collectVisibleErrors(envelope?.last_errors, selectedCreatureId);
+    const visibleErrors = collectSandboxVisibleErrors(envelope, selectedCreatureId);
     const activeBoardName =
         boards.find(b => b.id === (mainTab === 'simulation' ? selectedBoardId : builderBoardId))?.name ?? null;
 
@@ -1165,6 +1226,50 @@ export const SandboxView: React.FC = () => {
             <div className="h-full flex items-center justify-center text-mw-text-secondary gap-2">
                 <Loader2 className="animate-spin" size={24} />
                 <span>Loading sandbox…</span>
+            </div>
+        );
+    }
+
+    const mainTabSwitcher = (
+        <div
+            role="tablist"
+            aria-label="Sandbox mode"
+            className="flex rounded-lg border border-mw-border bg-mw-page p-0.5 gap-0.5 shrink-0"
+        >
+            {(['simulation', 'builder', 'definitions'] as const).map(tab => (
+                <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={mainTab === tab}
+                    onClick={() => handleMainTabChange(tab)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                        mainTab === tab
+                            ? 'bg-mw-primary-muted text-mw-primary'
+                            : 'text-mw-text-secondary hover:text-mw-text-primary hover:bg-mw-card'
+                    }`}
+                >
+                    {MAIN_TAB_LABELS[tab]}
+                </button>
+            ))}
+        </div>
+    );
+
+    if (mainTab === 'definitions') {
+        return (
+            <div className="flex flex-col h-full overflow-hidden bg-mw-page">
+                <div className="h-12 border-b border-mw-border bg-mw-card flex items-center px-4 gap-3 shrink-0">
+                    {mainTabSwitcher}
+                </div>
+                <div className="flex-1 min-h-0">
+                    <SandboxDefinitionsView
+                        workflows={workflows}
+                        workflowProjects={workflowProjects}
+                        sharedProjectId={sharedProjectId}
+                        sandboxFavoriteColors={sandboxFavoriteColors}
+                        onDefinitionsChange={refreshDefinitionCatalog}
+                    />
+                </div>
             </div>
         );
     }
@@ -1460,28 +1565,7 @@ export const SandboxView: React.FC = () => {
                             </button>
                         </>
                     )}
-                    <div
-                        role="tablist"
-                        aria-label="Sandbox mode"
-                        className="flex rounded-lg border border-mw-border bg-mw-page p-0.5 gap-0.5 shrink-0"
-                    >
-                        {(['simulation', 'builder'] as const).map(tab => (
-                            <button
-                                key={tab}
-                                type="button"
-                                role="tab"
-                                aria-selected={mainTab === tab}
-                                onClick={() => setMainTab(tab)}
-                                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                                    mainTab === tab
-                                        ? 'bg-mw-primary-muted text-mw-primary'
-                                        : 'text-mw-text-secondary hover:text-mw-text-primary hover:bg-mw-card'
-                                }`}
-                            >
-                                {tab === 'simulation' ? 'Simulation' : 'Board Builder'}
-                            </button>
-                        ))}
-                    </div>
+                    {mainTabSwitcher}
                     {mainTab === 'simulation' ? (
                         <>
                             <button
@@ -1594,11 +1678,18 @@ export const SandboxView: React.FC = () => {
                 </div>
                 {mainTab === 'simulation' && visibleErrors.length > 0 && (
                     <div className="px-4 py-2 text-xs text-mw-error bg-mw-error-muted border-b border-mw-border shrink-0 space-y-1">
-                        {visibleErrors.map(({ creatureId, message }) => (
-                            <div key={creatureId}>
-                                {selectedCreatureId && creatureId === selectedCreatureId ? null : (
+                        {visibleErrors.map(({ key, message, source, creatureId }) => (
+                            <div key={key}>
+                                <span className="font-semibold uppercase text-[10px] mr-1">
+                                    {source === 'brain'
+                                        ? 'Brain'
+                                        : source === 'fixture'
+                                          ? 'Fixture'
+                                          : 'Region'}
+                                </span>
+                                {selectedCreatureId && creatureId === selectedCreatureId ? null : creatureId ? (
                                     <span className="font-mono text-[10px] mr-1">{creatureId.slice(0, 8)}:</span>
-                                )}
+                                ) : null}
                                 {message}
                             </div>
                         ))}
@@ -1655,15 +1746,6 @@ export const SandboxView: React.FC = () => {
                             <Maximize2 size={16} aria-hidden />
                         </button>
                     </div>
-                    {runMessageToast ? (
-                        <div
-                            className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 max-w-[min(92vw,32rem)] px-4 py-3 rounded-lg bg-mw-card border border-mw-border shadow-lg text-sm text-mw-text-primary whitespace-pre-wrap"
-                            role="status"
-                            aria-live="polite"
-                        >
-                            {runMessageToast}
-                        </div>
-                    ) : null}
                 </div>
             </div>
 
@@ -1876,7 +1958,9 @@ export const SandboxView: React.FC = () => {
                                                             item={it}
                                                             readOnly={mainTab !== 'builder'}
                                                             favoriteColors={sandboxFavoriteColors}
-                                                            workflows={sandboxEligibleWorkflows}
+                                                            workflows={workflows}
+                                                            workflowProjects={workflowProjects}
+                                                            sharedProjectId={sharedProjectId}
                                                             onItemChange={(itemId, patch) => {
                                                                 setLocalBoardDef(prev =>
                                                                     updateBoardItemMetadata(prev, itemId, patch),
@@ -2176,6 +2260,46 @@ export const SandboxView: React.FC = () => {
                                         />
                                     </div>
                                 )}
+                                {visibleNestedRuns.length > 0 ? (
+                                    <div className="space-y-3">
+                                        <h3 className="text-xs font-semibold text-mw-text-secondary uppercase tracking-wide">
+                                            Triggered workflows
+                                        </h3>
+                                        {visibleNestedRuns.map(entry => {
+                                            const labels = nestedRunNodeLabels(entry.meta);
+                                            return (
+                                                <div
+                                                    key={nestedWorkflowRunKey(entry.meta)}
+                                                    className="space-y-2 border border-mw-border rounded-lg p-3 bg-mw-card"
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-xs font-semibold text-mw-text-primary">
+                                                            {entry.meta.label}
+                                                        </span>
+                                                        <span
+                                                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                                                entry.run.status === 'ok'
+                                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                                                    : entry.run.status === 'partial'
+                                                                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                                                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                                            }`}
+                                                        >
+                                                            {entry.run.status.toUpperCase()}
+                                                        </span>
+                                                    </div>
+                                                    <WorkflowRunLogsNodeResultsList
+                                                        node_results={entry.run.node_results}
+                                                        getNodeLabel={id => labels.get(id) ?? id}
+                                                        userSettings={
+                                                            user?.settings as Record<string, unknown> | undefined
+                                                        }
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : null}
                             </div>
                         ) : null}
                     </div>
@@ -2202,11 +2326,22 @@ export const SandboxView: React.FC = () => {
                     workflows={workflows}
                     sharedProjectId={sharedProjectId}
                     sandboxFavoriteColors={sandboxFavoriteColors}
+                    itemDefinitions={itemDefinitions}
+                    terrainDefinitions={terrainDefinitions}
+                    fixtureDefinitions={fixtureDefinitions}
+                    regionDefinitions={regionDefinitions}
+                    creatureDefinitions={creatureDefinitions}
                     onDismiss={dismissCellActionModal}
                     onComplete={interaction => {
                         void completeCellAction(interaction);
                     }}
                     onInspect={completeCellInspect}
+                />
+            ) : null}
+            {broadcastPromptSegments.length > 0 ? (
+                <BroadcastMessageModal
+                    segments={broadcastPromptSegments}
+                    onContinue={() => setBroadcastPromptSegments([])}
                 />
             ) : null}
         </div>

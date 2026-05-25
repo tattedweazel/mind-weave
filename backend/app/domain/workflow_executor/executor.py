@@ -89,6 +89,10 @@ from app.domain.workflow_executor.transcribe_pending import (
     TranscribeWaitKey,
     cancel_transcribe_wait,
 )
+from app.domain.workflow_executor.workflow_input_pending import (
+    BroadcastAckWaitKey,
+    cancel_broadcast_ack_wait,
+)
 from app.domain.workflow_run_status import terminal_status_for_aggregate
 from app.persistence.tables import (
     NodeRunLog,
@@ -216,6 +220,61 @@ def _sandbox_tick_dict_from_upstream(upstream: list[NodeOutputUnion]) -> dict | 
             if isinstance(st, dict):
                 return st
     return None
+
+
+def _sandbox_fixture_dict_from_upstream(upstream: list[NodeOutputUnion]) -> dict | None:
+    """Pick a dict-shaped ``FixtureInteractionInput`` from upstream node outputs."""
+    for out in upstream:
+        if isinstance(out, DictionaryNodeOutput):
+            d = dict(out.data)
+            if "fixture" in d and "actor" in d and "world" in d:
+                return d
+    return None
+
+
+def _tick_dict_from_fixture_override(raw: dict[str, Any]) -> dict | None:
+    """Convert ``FixtureInteractionInput`` override to tick-shaped dict, or None on failure."""
+    if not ("fixture" in raw and "actor" in raw and "world" in raw):
+        return None
+    try:
+        from app.domain.sandbox.query import tick_dict_from_fixture_dict
+
+        return tick_dict_from_fixture_dict(raw)
+    except Exception:
+        return None
+
+
+def _resolve_sandbox_tick_dict(
+    upstream: list[NodeOutputUnion],
+    input_overrides: dict[str, Any] | None,
+) -> dict | None:
+    """Resolve tick-shaped context from upstream wires, ``sandbox_tick``, or ``sandbox_fixture`` overrides."""
+    raw = _sandbox_tick_dict_from_upstream(upstream)
+    if raw is not None:
+        return raw
+    fx_upstream = _sandbox_fixture_dict_from_upstream(upstream)
+    if fx_upstream is not None:
+        converted = _tick_dict_from_fixture_override(fx_upstream)
+        if converted is not None:
+            return converted
+    ov = (input_overrides or {}).get("sandbox_tick")
+    if isinstance(ov, dict) and "world" in ov and "creature" in ov and "tick" in ov:
+        return dict(ov)
+    fx_ov = (input_overrides or {}).get("sandbox_fixture")
+    if isinstance(fx_ov, dict):
+        return _tick_dict_from_fixture_override(fx_ov)
+    return None
+
+
+def _resolve_sandbox_fixture_dict(
+    upstream: list[NodeOutputUnion],
+    input_overrides: dict[str, Any] | None,
+) -> dict | None:
+    """Resolve ``FixtureInteractionInput`` from override or upstream ``sandbox_fixture`` output."""
+    fx_ov = (input_overrides or {}).get("sandbox_fixture")
+    if isinstance(fx_ov, dict) and "fixture" in fx_ov and "actor" in fx_ov and "world" in fx_ov:
+        return dict(fx_ov)
+    return _sandbox_fixture_dict_from_upstream(upstream)
 
 
 def _paired_for_loop_end_id(for_loop_id: str, nodes_by_id: Dict[str, Any]) -> Optional[str]:
@@ -708,6 +767,8 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         self._pending_interstitial_tuples: deque[tuple[str, dict[str, Any]]] = deque()
         self._stream_interstitial_sink: Optional[list[tuple[str, dict[str, Any]]]] = None
         self._active_transcribe_wait_keys: set[TranscribeWaitKey] = set()
+        self._active_broadcast_ack_wait_keys: set[BroadcastAckWaitKey] = set()
+        self._broadcast_segments_collected: list[dict[str, Any]] = []
         self._streaming_ctx_workflow_id: Optional[uuid.UUID] = None
         self._streaming_ctx_run_id: Optional[uuid.UUID] = None
         self._sem_node: asyncio.Semaphore | None = None
@@ -826,6 +887,25 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
             cancel_transcribe_wait(key)
         self._active_transcribe_wait_keys.clear()
 
+    def _track_broadcast_ack_wait(self, key: BroadcastAckWaitKey) -> None:
+        self._active_broadcast_ack_wait_keys.add(key)
+
+    def _untrack_broadcast_ack_wait(self, key: BroadcastAckWaitKey) -> None:
+        self._active_broadcast_ack_wait_keys.discard(key)
+
+    def _cancel_active_broadcast_ack_waits(self) -> None:
+        for key in list(self._active_broadcast_ack_wait_keys):
+            cancel_broadcast_ack_wait(key)
+        self._active_broadcast_ack_wait_keys.clear()
+
+    def _reset_broadcast_run_state(self) -> None:
+        self._broadcast_segments_collected = []
+        self._cancel_active_broadcast_ack_waits()
+
+    def _cancel_active_input_waits(self) -> None:
+        self._cancel_active_transcribe_waits()
+        self._cancel_active_broadcast_ack_waits()
+
     def _wave_cap_for_run(self) -> int:
         if self._max_concurrent_wave_cap is not None:
             return self._max_concurrent_wave_cap
@@ -879,6 +959,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
             )
         self._resolved_execution_limits = execution_limits
         self._node_execution_count_for_budget = 0
+        self._reset_broadcast_run_state()
 
         # --- Validation: cycle detection ---
         cycle = _detect_cycle(list(nodes_by_id.keys()), _edges_for_global_cycle_detection(edges, nodes_by_id))
@@ -1224,6 +1305,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                 user_limits=user_lim_sched,
             )
             self._node_execution_count_for_budget = 0
+            self._reset_broadcast_run_state()
 
             outputs: Dict[str, NodeOutputUnion] = {}
             node_results = []
@@ -1479,7 +1561,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                             persist_run_record.completed_at = utc_now()
                             self.session.add(persist_run_record)
                             self.session.commit()
-                            self._cancel_active_transcribe_waits()
+                            self._cancel_active_input_waits()
 
                             await _emit(
                                 "workflow.completed",
@@ -1511,7 +1593,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                             "failed to persist timed-out run terminal for run_id=%s",
                             run_id,
                         )
-                    self._cancel_active_transcribe_waits()
+                    self._cancel_active_input_waits()
                     return WorkflowRunResult(
                         workflow_id=workflow.id,
                         status="error",
@@ -1538,7 +1620,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
                             "failed to persist safety-aborted run terminal for run_id=%s",
                             run_id,
                         )
-                    self._cancel_active_transcribe_waits()
+                    self._cancel_active_input_waits()
                     return WorkflowRunResult(
                         workflow_id=workflow.id,
                         status="error",
@@ -1551,7 +1633,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         except asyncio.CancelledError:
             logger.info("execute_scheduled_run cancelled workflow %s run_id=%s", workflow.id, run_id)
             await _cancel_run_tasks()
-            self._cancel_active_transcribe_waits()
+            self._cancel_active_input_waits()
             try:
                 st = (persist_run_record.status or "").strip()
                 if st not in {"completed", "failed", "canceled"}:
@@ -1579,7 +1661,7 @@ class WorkflowExecutor(WorkflowExecutorResolverMixin, WorkflowExecutorSkillsRunn
         except Exception as exc:
             logger.exception("execute_scheduled_run failed workflow %s run_id=%s", workflow.id, run_id)
             await _cancel_run_tasks()
-            self._cancel_active_transcribe_waits()
+            self._cancel_active_input_waits()
             try:
                 await sse_publish(
                     "workflow.failed",

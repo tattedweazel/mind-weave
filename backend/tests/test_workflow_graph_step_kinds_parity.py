@@ -121,6 +121,15 @@ def _minimal_raw_step(step: Dict[str, Any]) -> Dict[str, Any]:
                 "data": {},
                 "position": pos,
             }
+        if pt == "sandbox_region":
+            return {
+                "id": node_id,
+                "kind": "primitive",
+                "primitive_type": "sandbox_region",
+                "label": label,
+                "data": {},
+                "position": pos,
+            }
         if pt == "gmail":
             return {
                 "id": node_id,
@@ -241,6 +250,14 @@ def _minimal_raw_step(step: Dict[str, Any]) -> Dict[str, Any]:
                     {"key": "value", "type": "any", "value": None},
                 ]
             }
+        if ut == "broadcast_message":
+            base["data"] = {
+                "severity": "info",
+                "required_inputs": [
+                    {"key": "message", "type": "any", "value": None},
+                    {"key": "title", "type": "string", "value": None},
+                ],
+            }
         if ut == "message":
             base["data"] = {
                 "required_inputs": [
@@ -253,6 +270,19 @@ def _minimal_raw_step(step: Dict[str, Any]) -> Dict[str, Any]:
                     {"key": "target_string", "type": "string", "value": ""},
                     {"key": "start_index", "type": "int", "value": 0},
                     {"key": "end_index", "type": "int", "value": -1},
+                ]
+            }
+        if ut == "sandbox_remove_item_at_cell":
+            base["data"] = {
+                "required_inputs": [
+                    {"key": "item_id", "type": "string", "value": None},
+                ]
+            }
+        if ut == "sandbox_spawn_item_at_cell":
+            base["data"] = {
+                "required_inputs": [
+                    {"key": "definition_id", "type": "string", "value": None},
+                    {"key": "target", "type": "string", "value": "self"},
                 ]
             }
         return base

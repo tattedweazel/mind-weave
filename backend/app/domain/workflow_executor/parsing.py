@@ -43,6 +43,7 @@ from app.domain.schemas import (
     LteControlNode,
     MaxIntsUtilityNode,
     MessageUtilityNode,
+    BroadcastMessageUtilityNode,
     MinIntsUtilityNode,
     ModuloIntsUtilityNode,
     MultimodalLLMCallSkillNode,
@@ -56,6 +57,11 @@ from app.domain.schemas import (
     SandboxGetFacingUtilityNode,
     SandboxGetInventoryUtilityNode,
     SandboxPromptUserActionUtilityNode,
+    SandboxForceSimulationPauseUtilityNode,
+    SandboxRegionPrimitiveNode,
+    SandboxGetCellItemsUtilityNode,
+    SandboxRemoveItemAtCellUtilityNode,
+    SandboxSpawnItemAtCellUtilityNode,
     SandboxGetNearbyUtilityNode,
     SandboxGetPositionUtilityNode,
     SandboxIdleUtilityNode,
@@ -156,6 +162,8 @@ def _parse_node(raw: Dict[str, Any]):
             return GmailPrimitiveNode(**raw)
         if ptype == "sandbox_tick":
             return SandboxTickPrimitiveNode(**raw)
+        if ptype == "sandbox_region":
+            return SandboxRegionPrimitiveNode(**raw)
     if kind == "utility" and raw.get("utility_type") == "simple_llm_call":
         normalized = dict(raw)
         normalized["kind"] = "skill"
@@ -204,6 +212,8 @@ def _parse_node(raw: Dict[str, Any]):
             return StringTruncUtilityNode(**raw)
         if utype == "message":
             return MessageUtilityNode(**raw)
+        if utype == "broadcast_message":
+            return BroadcastMessageUtilityNode(**raw)
         if utype == "len_from_list":
             return LenFromListUtilityNode(**raw)
         if utype == "random_item_from_list":
@@ -230,6 +240,14 @@ def _parse_node(raw: Dict[str, Any]):
             return SandboxGetInventoryUtilityNode(**raw)
         if utype == "sandbox_prompt_user_action":
             return SandboxPromptUserActionUtilityNode(**raw)
+        if utype == "sandbox_force_simulation_pause":
+            return SandboxForceSimulationPauseUtilityNode(**raw)
+        if utype == "sandbox_get_cell_items":
+            return SandboxGetCellItemsUtilityNode(**raw)
+        if utype == "sandbox_remove_item_at_cell":
+            return SandboxRemoveItemAtCellUtilityNode(**raw)
+        if utype == "sandbox_spawn_item_at_cell":
+            return SandboxSpawnItemAtCellUtilityNode(**raw)
         if utype == "int_to_string":
             return IntToStringUtilityNode(**raw)
         if utype == "list_item_by_index":

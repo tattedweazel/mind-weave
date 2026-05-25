@@ -28,6 +28,21 @@ def graph_requires_simulation_user_action(graph_nodes: list[dict[str, Any]]) -> 
     return prompt_user_action_node_id_from_graph(graph_nodes) is not None
 
 
+def workflow_graph_node_labels(graph: dict[str, Any] | None) -> dict[str, str]:
+    """Map node id to display label for run log rendering."""
+    nodes = (graph or {}).get("nodes") or []
+    labels: dict[str, str] = {}
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        node_id = node.get("id")
+        if not isinstance(node_id, str) or not node_id.strip():
+            continue
+        label = node.get("label") or (node.get("data") or {}).get("label") or node_id
+        labels[node_id] = str(label)
+    return labels
+
+
 def decision_intent_from_workflow_result(
     result: WorkflowRunResult,
     graph_nodes: list[dict[str, Any]],

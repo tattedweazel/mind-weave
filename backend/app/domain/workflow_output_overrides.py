@@ -59,6 +59,7 @@ from app.domain.schemas import (
     LteControlNode,
     MaxIntsUtilityNode,
     MessageUtilityNode,
+    BroadcastMessageUtilityNode,
     MinIntsUtilityNode,
     ModuloIntsUtilityNode,
     MultimodalLLMCallSkillNode,
@@ -367,6 +368,7 @@ def coerce_raw_to_node_output(
             PrependTextUtilityNode,
             StringTruncUtilityNode,
             MessageUtilityNode,
+            BroadcastMessageUtilityNode,
         ),
     ):
         if not isinstance(raw, str):

@@ -399,6 +399,50 @@ describe('PhaserSandboxAdapter', () => {
         adapter.destroy();
     });
 
+    it('draws pickables above fixtures when stacked on the same cell', () => {
+        const adapter = new PhaserSandboxAdapter();
+        adapter.mount(sizedContainer(640, 480));
+        adapter.setState(
+            {
+                ...baseState,
+                world: {
+                    grid: { width: 16, height: 16 },
+                    items: [
+                        {
+                            id: 'pick-1',
+                            definition_kind: 'item',
+                            role: 'pickable',
+                            definition_id: 'item-def-1',
+                            color: '#FFFFFF',
+                            position: { x: 0, y: 0 },
+                        },
+                        {
+                            id: 'fx-1',
+                            type: 'fixture',
+                            definition_kind: 'fixture',
+                            role: 'solid',
+                            definition_id: 'fx-def-1',
+                            position: { x: 0, y: 0 },
+                        },
+                    ],
+                },
+            },
+            {
+                renderCatalog: {
+                    itemDefinitions: [{ id: 'item-def-1', shape: 'circle', default_color: '#FFFFFF' }],
+                },
+            },
+        );
+
+        const graphics = lastMountedScene!.add.graphics.mock.results[0]?.value as ReturnType<typeof mockGraphics>;
+        expect(graphics.fillCircle).toHaveBeenCalled();
+        const fixtureRectOrder = graphics.fillRect.mock.invocationCallOrder.at(-1)!;
+        const pickableCircleOrder = graphics.fillCircle.mock.invocationCallOrder[0]!;
+        expect(pickableCircleOrder).toBeGreaterThan(fixtureRectOrder);
+
+        adapter.destroy();
+    });
+
     it('draws grid and fits view when setState runs before Phaser create()', () => {
         deferSceneCreate = true;
         const adapter = new PhaserSandboxAdapter();

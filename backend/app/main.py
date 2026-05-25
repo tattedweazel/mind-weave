@@ -50,6 +50,7 @@ from app.api.v1 import (
     palettes,
     personas,
     sandbox,
+    sandbox_definitions,
     structures,
     stt,
     system_palettes,
@@ -57,6 +58,7 @@ from app.api.v1 import (
     url_snapshot_artifacts,
     voice_samples,
     workflow_run_audio_file_input,
+    workflow_run_broadcast_ack,
     workflow_run_events,
     workflow_run_transcribe,
     workflow_run_transcribe_file,
@@ -82,6 +84,7 @@ from app.domain.sandbox.empty_board_seed import ensure_empty_sandbox_board
 from app.domain.sandbox.starter_workflow_seed import ensure_starter_sandbox_workflow
 from app.domain.services.palette_service import PaletteService
 from app.domain.services.persona_service import PersonaService
+from app.domain.services.sandbox_definition_service import seed_default_definitions
 from app.domain.services.system_palette_service import SystemPaletteService
 from app.domain.services.transcription_job_poller import transcription_job_poller
 from app.persistence.db import engine
@@ -155,6 +158,7 @@ async def lifespan(app: FastAPI):
         SystemPaletteService(session).initialize_builtin_system_palettes()
         ensure_starter_sandbox_workflow(session)
         ensure_empty_sandbox_board(session)
+        seed_default_definitions(session)
 
         if settings.BOOTSTRAP_DEFAULT_ADMIN and settings.APP_ENV == "local" and not session.exec(select(User)).first():
             session.add(
@@ -251,6 +255,7 @@ app.include_router(audio_file_artifacts.router, prefix=f"{api_v1}/audio-file-art
 app.include_router(url_snapshot_artifacts.router, prefix=f"{api_v1}", tags=["url-snapshot-artifacts"])
 app.include_router(voice_samples.router, prefix=f"{api_v1}/voice-samples", tags=["voice-samples"])
 app.include_router(sandbox.router, prefix=f"{api_v1}", tags=["sandbox"])
+app.include_router(sandbox_definitions.router, prefix=f"{api_v1}", tags=["sandbox-definitions"])
 app.include_router(companion_api.router, prefix=api_v1)
 app.include_router(workspaces_api.router, prefix=api_v1)
 app.include_router(
@@ -258,6 +263,7 @@ app.include_router(
 )
 app.include_router(workflow_execution_limits_router.router, prefix=api_v1)
 app.include_router(workflow_run_transcribe.router, prefix=f"{api_v1}", tags=["workflow-runs"])
+app.include_router(workflow_run_broadcast_ack.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(workflow_run_audio_file_input.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(workflow_run_transcribe_file.router, prefix=f"{api_v1}", tags=["workflow-runs"])
 app.include_router(workflow_run_events.router, prefix=f"{api_v1}", tags=["workflow-runs"])

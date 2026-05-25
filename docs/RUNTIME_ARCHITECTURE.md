@@ -16,7 +16,7 @@ Mind Weave ships as a **React + Vite** single-page app that talks to a **FastAPI
 - **Graph rendering** — Nodes, edges, palette colors resolved via the API (**`GET /api/v1/palettes/resolve`**).
 - **SSE subscriptions** — **`GET /api/v1/workflow-runs/{run_id}/events`** for live Build runs; reconnect/replay of persisted events.
 - **Replay / explorer UI** — Read-only graph + per-step logs for completed runs (**Build → Replays**).
-- **Other surfaces** — Workspace (companion chat), Sandbox (tick simulation), configure modals (Personas, Documents, Palettes, …), per [MIND_WEAVE_ONE_PAGE.md](MIND_WEAVE_ONE_PAGE.md).
+- **Other surfaces** — Workspace (companion chat), Sandbox (tick simulation with ephemeral nested workflow run logs on each tick — not persisted `workflow_runs`), configure modals (Personas, Documents, Palettes, …), per [MIND_WEAVE_ONE_PAGE.md](MIND_WEAVE_ONE_PAGE.md).
 
 ### Backend API layer
 

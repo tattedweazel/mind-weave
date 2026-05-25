@@ -18,6 +18,8 @@ from app.domain.schemas import (
     SandboxPickUpItemUtilityNode,
     SandboxPlaceItemUtilityNode,
     SandboxPromptUserActionUtilityNode,
+    SandboxRemoveItemAtCellUtilityNode,
+    SandboxSpawnItemAtCellUtilityNode,
     SandboxTickPrimitiveNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -36,7 +38,18 @@ def _executor_mod():
     return executor_mod
 
 
+_SANDBOX_TICK_CONTEXT_ERROR = (
+    "{label}: no tick or fixture context — wire sandbox_tick (Start output) or a tick-shaped dictionary, "
+    "or run from Sandbox / fixture workflow"
+)
+
+
 class SandboxNodeResolverMixin:
+    def _sandbox_item_definition_probe_maps(self: WorkflowExecutorResolverMixin):
+        from app.domain.services.sandbox_definition_service import item_definition_probe_maps
+
+        return item_definition_probe_maps(self.session, self.user_id)
+
     def _resolve_sandbox_tick_primitive_node(
         self: WorkflowExecutorResolverMixin,
         node: SandboxTickPrimitiveNode,
@@ -76,17 +89,45 @@ class SandboxNodeResolverMixin:
         self: WorkflowExecutorResolverMixin,
         node: SandboxGetPositionUtilityNode,
         upstream: list[NodeOutputUnion],
+        input_overrides: Dict[str, Any],
     ) -> Dict[str, Any]:
-        from app.domain.sandbox.query import creature_position_from_tick_dict
+        from app.domain.sandbox.query import (
+            creature_position_from_tick_dict,
+            fixture_cell_probe_from_fixture_dict,
+        )
 
-        raw = _executor_mod()._sandbox_tick_dict_from_upstream(upstream)
+        definition_maps = self._sandbox_item_definition_probe_maps()
+        fx_raw = _executor_mod()._resolve_sandbox_fixture_dict(upstream, input_overrides)
+        if fx_raw is not None:
+            try:
+                cell = fixture_cell_probe_from_fixture_dict(
+                    fx_raw,
+                    definition_labels=definition_maps.labels,
+                    definition_defaults=definition_maps.defaults,
+                )
+            except Exception as exc:
+                return _executor_mod()._error_with_resolved_inputs(
+                    f"sandbox_get_position: {exc}",
+                    {"sandbox_fixture": fx_raw},
+                )
+            return {
+                "status": "ok",
+                "output": DictionaryNodeOutput(node_id=node.id, data=cell),
+                "details": {"resolved_inputs": cell},
+            }
+
+        raw = _executor_mod()._resolve_sandbox_tick_dict(upstream, input_overrides)
         if raw is None:
             return _executor_mod()._error_with_resolved_inputs(
-                "sandbox_get_position: connect sandbox_tick (Start output) or a tick-shaped dictionary",
+                _SANDBOX_TICK_CONTEXT_ERROR.format(label="sandbox_get_position"),
                 {"sandbox_tick": None},
             )
         try:
-            cell = creature_position_from_tick_dict(raw)
+            cell = creature_position_from_tick_dict(
+                raw,
+                definition_labels=definition_maps.labels,
+                definition_defaults=definition_maps.defaults,
+            )
         except Exception as exc:
             return _executor_mod()._error_with_resolved_inputs(
                 f"sandbox_get_position: {exc}",
@@ -102,13 +143,14 @@ class SandboxNodeResolverMixin:
         self: WorkflowExecutorResolverMixin,
         node: SandboxGetFacingUtilityNode,
         upstream: list[NodeOutputUnion],
+        input_overrides: Dict[str, Any],
     ) -> Dict[str, Any]:
         from app.domain.sandbox.query import creature_facing_from_tick_dict
 
-        raw = _executor_mod()._sandbox_tick_dict_from_upstream(upstream)
+        raw = _executor_mod()._resolve_sandbox_tick_dict(upstream, input_overrides)
         if raw is None:
             return _executor_mod()._error_with_resolved_inputs(
-                "sandbox_get_facing: connect sandbox_tick (Start output) or a tick-shaped dictionary",
+                _SANDBOX_TICK_CONTEXT_ERROR.format(label="sandbox_get_facing"),
                 {"sandbox_tick": None},
             )
         try:
@@ -128,17 +170,23 @@ class SandboxNodeResolverMixin:
         self: WorkflowExecutorResolverMixin,
         node: SandboxGetNearbyUtilityNode,
         upstream: list[NodeOutputUnion],
+        input_overrides: Dict[str, Any],
     ) -> Dict[str, Any]:
         from app.domain.sandbox.query import nearby_cells_from_tick_dict
 
-        raw = _executor_mod()._sandbox_tick_dict_from_upstream(upstream)
+        raw = _executor_mod()._resolve_sandbox_tick_dict(upstream, input_overrides)
         if raw is None:
             return _executor_mod()._error_with_resolved_inputs(
-                "sandbox_get_nearby: connect sandbox_tick (Start output) or a tick-shaped dictionary",
+                _SANDBOX_TICK_CONTEXT_ERROR.format(label="sandbox_get_nearby"),
                 {"sandbox_tick": None},
             )
         try:
-            cells = nearby_cells_from_tick_dict(raw)
+            definition_maps = self._sandbox_item_definition_probe_maps()
+            cells = nearby_cells_from_tick_dict(
+                raw,
+                definition_labels=definition_maps.labels,
+                definition_defaults=definition_maps.defaults,
+            )
         except Exception as exc:
             return _executor_mod()._error_with_resolved_inputs(
                 f"sandbox_get_nearby: {exc}",
@@ -282,13 +330,14 @@ class SandboxNodeResolverMixin:
         self: WorkflowExecutorResolverMixin,
         node: SandboxGetInventoryUtilityNode,
         upstream: list[NodeOutputUnion],
+        input_overrides: Dict[str, Any],
     ) -> Dict[str, Any]:
         from app.domain.sandbox.query import inventory_from_tick_dict
 
-        raw = _executor_mod()._sandbox_tick_dict_from_upstream(upstream)
+        raw = _executor_mod()._resolve_sandbox_tick_dict(upstream, input_overrides)
         if raw is None:
             return _executor_mod()._error_with_resolved_inputs(
-                "sandbox_get_inventory: connect sandbox_tick (Start output) or a tick-shaped dictionary",
+                _SANDBOX_TICK_CONTEXT_ERROR.format(label="sandbox_get_inventory"),
                 {"sandbox_tick": None},
             )
         try:
@@ -371,4 +420,189 @@ class SandboxNodeResolverMixin:
             "status": "ok",
             "output": DictionaryNodeOutput(node_id=node.id, data=data),
             "details": details,
+        }
+
+    def _resolve_sandbox_region_primitive_node(
+        self: WorkflowExecutorResolverMixin,
+        node: Any,
+        upstream: list[NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        from app.domain.schemas.sandbox import RegionTriggerInput
+
+        raw = input_overrides.get("sandbox_region")
+        if not isinstance(raw, dict):
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_region primitive: no region context override",
+                {"sandbox_region": None},
+            )
+        try:
+            region_in = RegionTriggerInput.model_validate(raw)
+        except Exception as exc:
+            return _executor_mod()._error_with_resolved_inputs(
+                f"sandbox_region primitive: invalid input: {exc}",
+                {"sandbox_region": raw},
+            )
+        data = region_in.model_dump(mode="json")
+        return {
+            "status": "ok",
+            "output": DictionaryNodeOutput(node_id=node.id, data=data),
+            "details": {"resolved_inputs": {"sandbox_region": data}},
+        }
+
+    def _resolve_sandbox_force_simulation_pause_node(
+        self: WorkflowExecutorResolverMixin,
+        node: Any,
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        effects = input_overrides.get("_simulation_effects")
+        if effects is None:
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_force_simulation_pause is only available during sandbox simulation ticks",
+                {"_simulation_effects": None},
+            )
+        effects.force_pause = True
+        data = {"pause": True}
+        return {
+            "status": "ok",
+            "output": DictionaryNodeOutput(node_id=node.id, data=data),
+            "details": {"resolved_inputs": data},
+        }
+
+    def _resolve_sandbox_get_cell_items_node(
+        self: WorkflowExecutorResolverMixin,
+        node: Any,
+        upstream: list[NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        raw = input_overrides.get("sandbox_fixture")
+        if not isinstance(raw, dict):
+            raw_ov = _executor_mod()._sandbox_fixture_dict_from_upstream(upstream)
+            raw = raw_ov
+        if not isinstance(raw, dict):
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_get_cell_items: connect sandbox_fixture context",
+                {"sandbox_fixture": None},
+            )
+        items = raw.get("cell_items") or []
+        return {
+            "status": "ok",
+            "output": ListNodeOutput(node_id=node.id, data=list(items)),
+            "details": {"resolved_inputs": {"cell_items": items}},
+        }
+
+    def _resolve_sandbox_remove_item_at_cell_node(
+        self: WorkflowExecutorResolverMixin,
+        node: SandboxRemoveItemAtCellUtilityNode,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        raw_inputs = (node.data or {}).get("required_inputs") or [
+            {"key": "item_id", "type": "string", "value": None},
+        ]
+        resolved = _resolve_inputs_by_target_handle(
+            node.id,
+            ["item_id"],
+            edges,
+            outputs,
+            input_overrides,
+            raw_inputs,
+        )
+        item_id = resolved.get("item_id")
+        if not isinstance(item_id, str) or not item_id.strip():
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_remove_item_at_cell: item_id required",
+                resolved,
+            )
+        mutations = input_overrides.get("_fixture_mutations")
+        removed = False
+        if mutations is not None:
+            removed = mutations.remove_item_by_id(item_id.strip())
+        return {
+            "status": "ok",
+            "output": DictionaryNodeOutput(
+                node_id=node.id, data={"removed": removed, "item_id": item_id.strip()}
+            ),
+            "details": {"resolved_inputs": resolved},
+        }
+
+    def _resolve_sandbox_spawn_item_at_cell_node(
+        self: WorkflowExecutorResolverMixin,
+        node: SandboxSpawnItemAtCellUtilityNode,
+        edges: List[GraphEdge],
+        outputs: Dict[str, NodeOutputUnion],
+        input_overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        import uuid as _uuid
+
+        from app.domain.schemas.sandbox import GridCell, SandboxItem
+        from app.domain.schemas.sandbox_definitions import BUILTIN_FOOD_ID
+
+        raw_inputs = (node.data or {}).get("required_inputs") or [
+            {"key": "definition_id", "type": "string", "value": None},
+            {"key": "target", "type": "string", "value": "self"},
+        ]
+        resolved = _resolve_inputs_by_target_handle(
+            node.id,
+            ["definition_id", "target", "energy", "color"],
+            edges,
+            outputs,
+            input_overrides,
+            raw_inputs,
+        )
+        raw_fx = input_overrides.get("sandbox_fixture")
+        if not isinstance(raw_fx, dict):
+            return _executor_mod()._error_with_resolved_inputs(
+                "sandbox_spawn_item_at_cell: sandbox_fixture override required",
+                resolved,
+            )
+        fixture_pos = (raw_fx.get("fixture") or {}).get("position") or {}
+        try:
+            base = GridCell.model_validate(fixture_pos)
+        except Exception as exc:
+            return _executor_mod()._error_with_resolved_inputs(
+                f"sandbox_spawn_item_at_cell: invalid fixture position: {exc}",
+                resolved,
+            )
+        target = str(resolved.get("target") or "self").strip()
+        definition_id = str(resolved.get("definition_id") or BUILTIN_FOOD_ID)
+        energy_raw = resolved.get("energy")
+        color_raw = resolved.get("color")
+        spawn_cell = base
+        if target != "self":
+            parts = target.replace(",", " ").split()
+            if len(parts) >= 2:
+                try:
+                    dx, dy = int(parts[0]), int(parts[1])
+                    spawn_cell = GridCell(x=base.x + dx, y=base.y + dy)
+                except ValueError:
+                    pass
+        energy_val = 48
+        if energy_raw is not None and str(energy_raw).strip() != "":
+            try:
+                energy_val = int(energy_raw)
+            except (TypeError, ValueError):
+                energy_val = 48
+        color_val = str(color_raw).strip() if color_raw is not None and str(color_raw).strip() else None
+        new_item = SandboxItem(
+            id=str(_uuid.uuid4()),
+            type="food" if not color_val else "ball",
+            definition_id=definition_id,
+            definition_kind="item",
+            role="pickable",
+            position=spawn_cell,
+            energy=energy_val,
+            color=color_val,
+        )
+        mutations = input_overrides.get("_fixture_mutations")
+        if mutations is not None:
+            mutations.spawn_item(new_item)
+        return {
+            "status": "ok",
+            "output": DictionaryNodeOutput(
+                node_id=node.id,
+                data={"spawned_id": new_item.id, "position": spawn_cell.model_dump()},
+            ),
+            "details": {"resolved_inputs": resolved},
         }

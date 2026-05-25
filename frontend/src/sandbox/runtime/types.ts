@@ -1,7 +1,9 @@
 import type { SandboxSandboxStateJson } from '../../domain/sandbox/types';
+import type { SandboxItemRenderCatalog } from '../sandboxItemRender';
 
 export interface SandboxSetStateOptions {
     selectedCreatureId?: string | null;
+    renderCatalog?: SandboxItemRenderCatalog;
 }
 
 /** Renderer + input only; never owns simulation truth (see docs/SANDBOX.md). */

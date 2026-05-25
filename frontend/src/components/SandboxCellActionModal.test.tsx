@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { WorkflowDefinitionListItem, WorkflowProject } from '../api/types';
+import type { CreatureDefinitionRead, ItemDefinitionRead, TerrainDefinitionRead, WorkflowDefinitionListItem, WorkflowProject } from '../api/types';
 import type { CellOccupants } from '../sandbox/sandboxCellOccupants';
 import { projectsWithSandboxCreatureBrains } from '../domain/workflowProjectMembership';
 import { SandboxCellActionModal } from './SandboxCellActionModal';
@@ -156,6 +156,68 @@ function renderModal(
     );
 }
 
+const creatureDefinitions: CreatureDefinitionRead[] = [
+    {
+        id: 'creature-def-1',
+        name: 'Scout',
+        label: 'Scout',
+        workflow_id: 'wf-alpha',
+        default_color: '#22C55E',
+        default_facing: 'E',
+        default_inventory: [],
+        is_system: false,
+    },
+];
+
+const userItemDefinition: ItemDefinitionRead = {
+    id: 'item-user-1',
+    name: 'custom_snack',
+    label: 'Custom Snack',
+    default_energy: 32,
+    default_color: '#FF6B6B',
+    shape: 'circle',
+    pickable: true,
+    is_system: false,
+};
+
+const systemItemDefinition: ItemDefinitionRead = {
+    id: 'item-system-1',
+    name: 'builtin-food',
+    label: 'Food',
+    default_energy: 48,
+    default_color: null,
+    shape: 'circle',
+    pickable: true,
+    is_system: true,
+};
+
+const userTerrainDefinition: TerrainDefinitionRead = {
+    id: 'terrain-user-1',
+    name: 'custom_wall',
+    label: 'Custom Wall',
+    default_color: '#64748B',
+    shape: 'rect',
+    is_system: false,
+};
+
+const systemTerrainDefinition: TerrainDefinitionRead = {
+    id: 'terrain-system-1',
+    name: 'builtin-wall',
+    label: 'Wall',
+    default_color: '#64748B',
+    shape: 'rect',
+    is_system: true,
+};
+
+async function openPlaceItemMenu(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /^Place item/ }));
+}
+
+async function openBuiltInsMenu(user: ReturnType<typeof userEvent.setup>) {
+    await openPlaceItemMenu(user);
+    await user.click(screen.getByRole('button', { name: /^Built-ins/ }));
+}
+
 describe('SandboxCellActionModal', () => {
     it('shows place actions on empty cell', () => {
         renderModal();
@@ -206,6 +268,73 @@ describe('SandboxCellActionModal', () => {
         expect(onComplete).toHaveBeenCalledWith({
             type: 'remove_item',
             cell: { x: 2, y: 3 },
+            item_id: 'w1',
+        });
+    });
+
+    it('shows place_item and remove_fixture on fixture-only cell', () => {
+        renderModal({
+            occupants: {
+                items: [
+                    {
+                        id: 'fx1',
+                        type: 'fixture',
+                        definition_id: 'def-1',
+                        definition_kind: 'fixture',
+                        role: 'solid',
+                        position: { x: 2, y: 3 },
+                    },
+                ],
+                creatures: [],
+            },
+        });
+
+        expect(screen.getByRole('button', { name: /^Place item/ })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^Remove fixture/ })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: /^Remove item/ })).toBeNull();
+    });
+
+    it('opens remove picker when multiple removable items share a cell', async () => {
+        const user = userEvent.setup();
+        const onComplete = vi.fn();
+        renderModal({
+            occupants: {
+                items: [
+                    { id: 'f1', type: 'food', position: { x: 2, y: 3 }, energy: 25 },
+                    { id: 'b1', type: 'ball', position: { x: 2, y: 3 }, color: '#AABBCC' },
+                ],
+                creatures: [],
+            },
+            onComplete,
+        });
+
+        await user.click(screen.getByRole('button', { name: /^Remove item/ }));
+        expect(screen.getByRole('button', { name: /^Food \(25\)$/ })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^Ball \(#AABBCC\)$/ })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^Remove all/ })).toBeTruthy();
+        expect(onComplete).not.toHaveBeenCalled();
+    });
+
+    it('completes targeted remove_item from picker', async () => {
+        const user = userEvent.setup();
+        const onComplete = vi.fn();
+        renderModal({
+            occupants: {
+                items: [
+                    { id: 'f1', type: 'food', position: { x: 2, y: 3 }, energy: 25 },
+                    { id: 'b1', type: 'ball', position: { x: 2, y: 3 }, color: '#AABBCC' },
+                ],
+                creatures: [],
+            },
+            onComplete,
+        });
+
+        await user.click(screen.getByRole('button', { name: /^Remove item/ }));
+        await user.click(screen.getByRole('button', { name: /^Food \(25\)$/ }));
+        expect(onComplete).toHaveBeenCalledWith({
+            type: 'remove_item',
+            cell: { x: 2, y: 3 },
+            item_id: 'f1',
         });
     });
 
@@ -218,7 +347,7 @@ describe('SandboxCellActionModal', () => {
             sandboxFavoriteColors: ['#00FF00'],
         });
 
-        await user.click(screen.getByRole('button', { name: /^Place item/ }));
+        await openBuiltInsMenu(user);
         await user.click(screen.getByRole('button', { name: /^Ball/ }));
         await user.click(screen.getByRole('button', { name: /Place ball \(#00FF00\)/ }));
         expect(onComplete).toHaveBeenCalledWith({
@@ -234,12 +363,89 @@ describe('SandboxCellActionModal', () => {
         const onComplete = vi.fn();
         renderModal({ cell: { x: 1, y: 1 }, onComplete });
 
-        await user.click(screen.getByRole('button', { name: /^Place item/ }));
+        await openBuiltInsMenu(user);
         await user.click(screen.getByRole('button', { name: /^Food/ }));
         expect(onComplete).toHaveBeenCalledWith({
             type: 'place_item',
             cell: { x: 1, y: 1 },
             item_type: 'food',
+        });
+    });
+
+    describe('place item source menu', () => {
+        it('shows Item, Terrain, and Built-ins in order', async () => {
+            const user = userEvent.setup();
+            renderModal();
+
+            await openPlaceItemMenu(user);
+
+            expect(screen.getByText('Place item')).toBeTruthy();
+            const labels = screen
+                .getAllByRole('button')
+                .map(btn => btn.querySelector('.text-sm.font-medium')?.textContent)
+                .filter((label): label is string => label === 'Item' || label === 'Terrain' || label === 'Built-ins');
+            expect(labels).toEqual(['Item', 'Terrain', 'Built-ins']);
+        });
+
+        it('lists only user item definitions and excludes seeded built-ins', async () => {
+            const user = userEvent.setup();
+            renderModal({
+                itemDefinitions: [userItemDefinition, systemItemDefinition],
+            });
+
+            await openPlaceItemMenu(user);
+            await user.click(screen.getByRole('button', { name: /^Item/ }));
+
+            expect(screen.getByRole('button', { name: /custom_snack/ })).toBeTruthy();
+            expect(screen.queryByRole('button', { name: /builtin-food/ })).toBeNull();
+        });
+
+        it('lists only user terrain definitions and excludes seeded built-ins', async () => {
+            const user = userEvent.setup();
+            renderModal({
+                terrainDefinitions: [userTerrainDefinition, systemTerrainDefinition],
+            });
+
+            await openPlaceItemMenu(user);
+            await user.click(screen.getByRole('button', { name: /^Terrain/ }));
+
+            expect(screen.getByRole('button', { name: /custom_wall/ })).toBeTruthy();
+            expect(screen.queryByRole('button', { name: /builtin-wall/ })).toBeNull();
+        });
+
+        it('shows empty item list when only system definitions exist', async () => {
+            const user = userEvent.setup();
+            renderModal({
+                itemDefinitions: [systemItemDefinition],
+            });
+
+            await openPlaceItemMenu(user);
+            await user.click(screen.getByRole('button', { name: /^Item/ }));
+
+            expect(screen.getByText('No item definitions available.')).toBeTruthy();
+            expect(screen.queryByRole('button', { name: /builtin-food/ })).toBeNull();
+        });
+
+        it('completes place_item from user item definition', async () => {
+            const user = userEvent.setup();
+            const onComplete = vi.fn();
+            renderModal({
+                cell: { x: 2, y: 3 },
+                onComplete,
+                itemDefinitions: [userItemDefinition],
+            });
+
+            await openPlaceItemMenu(user);
+            await user.click(screen.getByRole('button', { name: /^Item/ }));
+            await user.click(screen.getByRole('button', { name: /custom_snack/ }));
+
+            expect(onComplete).toHaveBeenCalledWith({
+                type: 'place_item',
+                cell: { x: 2, y: 3 },
+                definition_id: 'item-user-1',
+                color: '#FF6B6B',
+                energy: 32,
+            });
         });
     });
 
@@ -288,6 +494,53 @@ describe('SandboxCellActionModal', () => {
         renderModal({ occupants: itemOccupants, canInspect: false, onInspect: vi.fn() });
 
         expect(screen.queryByRole('button', { name: /^Inspect/ })).toBeNull();
+    });
+
+    describe('place creature from definition', () => {
+        it('shows creature definition picker when definitions exist', async () => {
+            const user = userEvent.setup();
+            renderModal({ creatureDefinitions });
+
+            await user.click(screen.getByRole('button', { name: /^Place creature/ }));
+
+            expect(screen.getByText('Creature definition')).toBeTruthy();
+            expect(screen.getByRole('button', { name: /Scout/ })).toBeTruthy();
+            expect(screen.queryByText('Project')).toBeNull();
+        });
+
+        it('completes place_creature from selected definition', async () => {
+            const user = userEvent.setup();
+            const onComplete = vi.fn();
+            renderModal({
+                cell: { x: 3, y: 4 },
+                onComplete,
+                creatureDefinitions,
+            });
+
+            await user.click(screen.getByRole('button', { name: /^Place creature/ }));
+            await user.click(screen.getByRole('button', { name: /Scout/ }));
+
+            expect(onComplete).toHaveBeenCalledWith({
+                type: 'place_creature',
+                cell: { x: 3, y: 4 },
+                workflow_id: 'wf-alpha',
+                name: 'Scout',
+                facing: 'E',
+                color: '#22C55E',
+                creature_definition_id: 'creature-def-1',
+            });
+        });
+
+        it('navigates back from creature definition picker to actions', async () => {
+            const user = userEvent.setup();
+            renderModal({ creatureDefinitions });
+
+            await user.click(screen.getByRole('button', { name: /^Place creature/ }));
+            expect(screen.getByText('Creature definition')).toBeTruthy();
+
+            await user.click(screen.getByRole('button', { name: 'Back' }));
+            expect(screen.getByRole('button', { name: /^Place creature/ })).toBeTruthy();
+        });
     });
 
     describe('place creature project → workflow picker', () => {

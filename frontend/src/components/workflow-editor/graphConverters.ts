@@ -9,6 +9,7 @@ import type {
     WorkflowDefinitionListItemHydrated,
 } from '../../api/types';
 import { resolveWorkflowPaletteColor } from '../../domain/paletteDefaults';
+import { DEFAULT_FOR_LOOP_END_EXPORTS } from './forLoopEndPairing';
 import { reactFlowTypeForAppNode } from './stepKindRegistry';
 import { normalizeAnnotationTextAlign } from './annotationTextAlign';
 
@@ -550,9 +551,48 @@ export function appNodeToFlow(n: AppGraphNode): Node {
             n.utility_type === 'sandbox_get_facing' ||
             n.utility_type === 'sandbox_get_nearby' ||
             n.utility_type === 'sandbox_get_inventory' ||
-            n.utility_type === 'sandbox_prompt_user_action')
+            n.utility_type === 'sandbox_get_cell_items' ||
+            n.utility_type === 'sandbox_prompt_user_action' ||
+            n.utility_type === 'sandbox_force_simulation_pause')
     ) {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
+    }
+    if (n.kind === 'utility' && n.utility_type === 'sandbox_remove_item_at_cell') {
+        const d = n.data as any;
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'item_id')
+            : [{ key: 'item_id', type: 'string' as const, value: null }];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'item_id')) {
+            requiredInputs.push({ key: 'item_id', type: 'string' as const, value: null });
+        }
+        return {
+            id: n.id,
+            type: reactFlowTypeForAppNode(n),
+            position: pos,
+            data: { label: n.label, required_inputs: requiredInputs },
+        };
+    }
+    if (n.kind === 'utility' && n.utility_type === 'sandbox_spawn_item_at_cell') {
+        const d = n.data as any;
+        const allowed = new Set(['definition_id', 'target', 'energy', 'color']);
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key && allowed.has(r.key))
+            : [
+                  { key: 'definition_id', type: 'string' as const, value: null },
+                  { key: 'target', type: 'string' as const, value: 'self' },
+              ];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'definition_id')) {
+            requiredInputs.unshift({ key: 'definition_id', type: 'string' as const, value: null });
+        }
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'target')) {
+            requiredInputs.push({ key: 'target', type: 'string' as const, value: 'self' });
+        }
+        return {
+            id: n.id,
+            type: reactFlowTypeForAppNode(n),
+            position: pos,
+            data: { label: n.label, required_inputs: requiredInputs },
+        };
     }
     if (n.kind === 'utility' && n.utility_type === 'sandbox_place_item') {
         const d = n.data as any;
@@ -932,19 +972,32 @@ export function appNodeToFlow(n: AppGraphNode): Node {
             data: { label: n.label, required_inputs: requiredInputs },
         };
     }
-    if (n.kind === 'utility' && n.utility_type === 'message') {
+    if (
+        n.kind === 'utility'
+        && (n.utility_type === 'message' || n.utility_type === 'broadcast_message')
+    ) {
         const d = n.data as any;
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'message')
-            : [{ key: 'message', type: 'string' as const, value: null }];
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'message' || r?.key === 'title')
+            : [
+                { key: 'message', type: 'any' as const, value: null },
+                { key: 'title', type: 'string' as const, value: null },
+            ];
         if (!requiredInputs.some((r: { key?: string }) => r?.key === 'message')) {
-            requiredInputs.push({ key: 'message', type: 'string' as const, value: null });
+            requiredInputs.push({ key: 'message', type: 'any' as const, value: null });
+        }
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'title')) {
+            requiredInputs.push({ key: 'title', type: 'string' as const, value: null });
         }
         return {
             id: n.id,
             type: reactFlowTypeForAppNode(n),
             position: pos,
-            data: { label: n.label, required_inputs: requiredInputs },
+            data: {
+                label: n.label,
+                required_inputs: requiredInputs,
+                severity: d?.severity ?? 'info',
+            },
         };
     }
     if (n.kind === 'control' && (n as any).control_type === 'basic_conditional') {
@@ -1106,7 +1159,7 @@ export function appNodeToFlow(n: AppGraphNode): Node {
     if (n.kind === 'control' && (n as any).control_type === 'for_loop_end') {
         const d = n.data as any;
         const exports =
-            Array.isArray(d?.exports) && d.exports.length > 0 ? d.exports : ['odds', 'evens'];
+            Array.isArray(d?.exports) && d.exports.length > 0 ? d.exports : [...DEFAULT_FOR_LOOP_END_EXPORTS];
         return {
             id: n.id,
             type: reactFlowTypeForAppNode(n),
@@ -1159,6 +1212,9 @@ export function appNodeToFlow(n: AppGraphNode): Node {
         };
     }
     if (n.kind === 'primitive' && n.primitive_type === 'sandbox_tick') {
+        return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
+    }
+    if (n.kind === 'primitive' && n.primitive_type === 'sandbox_region') {
         return { id: n.id, type: reactFlowTypeForAppNode(n), position: pos, data: { label: n.label } };
     }
     if (n.kind === 'primitive' && n.primitive_type === 'string') {
@@ -1346,6 +1402,7 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (isAnnotationFlowNodeType(src.type)) return 'any';
     if (src.type === 'stringPrimitive') return 'string';
     if (src.type === 'sandboxTickPrimitive') return 'dictionary';
+    if (src.type === 'sandboxRegionPrimitive') return 'dictionary';
     if (src.type === 'listPrimitive') return 'list';
     if (src.type === 'dictionaryPrimitive') return 'dictionary';
     if (src.type === 'booleanPrimitive') return 'boolean';
@@ -1357,7 +1414,7 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (src.type === 'gmailPrimitive') return 'gmail';
     if (src.type === 'sandboxGetPosition') return 'dictionary';
     if (src.type === 'sandboxGetFacing') return 'string';
-    if (src.type === 'sandboxGetNearby' || src.type === 'sandboxGetInventory') return 'list';
+    if (src.type === 'sandboxGetNearby' || src.type === 'sandboxGetInventory' || src.type === 'sandboxGetCellItems') return 'list';
     if (
         src.type === 'sandboxMoveForward' ||
         src.type === 'sandboxTurnLeft' ||
@@ -1365,7 +1422,10 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
         src.type === 'sandboxIdle' ||
         src.type === 'sandboxPickUpItem' ||
         src.type === 'sandboxPlaceItem' ||
-        src.type === 'sandboxPromptUserAction'
+        src.type === 'sandboxPromptUserAction' ||
+        src.type === 'sandboxForceSimulationPause' ||
+        src.type === 'sandboxRemoveItemAtCell' ||
+        src.type === 'sandboxSpawnItemAtCell'
     ) {
         return 'dictionary';
     }
@@ -1373,7 +1433,7 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
     if (src.type === 'stringToList') return 'list';
     if (src.type === 'prependText') return 'string';
     if (src.type === 'stringTrunc') return 'string';
-    if (src.type === 'messageUtility') return 'string';
+    if (src.type === 'broadcastMessage') return 'string';
     if (src.type === 'lenFromList') return 'int';
     if (src.type === 'randomItemFromList') return 'any';
     if (src.type === 'intToString') return 'string';
@@ -1495,7 +1555,8 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         (targetNode.type === 'sandboxGetPosition' ||
             targetNode.type === 'sandboxGetFacing' ||
             targetNode.type === 'sandboxGetNearby' ||
-            targetNode.type === 'sandboxGetInventory') &&
+            targetNode.type === 'sandboxGetInventory' ||
+            targetNode.type === 'sandboxGetCellItems') &&
         (targetHandle == null || targetHandle === '')
     ) {
         targetHandle = 'input';
@@ -1517,6 +1578,20 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
         (targetHandle == null || targetHandle === '')
     ) {
         targetHandle = 'item_type';
+    }
+    if (
+        targetNode &&
+        targetNode.type === 'sandboxRemoveItemAtCell' &&
+        (targetHandle == null || targetHandle === '')
+    ) {
+        targetHandle = 'item_id';
+    }
+    if (
+        targetNode &&
+        targetNode.type === 'sandboxSpawnItemAtCell' &&
+        (targetHandle == null || targetHandle === '')
+    ) {
+        targetHandle = 'definition_id';
     }
     if (targetNode && targetNode.type === 'dictionaryValueByKey' && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'dictionary';
@@ -1652,7 +1727,7 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
             targetHandle = 'trigger';
         } else {
             const ex = (targetNode.data as any)?.exports;
-            targetHandle = Array.isArray(ex) && ex.length > 0 ? ex[0] : 'odds';
+            targetHandle = Array.isArray(ex) && ex.length > 0 ? ex[0] : DEFAULT_FOR_LOOP_END_EXPORTS[0];
         }
     }
     if (targetNode && targetNode.type === 'basicConditional' && (targetHandle == null || targetHandle === '')) {
@@ -1712,18 +1787,18 @@ export function appEdgeToFlow(e: AppGraphEdge, idx: number, nodes: Node[], palet
     if (targetNode && targetNode.type === 'captureUrlSnapshot' && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'url';
     }
-    if (targetNode && targetNode.type === 'messageUtility' && (targetHandle == null || targetHandle === '')) {
+    if (targetNode && (targetNode.type === 'broadcastMessage' || targetNode.type === 'messageUtility') && (targetHandle == null || targetHandle === '')) {
         targetHandle = 'message';
     }
     const sourceNode = nodes.find(n => n.id === e.source);
-    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'googleDocsGetDocument', 'googleDocsParseDocument', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'messageUtility', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'googleDocsParseDocument', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxGetPosition', 'sandboxGetFacing', 'sandboxGetNearby', 'sandboxGetInventory', 'sandboxMoveForward', 'sandboxTurnLeft', 'sandboxTurnRight', 'sandboxIdle', 'sandboxPickUpItem', 'sandboxPlaceItem', 'workflowRef'];
+    const nodesWithTrigger = ['stop', 'simpleLLMCall', 'multimodalLLMCall', 'textToSpeech', 'transcribeAudio', 'audioFileInput', 'transcribeFile', 'gmailListMessages', 'calendarListEvents', 'googleDocsGetDocument', 'googleDocsParseDocument', 'fetchUrl', 'captureUrlSnapshot', 'listToString', 'stringToList', 'prependText', 'stringTrunc', 'broadcastMessage', 'lenFromList', 'randomItemFromList', 'intToString', 'listItemByIndex', 'dictionaryValueByKey', 'dictionarySetValueByKey', 'readDocumentProperty', 'loadDocument', 'upsertDocument', 'parseDocumentBody', 'htmlParseBasic', 'googleDocsParseDocument', 'writeObjectToDocumentBody', 'appendValueToDocument', 'validateAgainstStructure', 'addToList', 'addDays', 'addInts', 'subtractInts', 'multiplyInts', 'divideInts', 'moduloInts', 'minInts', 'maxInts', 'basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl', 'andControl', 'orControl', 'xorControl', 'notControl', 'tryCatchControl', 'forLoopControl', 'forLoopEndControl', 'stringPrimitive', 'sandboxTickPrimitive', 'listPrimitive', 'dictionaryPrimitive', 'booleanPrimitive', 'intPrimitive', 'dateTimePrimitive', 'structurePrimitive', 'documentPrimitive', 'imagePrimitive', 'gmailPrimitive', 'sandboxGetPosition', 'sandboxGetFacing', 'sandboxGetNearby', 'sandboxGetInventory', 'sandboxGetCellItems', 'sandboxMoveForward', 'sandboxTurnLeft', 'sandboxTurnRight', 'sandboxIdle', 'sandboxPickUpItem', 'sandboxPlaceItem', 'sandboxRemoveItemAtCell', 'sandboxSpawnItemAtCell', 'sandboxForceSimulationPause', 'workflowRef'];
     if (sourceNode && targetNode && nodesWithTrigger.includes(targetNode.type ?? '') && (targetHandle == null || targetHandle === '') &&
         ((['basicConditional', 'isControl', 'isEmptyControl', 'gtControl', 'ltControl', 'gteControl', 'lteControl', 'betweenControl'].includes(sourceNode.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) ||
             (sourceNode.type === 'tryCatchControl' && (sourceHandle === 'try' || sourceHandle === 'catch')))) {
         targetHandle = 'trigger';
     }
     if (sourceNode && (sourceHandle == null || sourceHandle === '') &&
-        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxGetPosition' || sourceNode.type === 'sandboxGetFacing' || sourceNode.type === 'sandboxGetNearby' || sourceNode.type === 'sandboxGetInventory' || sourceNode.type === 'sandboxMoveForward' || sourceNode.type === 'sandboxTurnLeft' || sourceNode.type === 'sandboxTurnRight' || sourceNode.type === 'sandboxIdle' || sourceNode.type === 'sandboxPickUpItem' || sourceNode.type === 'sandboxPlaceItem' || sourceNode.type === 'sandboxPromptUserAction' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
+        (sourceNode.type === 'stringPrimitive' || sourceNode.type === 'sandboxTickPrimitive' || sourceNode.type === 'listPrimitive' || sourceNode.type === 'dictionaryPrimitive' || sourceNode.type === 'booleanPrimitive' || sourceNode.type === 'intPrimitive' || sourceNode.type === 'dateTimePrimitive' || sourceNode.type === 'structurePrimitive' || sourceNode.type === 'documentPrimitive' || sourceNode.type === 'imagePrimitive' || sourceNode.type === 'gmailPrimitive' || sourceNode.type === 'sandboxGetPosition' || sourceNode.type === 'sandboxGetFacing' || sourceNode.type === 'sandboxGetNearby' || sourceNode.type === 'sandboxGetInventory' || sourceNode.type === 'sandboxGetCellItems' || sourceNode.type === 'sandboxMoveForward' || sourceNode.type === 'sandboxTurnLeft' || sourceNode.type === 'sandboxTurnRight' || sourceNode.type === 'sandboxIdle' || sourceNode.type === 'sandboxPickUpItem' || sourceNode.type === 'sandboxPlaceItem' || sourceNode.type === 'sandboxRemoveItemAtCell' || sourceNode.type === 'sandboxSpawnItemAtCell' || sourceNode.type === 'sandboxPromptUserAction' || sourceNode.type === 'sandboxForceSimulationPause' || sourceNode.type === 'listToString' || sourceNode.type === 'stringToList' || sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' || sourceNode.type === 'lenFromList' || sourceNode.type === 'randomItemFromList' || sourceNode.type === 'intToString' || sourceNode.type === 'listItemByIndex' || sourceNode.type === 'dictionaryValueByKey' || sourceNode.type === 'dictionarySetValueByKey' || sourceNode.type === 'readDocumentProperty' || sourceNode.type === 'loadDocument' || sourceNode.type === 'upsertDocument' || sourceNode.type === 'parseDocumentBody' || sourceNode.type === 'htmlParseBasic' || sourceNode.type === 'writeObjectToDocumentBody' || sourceNode.type === 'appendValueToDocument' || sourceNode.type === 'validateAgainstStructure' || sourceNode.type === 'addToList' || sourceNode.type === 'addDays' || sourceNode.type === 'addInts' || sourceNode.type === 'subtractInts' || sourceNode.type === 'multiplyInts' || sourceNode.type === 'divideInts' || sourceNode.type === 'moduloInts' || sourceNode.type === 'minInts' || sourceNode.type === 'maxInts' || sourceNode.type === 'andControl' || sourceNode.type === 'orControl' || sourceNode.type === 'xorControl' || sourceNode.type === 'notControl')) {
         sourceHandle = (sourceNode.type === 'prependText' || sourceNode.type === 'stringTrunc' ? 'output_string' : 'output');
     }
     if (sourceNode && sourceNode.type === 'forLoopControl' && (sourceHandle == null || sourceHandle === '')) {
@@ -1814,20 +1889,29 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             position: pos,
         };
     }
-    if (n.type === 'messageUtility') {
+    if (n.type === 'broadcastMessage' || n.type === 'messageUtility') {
         const d = n.data as any;
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
-            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'message')
-            : [{ key: 'message', type: 'string' as const, value: null }];
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'message' || r?.key === 'title')
+            : [
+                { key: 'message', type: 'any' as const, value: null },
+                { key: 'title', type: 'string' as const, value: null },
+            ];
         if (!requiredInputs.some((r: { key?: string }) => r?.key === 'message')) {
-            requiredInputs.push({ key: 'message', type: 'string' as const, value: null });
+            requiredInputs.push({ key: 'message', type: 'any' as const, value: null });
+        }
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'title')) {
+            requiredInputs.push({ key: 'title', type: 'string' as const, value: null });
         }
         return {
             id: n.id,
             kind: 'utility',
-            utility_type: 'message',
-            label: d?.label ?? 'Message',
-            data: { required_inputs: requiredInputs },
+            utility_type: 'broadcast_message',
+            label: d?.label ?? 'Broadcast Message',
+            data: {
+                required_inputs: requiredInputs,
+                severity: d?.severity ?? 'info',
+            },
             position: pos,
         };
     }
@@ -2015,7 +2099,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
     if (n.type === 'forLoopEndControl') {
         const d = n.data as any;
         const exports =
-            Array.isArray(d?.exports) && d.exports.length > 0 ? d.exports : ['odds', 'evens'];
+            Array.isArray(d?.exports) && d.exports.length > 0 ? d.exports : [...DEFAULT_FOR_LOOP_END_EXPORTS];
         return {
             id: n.id,
             kind: 'control',
@@ -2149,6 +2233,69 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             utility_type: 'sandbox_prompt_user_action',
             label: d?.label ?? 'Prompt for User Action',
             data: {},
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxForceSimulationPause') {
+        const d = n.data as any;
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_force_simulation_pause',
+            label: d?.label ?? 'Force Simulation Pause',
+            data: {},
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxGetCellItems') {
+        const d = n.data as any;
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_get_cell_items',
+            label: d?.label ?? 'Get cell items',
+            data: {},
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxRemoveItemAtCell') {
+        const d = n.data as any;
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'item_id')
+            : [{ key: 'item_id', type: 'string' as const, value: null }];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'item_id')) {
+            requiredInputs.push({ key: 'item_id', type: 'string' as const, value: null });
+        }
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_remove_item_at_cell',
+            label: d?.label ?? 'Remove item',
+            data: { required_inputs: requiredInputs },
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxSpawnItemAtCell') {
+        const d = n.data as any;
+        const allowed = new Set(['definition_id', 'target', 'energy', 'color']);
+        const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
+            ? d.required_inputs.filter((r: { key?: string }) => r?.key && allowed.has(r.key))
+            : [
+                  { key: 'definition_id', type: 'string' as const, value: null },
+                  { key: 'target', type: 'string' as const, value: 'self' },
+              ];
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'definition_id')) {
+            requiredInputs.unshift({ key: 'definition_id', type: 'string' as const, value: null });
+        }
+        if (!requiredInputs.some((r: { key?: string }) => r?.key === 'target')) {
+            requiredInputs.push({ key: 'target', type: 'string' as const, value: 'self' });
+        }
+        return {
+            id: n.id,
+            kind: 'utility',
+            utility_type: 'sandbox_spawn_item_at_cell',
+            label: d?.label ?? 'Spawn item',
+            data: { required_inputs: requiredInputs },
             position: pos,
         };
     }
@@ -2962,6 +3109,17 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             kind: 'primitive',
             primitive_type: 'sandbox_tick',
             label: d?.label ?? 'Tick input',
+            data: {},
+            position: pos,
+        };
+    }
+    if (n.type === 'sandboxRegionPrimitive') {
+        const d = n.data as any;
+        return {
+            id: n.id,
+            kind: 'primitive',
+            primitive_type: 'sandbox_region',
+            label: d?.label ?? 'Region trigger input',
             data: {},
             position: pos,
         };

@@ -2,21 +2,30 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from app.domain.schemas.sandbox import (
     BALL_ITEM_TYPE,
     CreatureState,
     DecisionIntent,
     Facing,
+    FIXTURE_ITEM_TYPE,
     GridCell,
     NearbyCell,
     NearbyCellKind,
     PlaceItemFilterType,
     REGION_ITEM_TYPE,
     SandboxTickInput,
-    SOLID_ITEM_TYPES,
     WorldState,
+)
+from app.domain.sandbox.item_helpers import (
+    ItemDefinitionDefaults,
+    cell_pickables_probe_summary,
+    is_region_item,
+    is_solid_item,
+    items_at_cell,
+    region_at_cell,
+    resolved_item_type,
 )
 
 # Clockwise ring starting at forward when facing North (N, NE, E, SE, S, SW, W, NW).
@@ -38,33 +47,111 @@ def parse_tick(raw: dict[str, Any]) -> SandboxTickInput:
     return SandboxTickInput.model_validate(raw)
 
 
-def creature_position_from_tick_dict(raw: dict[str, Any]) -> dict[str, Any]:
+def tick_dict_from_fixture_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Build a ``SandboxTickInput``-compatible dict from ``FixtureInteractionInput``."""
+    from app.domain.schemas.sandbox import FixtureInteractionInput
+
+    fx = FixtureInteractionInput.model_validate(raw)
+    wf_id = fx.fixture.workflow_id or "fixture-context"
+    creature = CreatureState(
+        id=fx.actor.id,
+        workflow_id=wf_id,
+        position=fx.actor.position.model_copy(deep=True),
+        facing=fx.actor.facing,
+    )
+    tick_in = SandboxTickInput(
+        tick=fx.tick,
+        creature=creature,
+        creatures=[creature],
+        world=fx.world.model_copy(deep=True),
+        recent_actions=[],
+    )
+    return tick_in.model_dump(mode="json")
+
+
+def cell_probe_at(
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    world: WorldState,
+    creatures: list[CreatureState],
+    *,
+    exclude_creature_id: str | None = None,
+    definition_labels: Mapping[str, str] | None = None,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+) -> dict[str, Any]:
+    kind = _cell_kind(x, y, width, height, world, creatures, exclude_creature_id)
+    region_label = _region_label_at_cell(x, y, world)
+    stack_count, item_summaries = cell_pickables_probe_summary(
+        world.items, x, y, definition_labels, definition_defaults
+    )
+    return {
+        "x": x,
+        "y": y,
+        "kind": kind,
+        "region_label": region_label,
+        "stack_count": stack_count,
+        "items": item_summaries,
+    }
+
+
+def creature_position_from_tick_dict(
+    raw: dict[str, Any],
+    *,
+    definition_labels: Mapping[str, str] | None = None,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+) -> dict[str, Any]:
     tick = parse_tick(raw)
     pos = tick.creature.position
-    w, h = tick.world.grid.width, tick.world.grid.height
-    kind = _cell_kind(
+    return cell_probe_at(
         pos.x,
         pos.y,
-        w,
-        h,
+        tick.world.grid.width,
+        tick.world.grid.height,
         tick.world,
         tick.creatures,
         exclude_creature_id=tick.creature.id,
+        definition_labels=definition_labels,
+        definition_defaults=definition_defaults,
     )
-    region_label = _region_label_at_cell(pos.x, pos.y, tick.world)
-    return {
-        "x": pos.x,
-        "y": pos.y,
-        "kind": kind,
-        "region_label": region_label,
-    }
+
+
+def fixture_cell_probe_from_fixture_dict(
+    raw: dict[str, Any],
+    *,
+    definition_labels: Mapping[str, str] | None = None,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+) -> dict[str, Any]:
+    """Probe the fixture cell (where stacked pickables live) from ``FixtureInteractionInput``."""
+    from app.domain.schemas.sandbox import FixtureInteractionInput
+
+    fx = FixtureInteractionInput.model_validate(raw)
+    pos = fx.fixture.position
+    tick = parse_tick(tick_dict_from_fixture_dict(raw))
+    return cell_probe_at(
+        pos.x,
+        pos.y,
+        fx.world.grid.width,
+        fx.world.grid.height,
+        fx.world,
+        tick.creatures,
+        exclude_creature_id=None,
+        definition_labels=definition_labels,
+        definition_defaults=definition_defaults,
+    )
 
 
 def creature_facing_from_tick_dict(raw: dict[str, Any]) -> str:
     return parse_tick(raw).creature.facing
 
 
-def nearby_cells_from_tick_dict(raw: dict[str, Any]) -> list[dict[str, Any]]:
+def nearby_cells_from_tick_dict(
+    raw: dict[str, Any],
+    *,
+    definition_labels: Mapping[str, str] | None = None,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+) -> list[dict[str, Any]]:
     tick = parse_tick(raw)
     cells = nearby_cells_clockwise(
         tick.creature.facing,
@@ -74,6 +161,8 @@ def nearby_cells_from_tick_dict(raw: dict[str, Any]) -> list[dict[str, Any]]:
         tick.world,
         tick.creatures,
         exclude_creature_id=tick.creature.id,
+        definition_labels=definition_labels,
+        definition_defaults=definition_defaults,
     )
     return [c.model_dump(mode="json") for c in cells]
 
@@ -87,23 +176,34 @@ def nearby_cells_clockwise(
     creatures: list[CreatureState],
     *,
     exclude_creature_id: str | None = None,
+    definition_labels: Mapping[str, str] | None = None,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
 ) -> list[NearbyCell]:
     start = _FACING_START_INDEX[facing]
     ordered_offsets = _NEIGHBOR_OFFSETS_N[start:] + _NEIGHBOR_OFFSETS_N[:start]
     out: list[NearbyCell] = []
     for dx, dy in ordered_offsets:
         x, y = position.x + dx, position.y + dy
-        kind = _cell_kind(x, y, width, height, world, creatures, exclude_creature_id)
-        region_label = _region_label_at_cell(x, y, world)
-        out.append(NearbyCell(x=x, y=y, kind=kind, region_label=region_label))
+        probe = cell_probe_at(
+            x,
+            y,
+            width,
+            height,
+            world,
+            creatures,
+            exclude_creature_id=exclude_creature_id,
+            definition_labels=definition_labels,
+            definition_defaults=definition_defaults,
+        )
+        out.append(NearbyCell.model_validate(probe))
     return out
 
 
 def _region_label_at_cell(x: int, y: int, world: WorldState) -> str | None:
-    for it in world.items:
-        if it.position.x == x and it.position.y == y and it.type == REGION_ITEM_TYPE:
-            return it.label if it.label is not None else ""
-    return None
+    reg = region_at_cell(world.items, x, y)
+    if reg is None:
+        return None
+    return reg.label if reg.label is not None else ""
 
 
 def _cell_kind(
@@ -122,16 +222,19 @@ def _cell_kind(
             continue
         if c.position.x == x and c.position.y == y:
             return "creature"
-    for it in world.items:
-        if it.position.x == x and it.position.y == y:
-            if it.type == REGION_ITEM_TYPE:
-                continue
-            if it.type in SOLID_ITEM_TYPES:
-                return "wall"
-            if it.type == BALL_ITEM_TYPE:
-                return "ball"
-            if it.type == "food":
-                return "food"
+    cell_items = items_at_cell(world.items, x, y)
+    for it in cell_items:
+        if is_region_item(it):
+            continue
+        t = resolved_item_type(it)
+        if t == FIXTURE_ITEM_TYPE:
+            return "fixture"
+        if is_solid_item(it):
+            return "wall"
+        if t == BALL_ITEM_TYPE:
+            return "ball"
+        if t == "food":
+            return "food"
     return "empty"
 
 

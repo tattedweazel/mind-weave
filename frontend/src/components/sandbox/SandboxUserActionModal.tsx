@@ -9,12 +9,14 @@ import {
     Hand,
     Package,
     Pause,
+    Sparkles,
     X,
 } from 'lucide-react';
 
 import type { SandboxCreatureJson, SandboxFacing, SandboxSandboxStateJson } from '../../domain/sandbox/types';
 import {
     forwardCellKind,
+    forwardCellHasFixture,
     forwardCellPickable,
     runSensoryProbe,
     type SandboxSensoryProbeKind,
@@ -64,6 +66,10 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
     const hasInventory = inventory.length > 0;
     const canPickUp = useMemo(
         () => forwardCellPickable(creature, sandboxState),
+        [creature, sandboxState],
+    );
+    const canUseFixture = useMemo(
+        () => forwardCellHasFixture(creature, sandboxState),
         [creature, sandboxState],
     );
     const forwardKind = useMemo(
@@ -327,8 +333,19 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
                         </button>
                     </div>
 
-                    {canPickUp || hasInventory ? (
-                        <div className="flex gap-2 justify-center" role="group" aria-label="Inventory actions">
+                    {canPickUp || hasInventory || canUseFixture ? (
+                        <div className="flex gap-2 justify-center flex-wrap" role="group" aria-label="Inventory actions">
+                            {canUseFixture ? (
+                                <button
+                                    type="button"
+                                    className={selectClass('use_fixture', 'flex items-center gap-2 px-4 py-2.5 text-sm')}
+                                    onClick={() => selectAction('use_fixture')}
+                                    aria-pressed={selectedAction === 'use_fixture'}
+                                >
+                                    <Sparkles className="w-4 h-4" />
+                                    Use
+                                </button>
+                            ) : null}
                             {canPickUp ? (
                                 <button
                                     type="button"

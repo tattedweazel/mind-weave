@@ -8,6 +8,42 @@ import type { Node, Edge } from '@xyflow/react';
 
 export type PairForLoopEndResult = { targetId: string; forLoopId: string };
 
+/** Default export keys for new For Loop End nodes (single neutral handle). */
+export const DEFAULT_FOR_LOOP_END_EXPORTS = ['export'] as const;
+
+function normalizeForLoopEndExports(exports: readonly string[] | undefined): string[] {
+    return Array.isArray(exports) && exports.length > 0 ? [...exports] : [...DEFAULT_FOR_LOOP_END_EXPORTS];
+}
+
+/**
+ * When export keys are renamed in the inspector, remap wired export edges by position
+ * so runtime dictionary keys stay aligned with the visible handles.
+ */
+export function remapForLoopEndExportEdges(
+    edges: Edge[],
+    forLoopEndNodeId: string,
+    oldExports: readonly string[] | undefined,
+    newExports: readonly string[] | undefined,
+): Edge[] {
+    const oldKeys = normalizeForLoopEndExports(oldExports);
+    const newKeys = normalizeForLoopEndExports(newExports);
+    if (oldKeys.join('\0') === newKeys.join('\0')) return edges;
+
+    return edges.map(edge => {
+        if (edge.target !== forLoopEndNodeId || edge.targetHandle === 'trigger') return edge;
+        const handle = edge.targetHandle ?? '';
+        const idx = oldKeys.indexOf(handle);
+        if (idx >= 0 && idx < newKeys.length) {
+            const nextHandle = newKeys[idx];
+            return nextHandle === handle ? edge : { ...edge, targetHandle: nextHandle };
+        }
+        if (newKeys.length === 1 && handle && !newKeys.includes(handle)) {
+            return { ...edge, targetHandle: newKeys[0] };
+        }
+        return edge;
+    });
+}
+
 /** When true, `onConnect` should set For Loop End `data.for_loop_id` to `params.source`. */
 export function pairForLoopEndOnConnect(
     params: Pick<Connection, 'source' | 'target' | 'sourceHandle' | 'targetHandle'>,

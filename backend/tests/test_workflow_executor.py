@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -3813,7 +3814,7 @@ def test_sandbox_tick_primitive_emits_dictionary_from_overrides(client: TestClie
 
 
 def test_message_utility_inline(client: TestClient):
-    """Message utility surfaces text in details and emits empty string output (no downstream data)."""
+    """Legacy Message utility emits broadcast_segment shape and resolved string output."""
     msg_id = "n_msg_001"
     workflow_res = client.post(
         "/api/v1/workflow-definitions/",
@@ -3836,9 +3837,72 @@ def test_message_utility_inline(client: TestClient):
     assert step["status"] == "ok"
     out = step.get("output") or {}
     assert out.get("kind") == "string"
-    assert out.get("text") == ""
+    assert out.get("text") == "hello from agent"
     det = step.get("details") or {}
-    assert det.get("user_message") == "hello from agent"
+    seg = det.get("broadcast_segment") or {}
+    assert seg.get("body") == "hello from agent"
+    assert seg.get("severity") == "info"
+
+
+def _broadcast_message_utility_node(
+    node_id: str,
+    *,
+    message: str | None = None,
+    title: str | None = None,
+    severity: str = "notice",
+    label: str = "Broadcast Message",
+):
+    return {
+        "id": node_id,
+        "kind": "utility",
+        "utility_type": "broadcast_message",
+        "label": label,
+        "data": {
+            "severity": severity,
+            "required_inputs": [
+                {"key": "message", "type": "any", "value": message},
+                {"key": "title", "type": "string", "value": title},
+            ],
+        },
+        "position": {"x": 300, "y": 100},
+    }
+
+
+def test_broadcast_message_utility_coerces_dict(client: TestClient):
+    msg_id = "n_bc_001"
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "Broadcast dict",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "n_str",
+                        "kind": "primitive",
+                        "primitive_type": "string",
+                        "label": "Src",
+                        "data": {"text": "not used"},
+                        "position": {"x": 0, "y": 0},
+                    },
+                    _broadcast_message_utility_node(msg_id, title="Debug", severity="success"),
+                ],
+                "edges": [
+                    {"source": "n_str", "target": msg_id, "target_handle": "message"},
+                ],
+            },
+        },
+    )
+    assert workflow_res.status_code == 201
+    workflow_id = workflow_res.json()["id"]
+    run_res = client.post(f"/api/v1/workflow-definitions/{workflow_id}/run")
+    assert run_res.status_code == 200
+    step = next((r for r in run_res.json()["node_results"] if r["node_id"] == msg_id), None)
+    assert step is not None
+    assert step["status"] == "ok"
+    seg = (step.get("details") or {}).get("broadcast_segment") or {}
+    assert seg.get("title") == "Debug"
+    assert seg.get("severity") == "success"
+    assert "not used" in seg.get("body", "")
 
 
 def test_prepend_text_utility_from_upstream(client: TestClient):
@@ -4470,6 +4534,87 @@ def test_workflow_node_error_includes_sub_workflow_details(client: TestClient):
     assert "connection refused" in failed_llm.get("error", "").lower()
     labels = details["sub_workflow_node_labels"]
     assert labels.get(sub_llm_id) == "Sub LLM"
+
+
+def test_workflow_node_success_includes_sub_workflow_details(client: TestClient):
+    """Successful Workflow nodes expose sub-workflow node logs for debugging."""
+    sub_wf_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "Passing Sub Workflow",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "n_start_sub",
+                        "kind": "start",
+                        "label": "Start",
+                        "data": {"required_inputs": []},
+                        "position": {"x": 50, "y": 100},
+                    },
+                    {
+                        "id": "n_stop_sub",
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": "string"}]},
+                        "position": {"x": 600, "y": 100},
+                    },
+                ],
+                "edges": [
+                    {
+                        "source": "n_start_sub",
+                        "target": "n_stop_sub",
+                        "source_handle": "trigger",
+                        "target_handle": "output",
+                    }
+                ],
+            },
+        },
+    )
+    assert sub_wf_res.status_code == 201
+    sub_wf_id = sub_wf_res.json()["id"]
+
+    parent_wf_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "Parent With Passing Sub",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "n_wf_001",
+                        "kind": "workflow",
+                        "label": "Sub Workflow",
+                        "data": {"workflow_id": sub_wf_id},
+                        "position": {"x": 300, "y": 100},
+                    },
+                    {
+                        "id": "n_stop_parent",
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": "string"}]},
+                        "position": {"x": 600, "y": 100},
+                    },
+                ],
+                "edges": [
+                    {"source": "n_wf_001", "target": "n_stop_parent", "source_handle": "output"},
+                ],
+            },
+        },
+    )
+    assert parent_wf_res.status_code == 201
+    parent_wf_id = parent_wf_res.json()["id"]
+
+    run_res = client.post(f"/api/v1/workflow-definitions/{parent_wf_id}/run")
+    assert run_res.status_code == 200
+    result = run_res.json()
+    assert result["status"] == "ok"
+    wf_result = next((r for r in result["node_results"] if r["node_id"] == "n_wf_001"), None)
+    assert wf_result is not None
+    assert wf_result["status"] == "ok"
+    details = wf_result.get("details", {})
+    assert "sub_workflow_node_results" in details
+    assert "sub_workflow_node_labels" in details
+    assert details.get("sub_workflow_name") == "Passing Sub Workflow"
+    assert len(details["sub_workflow_node_results"]) >= 2
 
 
 # ---------------------------------------------------------------------------
@@ -9181,6 +9326,56 @@ def test_for_loop_end_odds_evens_dictionary(client: TestClient):
     data = end_r["output"]["data"]
     assert data["odds"] == [1, 3, 5]
     assert data["evens"] == [2, 4]
+
+
+def test_for_loop_end_validation_export_key_must_match_exports():
+    """Export edge target_handle must appear in data.exports when exports is non-empty."""
+    from app.domain.schemas.graph_nodes import GraphEdge
+    from app.domain.workflow_executor.graph import validate_for_loop_end_configuration
+    from app.domain.workflow_executor.parsing import _parse_node
+
+    fl_id = "n_fl"
+    end_id = "n_end"
+    add_id = "n_add"
+    nodes_raw = [
+        {
+            "id": fl_id,
+            "kind": "control",
+            "control_type": "for_loop",
+            "label": "For Loop",
+            "data": {"required_inputs": [{"key": "input", "type": "list", "value": []}]},
+            "position": {"x": 0, "y": 0},
+        },
+        {
+            "id": add_id,
+            "kind": "utility",
+            "utility_type": "add_to_list",
+            "label": "Add",
+            "data": {
+                "required_inputs": [
+                    {"key": "list", "type": "list", "value": None},
+                    {"key": "value", "type": "any", "value": None},
+                ]
+            },
+            "position": {"x": 100, "y": 0},
+        },
+        {
+            "id": end_id,
+            "kind": "control",
+            "control_type": "for_loop_end",
+            "label": "End",
+            "data": {"for_loop_id": fl_id, "exports": ["milk"]},
+            "position": {"x": 200, "y": 0},
+        },
+    ]
+    nodes_by_id = {n["id"]: _parse_node(n) for n in nodes_raw}
+    edges = [
+        GraphEdge(source=fl_id, target=end_id, source_handle="signal_out", target_handle="trigger"),
+        GraphEdge(source=fl_id, target=add_id, source_handle="signal_out", target_handle="trigger"),
+        GraphEdge(source=add_id, target=end_id, source_handle="output", target_handle="odds"),
+    ]
+    with pytest.raises(ValueError, match="must match a name in data.exports"):
+        validate_for_loop_end_configuration(nodes_by_id, edges)
 
 
 def test_for_loop_end_validation_requires_trigger_and_exports(client: TestClient):

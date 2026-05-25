@@ -82,7 +82,7 @@ export const WORKFLOW_PALETTE_UTILITY_ITEMS: readonly WorkflowPaletteStepItem[] 
     { type: 'stringToList', label: 'String to List', extra: { label: 'String to List' }, paletteType: 'string_to_list' },
     { type: 'prependText', label: 'Prepend Text', extra: { label: 'Prepend Text' }, paletteType: 'prepend_text' },
     { type: 'stringTrunc', label: 'String Trunc', extra: { label: 'String Trunc' }, paletteType: 'string_trunc' },
-    { type: 'messageUtility', label: 'Message', extra: { label: 'Message' }, paletteType: 'message' },
+    { type: 'broadcastMessage', label: 'Broadcast Message', extra: { label: 'Broadcast Message' }, paletteType: 'broadcast_message' },
     { type: 'lenFromList', label: 'Len from List', extra: { label: 'Len from List' }, paletteType: 'len_from_list' },
     {
         type: 'randomItemFromList',
@@ -234,10 +234,40 @@ export const WORKFLOW_PALETTE_SANDBOX_UTILITY_ITEMS: readonly WorkflowPaletteSte
         paletteType: 'sandbox_get_inventory',
     },
     {
+        type: 'sandboxGetCellItems',
+        label: 'Get cell items',
+        extra: { label: 'Get cell items' },
+        paletteType: 'sandbox_get_cell_items',
+    },
+    {
+        type: 'sandboxRemoveItemAtCell',
+        label: 'Remove item',
+        extra: { label: 'Remove item' },
+        paletteType: 'sandbox_remove_item_at_cell',
+    },
+    {
+        type: 'sandboxSpawnItemAtCell',
+        label: 'Spawn item',
+        extra: {
+            label: 'Spawn item',
+            required_inputs: [
+                { key: 'definition_id', type: 'string', value: null },
+                { key: 'target', type: 'string', value: 'self' },
+            ],
+        },
+        paletteType: 'sandbox_spawn_item_at_cell',
+    },
+    {
         type: 'sandboxPromptUserAction',
         label: 'Prompt for User Action',
         extra: { label: 'Prompt for User Action' },
         paletteType: 'sandbox_prompt_user_action',
+    },
+    {
+        type: 'sandboxForceSimulationPause',
+        label: 'Force Simulation Pause',
+        extra: { label: 'Force Simulation Pause' },
+        paletteType: 'sandbox_force_simulation_pause',
     },
 ];
 
@@ -259,7 +289,7 @@ export const WORKFLOW_PALETTE_CONTROL_ITEMS: readonly WorkflowPaletteStepItem[] 
     {
         type: 'forLoopEndControl',
         label: 'For Loop End',
-        extra: { label: 'For Loop End', for_loop_id: '', exports: ['odds', 'evens'] },
+        extra: { label: 'For Loop End', for_loop_id: '', exports: ['export'] },
         paletteType: 'for_loop_end_control',
     },
 ];

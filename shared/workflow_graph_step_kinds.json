@@ -178,6 +178,46 @@
       "editor_label": "Prompt for User Action"
     },
     {
+      "kind": "utility",
+      "utility_type": "sandbox_force_simulation_pause",
+      "react_flow_type": "sandboxForceSimulationPause",
+      "pydantic_model": "SandboxForceSimulationPauseUtilityNode",
+      "palette_handle": "sandbox_force_simulation_pause",
+      "editor_label": "Force Simulation Pause"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_get_cell_items",
+      "react_flow_type": "sandboxGetCellItems",
+      "pydantic_model": "SandboxGetCellItemsUtilityNode",
+      "palette_handle": "sandbox_get_cell_items",
+      "editor_label": "Get cell items"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_remove_item_at_cell",
+      "react_flow_type": "sandboxRemoveItemAtCell",
+      "pydantic_model": "SandboxRemoveItemAtCellUtilityNode",
+      "palette_handle": "sandbox_remove_item_at_cell",
+      "editor_label": "Remove item"
+    },
+    {
+      "kind": "utility",
+      "utility_type": "sandbox_spawn_item_at_cell",
+      "react_flow_type": "sandboxSpawnItemAtCell",
+      "pydantic_model": "SandboxSpawnItemAtCellUtilityNode",
+      "palette_handle": "sandbox_spawn_item_at_cell",
+      "editor_label": "Spawn item"
+    },
+    {
+      "kind": "primitive",
+      "primitive_type": "sandbox_region",
+      "react_flow_type": "sandboxRegionPrimitive",
+      "pydantic_model": "SandboxRegionPrimitiveNode",
+      "palette_handle": "sandbox_region",
+      "editor_label": "Region trigger input"
+    },
+    {
       "kind": "skill",
       "skill_type": "simple_llm_call",
       "react_flow_type": "simpleLLMCall",
@@ -299,11 +339,11 @@
     },
     {
       "kind": "utility",
-      "utility_type": "message",
-      "react_flow_type": "messageUtility",
-      "pydantic_model": "MessageUtilityNode",
-      "palette_handle": "message",
-      "editor_label": "Message"
+      "utility_type": "broadcast_message",
+      "react_flow_type": "broadcastMessage",
+      "pydantic_model": "BroadcastMessageUtilityNode",
+      "palette_handle": "broadcast_message",
+      "editor_label": "Broadcast Message"
     },
     {
       "kind": "utility",

@@ -294,12 +294,25 @@ def validate_for_loop_end_configuration(nodes_by_id: dict[str, Any], edges: list
             raise ValueError(
                 f"For Loop End '{eid}' requires at least one export edge (data input with a named target_handle)."
             )
+        declared_exports = (node.data or {}).get("exports")
+        allowed_export_keys: set[str] | None = None
+        if isinstance(declared_exports, list) and declared_exports:
+            allowed_export_keys = {
+                str(x).strip()
+                for x in declared_exports
+                if isinstance(x, str) and str(x).strip()
+            } or None
         seen_keys: set[str] = set()
         for e in export_edges:
             key = (e.target_handle or "").strip()
             if not key:
                 raise ValueError(
                     f"For Loop End '{eid}' export from '{e.source}' must use a non-empty target_handle as the key."
+                )
+            if allowed_export_keys is not None and key not in allowed_export_keys:
+                raise ValueError(
+                    f"For Loop End '{eid}' export edge target_handle '{key}' must match a name in "
+                    f"data.exports {sorted(allowed_export_keys)}."
                 )
             if key in seen_keys:
                 raise ValueError(f"For Loop End '{eid}' duplicate export key '{key}'.")

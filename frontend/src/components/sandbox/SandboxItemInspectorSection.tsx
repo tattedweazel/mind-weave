@@ -6,6 +6,7 @@ import {
     getItemFieldValue,
     validateItemFieldValue,
 } from '../../sandbox/sandboxItemInspectorFields';
+import { resolvedItemType } from '../../sandbox/sandboxItemResolve';
 import { InspectorSection } from '../workflow-editor/InspectorSection';
 
 export interface SandboxItemInspectorSectionProps {
@@ -76,20 +77,21 @@ export const SandboxItemInspectorSection: React.FC<SandboxItemInspectorSectionPr
     readOnly,
     onItemChange,
 }) => {
-    const editableFields = getEditableItemFields(item.type);
+    const itemType = resolvedItemType(item);
+    const editableFields = getEditableItemFields(itemType);
 
     return (
-        <InspectorSection title={`Item (${item.type})`}>
+        <InspectorSection title={`Item (${itemType})`}>
             <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="text-mw-text-secondary">Id</div>
                 <div className="text-mw-text-primary text-right font-mono text-[10px] break-all">{item.id}</div>
                 <div className="text-mw-text-secondary">Type</div>
-                <div className="text-mw-text-primary text-right font-mono">{item.type}</div>
+                <div className="text-mw-text-primary text-right font-mono">{itemType}</div>
                 <div className="text-mw-text-secondary">Position</div>
                 <div className="text-mw-text-primary tabular-nums text-right font-mono">
                     ({item.position.x}, {item.position.y})
                 </div>
-                {item.type === 'ball' && item.color ? (
+                {itemType === 'ball' && item.color ? (
                     <>
                         <div className="text-mw-text-secondary">Color</div>
                         <div className="flex items-center justify-end gap-2">

@@ -6,6 +6,7 @@ export const SANDBOX_DECISION_ACTIONS = [
     'idle',
     'pick_up_item',
     'place_item',
+    'use_fixture',
 ] as const;
 
 export type SandboxDecisionAction = (typeof SANDBOX_DECISION_ACTIONS)[number];

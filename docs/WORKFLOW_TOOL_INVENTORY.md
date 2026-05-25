@@ -84,6 +84,7 @@ Each utility typically includes `data.required_inputs`: `{ "key", "type", "value
 | `list_to_string` | `list` | `output` (string) | **Joined text** for prompts when `data.use_text_join` is true (editor default): concatenate items with newlines or spaces via `data.add_line_breaks_between_items` (default true). **JSON array** (pretty-printed) when `use_text_join` is false or omitted — use with **String to List** for round-trips. |
 | `string_to_list` | `string` | `output` (list) | Parse JSON array text; pair with **List to String** only when the latter emits JSON (`use_text_join` false / legacy empty `data`). |
 | `prepend_text` | `target_string`, `text_to_prepend`; optional `data.add_additional_line` (boolean) for a blank line between chunks | `output` (string) | Prefix one string onto another. |
+| `broadcast_message` | `message` (any), optional `title` (string); optional `data.severity` (`info` \| `notice` \| `success`, default `info`) | `output` (string) | Pause execution and show a combined modal with the resolved message (Markdown auto-detected). **Build** streaming runs block until **Continue**; **Sandbox** shows one post-tick modal from all brains/triggers/fixtures in that tick. Replaces legacy **`message`**. |
 | `string_trunc` | `target_string`, `start_index`, `end_index` | `output_string` (string) | Substring with inclusive `end_index`, or `end_index == -1` through end; `start_index` must be ≥ 0. |
 | `len_from_list` | `list` | `output` (int) | Count items. |
 | `random_item_from_list` | `list` | `output` (typed by element: string, list, dictionary, int, boolean) | Pick one uniform random element (`secrets.randbelow` index); empty list errors. |
@@ -109,15 +110,22 @@ Each utility typically includes `data.required_inputs`: `{ "key", "type", "value
 | `min_ints` | two int inputs | `output` | |
 | `max_ints` | two int inputs | `output` | |
 | `sandbox_tick` | (run override or wired tick) | `output` (dictionary) | Full `SandboxTickInput` for sandbox brains. See [SANDBOX.md](SANDBOX.md). |
-| `sandbox_get_position` | `sandbox_tick` | `output` (dictionary) | Creature `{x, y, kind, region_label}` — current cell with same classification rules as **Get nearby**. |
-| `sandbox_get_facing` | `sandbox_tick` | `output` (string) | Creature facing `N`/`E`/`S`/`W`. |
-| `sandbox_get_nearby` | `sandbox_tick` | `output` (list) | Eight typed neighbor cells clockwise from facing; each `{x, y, kind, region_label}` where `region_label` is `null` or the region label string. |
+| `sandbox_get_position` | `sandbox_tick` (wire or run override) or **`sandbox_fixture`** (fixture workflow) | `output` (dictionary) | [Cell probe](SANDBOX.md#cell-probe-shape) for the focused creature's cell, or the **fixture cell** when `sandbox_fixture` context is present. |
+| `sandbox_get_facing` | `sandbox_tick` (wire or run override) or **`sandbox_fixture`** (fixture workflow actor) | `output` (string) | Creature facing `N`/`E`/`S`/`W`. |
+| `sandbox_get_nearby` | `sandbox_tick` (wire or run override) or **`sandbox_fixture`** (fixture workflow actor) | `output` (list) | Eight typed neighbor cells clockwise from facing; each entry is a [cell probe](SANDBOX.md#cell-probe-shape). |
 | `sandbox_move_forward` | optional `reason` | `output` (dictionary) | `{action: "move_forward"}` for Stop. |
 | `sandbox_turn_left` / `sandbox_turn_right` / `sandbox_idle` | optional `reason` | `output` (dictionary) | Navigation action dict for Stop. |
 | `sandbox_pick_up_item` | optional `reason` | `output` (dictionary) | `{action: "pick_up_item"}` — forward-adjacent ball/food into creature inventory. |
 | `sandbox_place_item` | optional `reason`, optional `item_type` (`ball` \| `food`) | `output` (dictionary) | `{action: "place_item", item_type?: ..., inventory_index?: number}` — place from inventory on forward cell (index or first matching type). |
-| `sandbox_get_inventory` | `sandbox_tick` | `output` (list) | Focused creature held items. |
-| `sandbox_prompt_user_action` | `sandbox_tick` (optional wire); **`sandbox_user_action`** run override | `output` (dictionary) | Simulation-only: SPA remote-control modal supplies `DecisionIntent` per tick. See [SANDBOX.md](SANDBOX.md#manual-control-brain-prompt-for-user-action). |
+| `sandbox_get_inventory` | `sandbox_tick` (wire or run override) or **`sandbox_fixture`** (fixture workflow actor; empty inventory) | `output` (list) | Focused creature held items. |
+| `sandbox_prompt_user_action` | `sandbox_tick` (optional wire); **`sandbox_user_action`** run override | `output` (dictionary) | Simulation-only: SPA remote-control modal supplies `DecisionIntent` per tick (including **`use_fixture`**). See [SANDBOX.md](SANDBOX.md#manual-control-brain-prompt-for-user-action). |
+| `sandbox_force_simulation_pause` | — | `output` (dictionary) | Simulation-only: `{ "pause": true }`; tick response sets `simulation_effects.force_pause`. Region trigger workflows. |
+| `sandbox_region` | **`sandbox_region`** run override | `output` (dictionary) | Region trigger context (`RegionTriggerInput`). Region trigger workflows only. |
+| `sandbox_get_cell_items` | `sandbox_fixture` run override | `output` (list) | Pickable items at the fixture cell (same summaries as `items` on the cell probe, including `label`). **Sandbox Utilities** palette. |
+| `sandbox_remove_item_at_cell` | `item_id` | `output` (dictionary) | Remove item by instance id during fixture workflow. Set inline in Explorer or wire. **Sandbox Utilities** palette. |
+| `sandbox_spawn_item_at_cell` | `definition_id`, optional `target` (`self` or offset), optional `energy`/`color` | `output` (dictionary) | Spawn pickable at fixture or neighbor cell. Set inline in Explorer or wire. **Sandbox Utilities** palette. |
+
+See [SANDBOX_DEFINITIONS.md](SANDBOX_DEFINITIONS.md) for fixture interaction semantics.
 
 ---
 
@@ -135,7 +143,7 @@ Each utility typically includes `data.required_inputs`: `{ "key", "type", "value
 | `for_loop` | Iterate over a list | **`input`** (list), **`item`**, **`signal_out`**, **`trigger`**; optional **`summary`** (**dictionary**: items processed/failed + per-item results/errors when enabled) | **`data.iteration_mode`**: **`sequential`** (default), **`parallel`** (same semantics as legacy **`parallel_iterations: true`**), **`batched`** (**`batch_size`**, capped by deployment ceiling **`WORKFLOW_MAX_LOOP_BATCH_SIZE_CEILING`**). Optional **`continue_on_error`**, **`max_iterations`**. List length is checked against resolved **`execution_limits.max_loop_iterations`** before the loop runs. |
 | `for_loop_end` | Aggregate named exports from the loop body | **`trigger`** from the paired For loop’s **`signal_out`**; **data** edges from body nodes with `target_handle` = export key → **`output`** (dictionary) | Persist `data.for_loop_id` as the **For Loop** node’s `id` (the workflow editor sets this when you wire **`signal_out` → `trigger`**; you can still override in the inspector). **Not** part of the per-iteration body—runs **once** on the main schedule after the loop completes. |
 
-**Suggested usage:** For branching controls, only **one** of **`true`** / **`false`** runs per evaluation. **For Loop End** must reference the correct **`for_loop_id`** and use **named** `target_handle` values matching your export keys.
+**Suggested usage:** For branching controls, only **one** of **`true`** / **`false`** runs per evaluation. **For Loop End** must reference the correct **`for_loop_id`** and use **named** `target_handle` values matching your export keys. **Runtime dictionary keys come from each export edge’s `target_handle`**, not from `data.exports` alone; the workflow editor keeps wired export edges aligned when you rename export keys in the inspector. Hand-edited graphs with mismatched `target_handle` / `exports` fail validation.
 
 ### For loop and For loop end (minimal valid `data` fragments)
 
@@ -170,7 +178,7 @@ Schedule with **`trigger`**; wire the **`try`** handle for the happy path and **
 }
 ```
 
-**Trigger:** `for_loop` **`signal_out`** → `for_loop_end` **`trigger`** (the editor fills `for_loop_id` from that connection). **Data** edges from body nodes into **For loop end** use **`target_handle`** equal to an export name in `exports`.
+**Trigger:** `for_loop` **`signal_out`** → `for_loop_end` **`trigger`** (the editor fills `for_loop_id` from that connection). **Data** edges from body nodes into **For loop end** use **`target_handle`** equal to an export name in `exports`; that handle is the runtime dictionary key. Renaming export keys in the editor remaps existing export wires by position.
 
 **Bucket-style problems (design guidance, not a full graph):** iterate the input **list** with **`for_loop`**, classify each **integer** with **`between`** / **`modulo_ints`** / comparators, accumulate with **`add_to_list`** and/or **`dictionary`** primitives, then assemble a **final list** (often via **List** primitive or utilities) and wire **`Stop`** with `type: "list"`. Do **not** create untyped primitive nodes labeled “Bucket” without **`primitive_type`** and real `data`.
 

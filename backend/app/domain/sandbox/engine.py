@@ -14,6 +14,17 @@ from app.domain.sandbox.constants import (
     SANDBOX_GRID_MAX_SIZE,
     SANDBOX_GRID_MIN_SIZE,
 )
+from app.domain.sandbox.item_helpers import (
+    is_pickable_item,
+    is_region_item,
+    is_solid_item,
+    items_at_cell,
+    pickables_at_cell,
+    region_at_cell,
+    resolved_item_type,
+    solid_at_cell,
+)
+from app.domain.sandbox.region_triggers import RegionTriggerEvent, evaluate_transition_triggers
 from app.domain.sandbox.workflow_bridge import decision_intent_from_workflow_result
 from app.domain.schemas.sandbox import (
     BALL_ITEM_TYPE,
@@ -22,14 +33,13 @@ from app.domain.schemas.sandbox import (
     CreatureState,
     DecisionIntent,
     Facing,
+    FIXTURE_ITEM_TYPE,
     GridCell,
     InventoryItem,
     PlaceItemFilterType,
     RecentAction,
     REGION_ITEM_TYPE,
-    SOLID_ITEM_TYPES,
-    BLOCKING_ITEM_TYPES,
-    PICKABLE_ITEM_TYPES,
+    RegionTriggerSessionState,
     SandboxItem,
     SandboxState,
     SandboxTickInput,
@@ -74,36 +84,43 @@ def _creature_at_cell(state: SandboxState, g: GridCell) -> CreatureState | None:
 
 
 def _blocking_item_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
-    for it in state.world.items:
-        if it.position.x == g.x and it.position.y == g.y and it.type in BLOCKING_ITEM_TYPES:
-            return it
+    solid = solid_at_cell(state.world.items, g.x, g.y)
+    if solid is not None:
+        return solid
+    pickables = pickables_at_cell(state.world.items, g.x, g.y)
+    if pickables:
+        return pickables[0]
     return None
 
 
 def _region_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
-    for it in state.world.items:
-        if it.position.x == g.x and it.position.y == g.y and it.type == REGION_ITEM_TYPE:
-            return it
-    return None
+    return region_at_cell(state.world.items, g.x, g.y)
 
 
-def _cell_blocked_for_item_placement(state: SandboxState, g: GridCell) -> bool:
+def _cell_blocked_for_item_placement(state: SandboxState, g: GridCell, *, placing_solid: bool = False) -> bool:
     if _creature_at_cell(state, g) is not None:
         return True
-    return _blocking_item_at_cell(state, g) is not None
+    solid = solid_at_cell(state.world.items, g.x, g.y)
+    if placing_solid:
+        return solid is not None
+    if solid is not None and resolved_item_type(solid) != FIXTURE_ITEM_TYPE:
+        return True
+    return False
 
 
 def _cell_blocked_for_creature_placement(state: SandboxState, g: GridCell) -> bool:
     if _creature_at_cell(state, g) is not None:
         return True
-    return _blocking_item_at_cell(state, g) is not None
+    for it in items_at_cell(state.world.items, g.x, g.y):
+        if is_region_item(it):
+            continue
+        return True
+    return False
 
 
 def _item_blocks_movement(world: WorldState, cell: GridCell) -> bool:
-    for it in world.items:
-        if it.position.x == cell.x and it.position.y == cell.y and it.type in SOLID_ITEM_TYPES:
-            return True
-    return False
+    solid = solid_at_cell(world.items, cell.x, cell.y)
+    return solid is not None and is_solid_item(solid)
 
 
 def _creature_blocks_cell(state: SandboxState, cell: GridCell, exclude_id: str | None = None) -> bool:
@@ -115,11 +132,48 @@ def _creature_blocks_cell(state: SandboxState, cell: GridCell, exclude_id: str |
     return False
 
 
-def _remove_blocking_items_at_cell(state: SandboxState, g: GridCell) -> None:
+def _is_removable_cell_item(it: SandboxItem) -> bool:
+    if is_region_item(it):
+        return False
+    if resolved_item_type(it) == FIXTURE_ITEM_TYPE:
+        return False
+    return is_solid_item(it) or is_pickable_item(it)
+
+
+def _remove_blocking_items_at_cell(
+    state: SandboxState,
+    g: GridCell,
+    *,
+    item_id: str | None = None,
+) -> None:
+    if item_id:
+        state.world.items = [
+            it
+            for it in state.world.items
+            if not (
+                it.id == item_id
+                and it.position.x == g.x
+                and it.position.y == g.y
+                and _is_removable_cell_item(it)
+            )
+        ]
+        return
     state.world.items = [
         it
         for it in state.world.items
-        if not (it.position.x == g.x and it.position.y == g.y and it.type in BLOCKING_ITEM_TYPES)
+        if not (
+            it.position.x == g.x
+            and it.position.y == g.y
+            and _is_removable_cell_item(it)
+        )
+    ]
+
+
+def _remove_solid_at_cell(state: SandboxState, g: GridCell) -> None:
+    state.world.items = [
+        it
+        for it in state.world.items
+        if not (it.position.x == g.x and it.position.y == g.y and is_solid_item(it))
     ]
 
 
@@ -142,14 +196,19 @@ def _place_item_at_cell(
     *,
     color: str | None = None,
     energy: int | None = None,
+    definition_id: str | None = None,
 ) -> None:
-    if _cell_blocked_for_item_placement(state, g):
+    placing_solid = item_type == "wall"
+    if _cell_blocked_for_item_placement(state, g, placing_solid=placing_solid):
         return
     if item_type == "food":
         state.world.items.append(
             SandboxItem(
                 id=str(uuid.uuid4()),
                 type="food",
+                definition_id=definition_id,
+                definition_kind="item",
+                role="pickable",
                 position=g,
                 energy=energy if energy is not None else DEFAULT_FOOD_ENERGY,
             )
@@ -159,8 +218,10 @@ def _place_item_at_cell(
             SandboxItem(
                 id=str(uuid.uuid4()),
                 type="wall",
+                definition_id=definition_id,
+                definition_kind="terrain",
+                role="solid",
                 position=g,
-                energy=None,
             )
         )
     elif item_type == BALL_ITEM_TYPE:
@@ -174,6 +235,9 @@ def _place_item_at_cell(
             SandboxItem(
                 id=str(uuid.uuid4()),
                 type=BALL_ITEM_TYPE,
+                definition_id=definition_id,
+                definition_kind="item",
+                role="pickable",
                 position=g,
                 color=normalized,
             )
@@ -181,28 +245,45 @@ def _place_item_at_cell(
 
 
 def _remove_pickable_item_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
-    removed: SandboxItem | None = None
-    kept: list[SandboxItem] = []
-    for it in state.world.items:
-        if (
-            removed is None
-            and it.position.x == g.x
-            and it.position.y == g.y
-            and it.type in PICKABLE_ITEM_TYPES
-        ):
-            removed = it
-            continue
-        kept.append(it)
-    state.world.items = kept
+    pickables = pickables_at_cell(state.world.items, g.x, g.y)
+    if not pickables:
+        return None
+    removed = pickables[-1]
+    state.world.items = [it for it in state.world.items if it.id != removed.id]
     return removed
 
 
 def _inventory_item_from_world_item(it: SandboxItem) -> InventoryItem | None:
-    if it.type == BALL_ITEM_TYPE and it.color:
+    t = resolved_item_type(it)
+    if t == BALL_ITEM_TYPE and it.color:
         return InventoryItem(type=BALL_ITEM_TYPE, color=it.color)
-    if it.type == "food" and it.energy is not None:
+    if t == "food" and it.energy is not None:
         return InventoryItem(type="food", energy=it.energy)
     return None
+
+
+def _fixture_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
+    solid = solid_at_cell(state.world.items, g.x, g.y)
+    if solid is not None and resolved_item_type(solid) == FIXTURE_ITEM_TYPE:
+        return solid
+    return None
+
+
+def _place_fixture_at_cell(state: SandboxState, g: GridCell, definition_id: str) -> None:
+    if _creature_at_cell(state, g) is not None:
+        return
+    if solid_at_cell(state.world.items, g.x, g.y) is not None:
+        return
+    state.world.items.append(
+        SandboxItem(
+            id=str(uuid.uuid4()),
+            type=FIXTURE_ITEM_TYPE,
+            definition_id=definition_id,
+            definition_kind="fixture",
+            role="solid",
+            position=g,
+        )
+    )
 
 
 def _pop_inventory_entry(
@@ -400,7 +481,11 @@ class SandboxEngine:
                 g = _parse_interaction_cell(ev, w, h)
                 if g is None:
                     continue
-                _remove_blocking_items_at_cell(state, g)
+                raw_item_id = ev.get("item_id")
+                item_id = str(raw_item_id).strip() if raw_item_id else None
+                if item_id == "":
+                    item_id = None
+                _remove_blocking_items_at_cell(state, g, item_id=item_id)
                 continue
             if et == "place_region":
                 g = _parse_interaction_cell(ev, w, h)
@@ -447,6 +532,21 @@ class SandboxEngine:
                     continue
                 _remove_creature_at_cell(state, g)
                 continue
+            if et == "place_fixture":
+                g = _parse_interaction_cell(ev, w, h)
+                if g is None:
+                    continue
+                def_id = ev.get("definition_id")
+                if not def_id or not str(def_id).strip():
+                    continue
+                _place_fixture_at_cell(state, g, str(def_id))
+                continue
+            if et == "remove_fixture":
+                g = _parse_interaction_cell(ev, w, h)
+                if g is None:
+                    continue
+                _remove_solid_at_cell(state, g)
+                continue
             if et == "cell_click":
                 g = _parse_interaction_cell(ev, w, h)
                 if g is None:
@@ -472,31 +572,43 @@ class SandboxEngine:
         state: SandboxState,
         creature: CreatureState,
         dec: DecisionIntent,
-    ) -> None:
+        *,
+        region_trigger_session: RegionTriggerSessionState | None = None,
+    ) -> tuple[list[RegionTriggerEvent], RegionTriggerSessionState | None]:
         w, h = state.world.grid.width, state.world.grid.height
         act = dec.action
+        trigger_events: list[RegionTriggerEvent] = []
+        next_session = region_trigger_session
 
         if act == "idle":
             _append_recent(state, creature.id, "idle", dec.reason)
-            return
+            return trigger_events, next_session
 
         if act == "turn_left":
             creature.facing = _TURN_LEFT[creature.facing]
             _append_recent(state, creature.id, "turn_left", dec.reason)
-            return
+            return trigger_events, next_session
 
         if act == "turn_right":
             creature.facing = _TURN_RIGHT[creature.facing]
             _append_recent(state, creature.id, "turn_right", dec.reason)
-            return
+            return trigger_events, next_session
 
         if act == "move_forward":
             nxt = _forward_cell(creature, w, h)
             if nxt is not None and not _item_blocks_movement(state.world, nxt):
                 if not _creature_blocks_cell(state, nxt, exclude_id=creature.id):
+                    prev = creature.position.model_copy(deep=True)
                     creature.position = nxt
+                    if next_session is not None:
+                        trigger_events, next_session = evaluate_transition_triggers(
+                            state,
+                            creature=creature,
+                            previous_position=prev,
+                            session_state=next_session,
+                        )
             _append_recent(state, creature.id, "move_forward", dec.reason)
-            return
+            return trigger_events, next_session
 
         if act == "pick_up_item":
             fwd = _forward_cell(creature, w, h)
@@ -507,7 +619,7 @@ class SandboxEngine:
                     if entry is not None:
                         creature.inventory.append(entry)
             _append_recent(state, creature.id, "pick_up_item", dec.reason)
-            return
+            return trigger_events, next_session
 
         if act == "place_item":
             fwd = _forward_cell(creature, w, h)
@@ -516,11 +628,7 @@ class SandboxEngine:
                 item_type=dec.item_type,
                 inventory_index=dec.inventory_index,
             )
-            if (
-                fwd is not None
-                and entry is not None
-                and not _cell_blocked_for_item_placement(state, fwd)
-            ):
+            if fwd is not None and entry is not None and not _creature_at_cell(state, fwd):
                 if entry.type == BALL_ITEM_TYPE and entry.color:
                     _place_item_at_cell(state, fwd, BALL_ITEM_TYPE, color=entry.color)
                 elif entry.type == "food" and entry.energy is not None:
@@ -530,7 +638,13 @@ class SandboxEngine:
             elif entry is not None:
                 creature.inventory.insert(0, entry)
             _append_recent(state, creature.id, "place_item", dec.reason)
-            return
+            return trigger_events, next_session
+
+        if act == "use_fixture":
+            fwd = _forward_cell(creature, w, h)
+            if fwd is not None and _fixture_at_cell(state, fwd) is not None:
+                _append_recent(state, creature.id, "use_fixture", dec.reason)
+            return trigger_events, next_session
 
         assert_never(act)
 

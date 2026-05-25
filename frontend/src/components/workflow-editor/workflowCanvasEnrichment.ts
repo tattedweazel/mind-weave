@@ -326,12 +326,47 @@ export function enrichNodesForCanvasFlow(
                 n.type === 'sandboxGetFacing' ||
                 n.type === 'sandboxGetNearby' ||
                 n.type === 'sandboxGetInventory' ||
+                n.type === 'sandboxGetCellItems' ||
                 n.type === 'sandboxPromptUserAction'
             ) {
                 const tickHasValue = edges.some(
                     e => e.target === n.id && (e.targetHandle === 'input' || e.targetHandle == null),
                 );
-                return { ...n, data: { ...baseData, tickHasValue } };
+                const dataKey = n.type === 'sandboxGetCellItems' ? 'fixtureHasValue' : 'tickHasValue';
+                return { ...n, data: { ...baseData, [dataKey]: tickHasValue } };
+            }
+            if (n.type === 'sandboxRemoveItemAtCell') {
+                const d = n.data as any;
+                const req = d?.required_inputs ?? [];
+                const itemId = req.find((r: { key?: string }) => r?.key === 'item_id')?.value;
+                const itemIdHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'item_id') ||
+                    (itemId != null && String(itemId).trim() !== '');
+                return { ...n, data: { ...baseData, itemIdHasValue } };
+            }
+            if (n.type === 'sandboxSpawnItemAtCell') {
+                const d = n.data as any;
+                const req = d?.required_inputs ?? [];
+                const defId = req.find((r: { key?: string }) => r?.key === 'definition_id')?.value;
+                const target = req.find((r: { key?: string }) => r?.key === 'target')?.value;
+                const energy = req.find((r: { key?: string }) => r?.key === 'energy')?.value;
+                const color = req.find((r: { key?: string }) => r?.key === 'color')?.value;
+                const definitionIdHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'definition_id') ||
+                    (defId != null && String(defId).trim() !== '');
+                const targetHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'target') ||
+                    (target != null && String(target).trim() !== '');
+                const energyHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'energy') ||
+                    (energy != null && typeof energy === 'number');
+                const colorHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'color') ||
+                    (color != null && String(color).trim() !== '');
+                return {
+                    ...n,
+                    data: { ...baseData, definitionIdHasValue, targetHasValue, energyHasValue, colorHasValue },
+                };
             }
             if (
                 n.type === 'sandboxMoveForward' ||
@@ -536,14 +571,18 @@ export function enrichNodesForCanvasFlow(
                     data: { ...baseData, targetStringHasValue, startIndexHasValue, endIndexHasValue },
                 };
             }
-            if (n.type === 'messageUtility') {
+            if (n.type === 'broadcastMessage' || n.type === 'messageUtility') {
                 const d = n.data as any;
                 const req = d?.required_inputs ?? [];
                 const messageVal = req.find((r: { key?: string }) => r?.key === 'message')?.value;
+                const titleVal = req.find((r: { key?: string }) => r?.key === 'title')?.value;
                 const messageHasValue =
                     edges.some(e => e.target === n.id && (e.targetHandle === 'message' || e.targetHandle == null)) ||
-                    (messageVal != null && String(messageVal).trim() !== '');
-                return { ...n, data: { ...baseData, messageHasValue } };
+                    messageVal != null;
+                const titleHasValue =
+                    edges.some(e => e.target === n.id && e.targetHandle === 'title') ||
+                    (titleVal != null && String(titleVal).trim() !== '');
+                return { ...n, data: { ...baseData, messageHasValue, titleHasValue } };
             }
             if (n.type === 'basicConditional') {
                 const d = n.data as any;

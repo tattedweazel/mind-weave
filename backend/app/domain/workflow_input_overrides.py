@@ -16,6 +16,12 @@ _GLOBAL_OVERRIDE_KEYS = frozenset(
         "sandbox_tick",
         # Injected by Sandbox simulation UI for sandbox_prompt_user_action brains.
         "sandbox_user_action",
+        # Injected when a creature uses a fixture workflow.
+        "sandbox_fixture",
+        "_fixture_mutations",
+        # Injected when a region trigger workflow runs.
+        "sandbox_region",
+        "_simulation_effects",
     }
 )
 

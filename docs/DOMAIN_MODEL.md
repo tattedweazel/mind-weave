@@ -69,7 +69,7 @@ Canonical keys and SSOT contracts: [ARCHITECTURE.md — Single sources of truth]
 ## Related surfaces
 
 - **Workspace** — Companion chat and staged workflow capabilities using the same executor for confirmed runs. **[WORKSPACE.md](WORKSPACE.md)**.
-- **Sandbox** — Board-driven tick simulation; creatures with per-creature workflows — **[SANDBOX.md](SANDBOX.md)**, **[BOARDS.md](BOARDS.md)**.
+- **Sandbox** — Board-driven tick simulation; creatures with per-creature workflows; **Definitions** for Items, Terrain, Fixtures, Creatures, Regions — **[SANDBOX.md](SANDBOX.md)**, **[BOARDS.md](BOARDS.md)**, **[SANDBOX_DEFINITIONS.md](SANDBOX_DEFINITIONS.md)**.
 
 ## Where to go next
 

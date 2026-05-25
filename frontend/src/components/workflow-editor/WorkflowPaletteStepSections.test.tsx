@@ -36,6 +36,10 @@ describe('WorkflowPaletteStepSections', () => {
         expect(screen.getByText('Sandbox Utilities')).toBeInTheDocument();
         expect(screen.getByText('Tick input')).toBeInTheDocument();
         expect(screen.getByText('Move forward')).toBeInTheDocument();
+        expect(screen.getByText('Get cell items')).toBeInTheDocument();
+        expect(screen.getByText('Remove item')).toBeInTheDocument();
+        expect(screen.getByText('Spawn item')).toBeInTheDocument();
+        expect(screen.queryByText('Fixture Utilities')).not.toBeInTheDocument();
     });
 
     it('renders Flow section with Stop tile', () => {

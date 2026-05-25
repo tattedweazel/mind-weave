@@ -43,6 +43,7 @@ from app.domain.schemas import (
     LteControlNode,
     MaxIntsUtilityNode,
     MessageUtilityNode,
+    BroadcastMessageUtilityNode,
     MinIntsUtilityNode,
     ModuloIntsUtilityNode,
     MultimodalLLMCallSkillNode,
@@ -61,6 +62,11 @@ from app.domain.schemas import (
     SandboxPickUpItemUtilityNode,
     SandboxPlaceItemUtilityNode,
     SandboxPromptUserActionUtilityNode,
+    SandboxForceSimulationPauseUtilityNode,
+    SandboxRegionPrimitiveNode,
+    SandboxGetCellItemsUtilityNode,
+    SandboxRemoveItemAtCellUtilityNode,
+    SandboxSpawnItemAtCellUtilityNode,
     SandboxMoveForwardUtilityNode,
     SandboxTurnLeftUtilityNode,
     SandboxTurnRightUtilityNode,
@@ -183,11 +189,11 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
         if isinstance(node, RandomItemFromListUtilityNode):
             return executor._resolve_random_item_from_list_node(node, ctx.upstream)
         if isinstance(node, SandboxGetPositionUtilityNode):
-            return executor._resolve_sandbox_get_position_node(node, ctx.upstream)
+            return executor._resolve_sandbox_get_position_node(node, ctx.upstream, overrides)
         if isinstance(node, SandboxGetFacingUtilityNode):
-            return executor._resolve_sandbox_get_facing_node(node, ctx.upstream)
+            return executor._resolve_sandbox_get_facing_node(node, ctx.upstream, overrides)
         if isinstance(node, SandboxGetNearbyUtilityNode):
-            return executor._resolve_sandbox_get_nearby_node(node, ctx.upstream)
+            return executor._resolve_sandbox_get_nearby_node(node, ctx.upstream, overrides)
         if isinstance(node, SandboxMoveForwardUtilityNode):
             return executor._resolve_sandbox_move_forward_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, SandboxTurnLeftUtilityNode):
@@ -201,10 +207,30 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
         if isinstance(node, SandboxPlaceItemUtilityNode):
             return executor._resolve_sandbox_place_item_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, SandboxGetInventoryUtilityNode):
-            return executor._resolve_sandbox_get_inventory_node(node, ctx.upstream)
+            return executor._resolve_sandbox_get_inventory_node(node, ctx.upstream, overrides)
         if isinstance(node, SandboxPromptUserActionUtilityNode):
             return executor._resolve_sandbox_prompt_user_action_node(
                 node, ctx.upstream, overrides
+            )
+        if isinstance(node, SandboxForceSimulationPauseUtilityNode):
+            return executor._resolve_sandbox_force_simulation_pause_node(
+                node, overrides
+            )
+        if isinstance(node, SandboxRegionPrimitiveNode):
+            return executor._resolve_sandbox_region_primitive_node(
+                node, ctx.upstream, overrides
+            )
+        if isinstance(node, SandboxGetCellItemsUtilityNode):
+            return executor._resolve_sandbox_get_cell_items_node(
+                node, ctx.upstream, overrides
+            )
+        if isinstance(node, SandboxRemoveItemAtCellUtilityNode):
+            return executor._resolve_sandbox_remove_item_at_cell_node(
+                node, ctx.edges, ctx.outputs, overrides
+            )
+        if isinstance(node, SandboxSpawnItemAtCellUtilityNode):
+            return executor._resolve_sandbox_spawn_item_at_cell_node(
+                node, ctx.edges, ctx.outputs, overrides
             )
         if isinstance(node, ListItemByIndexUtilityNode):
             return executor._resolve_list_item_by_index_node(node, ctx.edges, ctx.outputs, overrides)
@@ -245,6 +271,17 @@ async def dispatch_execute_node(executor: Any, ctx: ExecutionNodeContext) -> Any
             return executor._resolve_string_trunc_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, MessageUtilityNode):
             return executor._resolve_message_utility_node(node, ctx.edges, ctx.outputs, overrides)
+        if isinstance(node, BroadcastMessageUtilityNode):
+            return await executor._resolve_broadcast_message_utility_node(
+                node,
+                ctx.node_id,
+                ctx.edges,
+                ctx.outputs,
+                overrides,
+                stream_run_id=ctx.stream_run_id,
+                for_loop_id=ctx.for_loop_id,
+                for_loop_iteration=ctx.for_loop_iteration,
+            )
         if isinstance(node, AddDaysUtilityNode):
             return executor._resolve_add_days_node(node, ctx.edges, ctx.outputs, overrides)
         if isinstance(node, AddIntsUtilityNode):

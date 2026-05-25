@@ -18,13 +18,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ReactFlow, Background, Controls,
-    addEdge, applyEdgeChanges, applyNodeChanges, MarkerType, ConnectionMode,
+    addEdge, applyEdgeChanges, applyNodeChanges, MarkerType,
     type Node, type Edge, type Connection, type NodeChange, type EdgeChange,
     type OnConnect,
-    type ReactFlowInstance,
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 
 import { ApiClient } from '../../api/client';
 import { getApiErrorDetailObject } from '../../api/http';
@@ -53,6 +50,7 @@ import {
     WorkflowGraph,
     WorkflowExecutionLimitsEnvelope,
     WorkflowExecutionLimitsOverrides,
+    ItemDefinitionRead,
 } from '../../api/types';
 import {
     Plus,
@@ -77,6 +75,12 @@ import {
     Ban,
 } from 'lucide-react';
 
+import {
+    type BroadcastSegment,
+    normalizeBroadcastSeverity,
+    parseBroadcastSegmentsFromEffects,
+} from '../../domain/broadcastMessage';
+import { BroadcastMessageModal } from '../workflow/BroadcastMessageModal';
 import { UserAvatar } from '../UserAvatar';
 import { ContextHelpModal } from '../ContextHelpModal';
 import { GmailQueryHelpContent } from './gmailQueryHelpContent';
@@ -85,9 +89,15 @@ import { GmailListCategoryFields } from './GmailListCategoryFields';
 import { GmailBoundaryDateFields } from './GmailBoundaryDateFields';
 import { CalendarWindowDateTimeFields } from './CalendarWindowDateTimeFields';
 import { SingleDateTimeField } from './SingleDateTimeField';
+import { SandboxItemDefinitionField } from './SandboxItemDefinitionField';
 import { INSPECTOR_SURFACE_CLASS, InspectorSection } from './InspectorSection';
 import { TtsBridgeOptionsTextarea } from './TtsBridgeOptionsTextarea';
-import { applyForLoopEndClearOnEdgeRemoved, pairForLoopEndOnConnect } from './forLoopEndPairing';
+import {
+    applyForLoopEndClearOnEdgeRemoved,
+    DEFAULT_FOR_LOOP_END_EXPORTS,
+    pairForLoopEndOnConnect,
+    remapForLoopEndExportEdges,
+} from './forLoopEndPairing';
 import { JsonTreeView } from './JsonTreeView';
 import { lastRunInputsPayload } from './lastRunInputsPayload';
 import {
@@ -198,7 +208,6 @@ import { createWorkflowGraphHistory } from './workflowGraphHistory';
 import {
     reactFlowEdgeChangesSkipUndoRecord,
     reactFlowNodeChangesSkipUndoRecord,
-    WorkflowGraphUndoContext,
     type WorkflowCanvasInteractionFlags,
 } from './workflowGraphUndoContext';
 import { WorkflowPaletteStepSections } from './WorkflowPaletteStepSections';
@@ -343,6 +352,7 @@ export const WorkflowEditor: React.FC<Props> = ({
     const [serverResolvedWorkflowPalette, setServerResolvedWorkflowPalette] = useState<Palette | null>(null);
     const [structures, setStructures] = useState<Structure[]>([]);
     const [documents, setDocuments] = useState<DocumentListItem[]>([]);
+    const [itemDefinitions, setItemDefinitions] = useState<ItemDefinitionRead[]>([]);
     const [ttsModelsReady, setTtsModelsReady] = useState<TtsModelRead[]>([]);
     const [voiceSamplesList, setVoiceSamplesList] = useState<VoiceSampleListItem[]>([]);
     const [audioFileArtifacts, setAudioFileArtifacts] = useState<AudioFileArtifactRead[]>([]);
@@ -450,6 +460,16 @@ export const WorkflowEditor: React.FC<Props> = ({
     const [transcribeFileCapture, setTranscribeFileCapture] = useState<TranscribeCaptureState | null>(null);
     const [transcribeFileUploading, setTranscribeFileUploading] = useState(false);
     const [transcribeFileError, setTranscribeFileError] = useState<string | null>(null);
+    type BroadcastCaptureState = {
+        runId: string;
+        nodeId: string;
+        forLoopId: string | null;
+        forLoopIteration: number;
+        segments: BroadcastSegment[];
+    };
+    const [broadcastCapture, setBroadcastCapture] = useState<BroadcastCaptureState | null>(null);
+    const [broadcastAckPending, setBroadcastAckPending] = useState(false);
+    const [broadcastAckError, setBroadcastAckError] = useState<string | null>(null);
     const [transcriptionProviders, setTranscriptionProviders] = useState<TranscriptionProviderItem[]>([]);
     const workflowRunAbortRef = useRef<AbortController | null>(null);
     const workflowStreamSeqRef = useRef(0);
@@ -621,17 +641,12 @@ export const WorkflowEditor: React.FC<Props> = ({
         setRunWizardJsonNormalizeError('');
     }, [runInputWizard]);
 
-    const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const immersiveEdgeTapTrackingRef = useRef<{
         edge: 'left' | 'right';
         x: number;
         y: number;
         pointerId: number;
     } | null>(null);
-    const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
-    useEffect(() => () => {
-        reactFlowInstanceRef.current = null;
-    }, []);
 
     const inspectorOpen = isWorkflowInspectorOpen(activeWf);
     const compactViewport = useCompactViewport();
@@ -817,13 +832,14 @@ export const WorkflowEditor: React.FC<Props> = ({
 
     // ------------------------------------------------------------------
     const loadAll = async () => {
-        const [wfs, projs, ps, pals, structs, docs, tts, vs, audioFiles, transcriptionProvs] = await Promise.all([
+        const [wfs, projs, ps, pals, structs, docs, items, tts, vs, audioFiles, transcriptionProvs] = await Promise.all([
             ApiClient.getWorkflows(),
             ApiClient.getWorkflowProjects().catch(() => [] as WorkflowProject[]),
             ApiClient.getPersonas(),
             ApiClient.getPalettes(),
             ApiClient.getStructures().catch(() => []),
             ApiClient.getDocuments().catch(() => []),
+            ApiClient.listItemDefinitions().catch(() => [] as ItemDefinitionRead[]),
             ApiClient.getTtsModelsReady().catch(() => [] as TtsModelRead[]),
             ApiClient.getVoiceSamples().catch(() => [] as VoiceSampleListItem[]),
             ApiClient.getAudioFileArtifacts().catch(() => [] as AudioFileArtifactRead[]),
@@ -835,6 +851,7 @@ export const WorkflowEditor: React.FC<Props> = ({
         setPalettes(pals);
         setStructures(structs);
         setDocuments(docs);
+        setItemDefinitions(items);
         setTtsModelsReady(tts);
         setVoiceSamplesList(vs);
         setAudioFileArtifacts(audioFiles);
@@ -1044,6 +1061,7 @@ export const WorkflowEditor: React.FC<Props> = ({
         const filteredNodes = (wf.graph.nodes as AppGraphNode[]).filter(n => !responseNodeIds.has(n.id));
         const filteredEdges = wf.graph.edges.filter((e: { source: string; target: string }) => !responseNodeIds.has(e.source) && !responseNodeIds.has(e.target));
         const wfWithGraph = { ...wf, graph: { ...wf.graph, nodes: filteredNodes, edges: filteredEdges } };
+        onSyncWorkflowPath?.(wfWithGraph.id);
         graphHistoryRef.current.clear();
         setWorkflows(ws => mergeWorkflowDefinitionIntoList(ws, wfWithGraph));
         setActiveWf(wfWithGraph);
@@ -1075,8 +1093,6 @@ export const WorkflowEditor: React.FC<Props> = ({
         const folderId = wfWithGraph.project_id ?? sharedProjectId;
         if (folderId) setSelectedProjectId(folderId);
         if (wfWithGraph.expose_as_custom_skill) setIsCustomSkillsOpen(true);
-
-        onSyncWorkflowPath?.(wfWithGraph.id);
     };
 
     const openWorkflowRef = useRef(openWorkflow);
@@ -1847,14 +1863,18 @@ export const WorkflowEditor: React.FC<Props> = ({
                     ],
                 },
             }]);
-        } else if (type === 'messageUtility') {
+        } else if (type === 'broadcastMessage') {
             setNodes(ns => [...ns, {
                 id,
-                type: 'messageUtility',
+                type: 'broadcastMessage',
                 position,
                 data: {
-                    label: extra.label ?? 'Message',
-                    required_inputs: [{ key: 'message', type: 'string', value: null }],
+                    label: extra.label ?? 'Broadcast Message',
+                    severity: 'info',
+                    required_inputs: [
+                        { key: 'message', type: 'any', value: null },
+                        { key: 'title', type: 'string', value: null },
+                    ],
                 },
             }]);
         } else if (type === 'basicConditional') {
@@ -1956,9 +1976,21 @@ export const WorkflowEditor: React.FC<Props> = ({
                 data: {
                     label: (extra as { label?: string }).label ?? 'For Loop End',
                     for_loop_id: (extra as { for_loop_id?: string }).for_loop_id ?? '',
-                    exports: Array.isArray(ex) && ex.length > 0 ? ex : ['odds', 'evens'],
+                    exports: Array.isArray(ex) && ex.length > 0 ? ex : [...DEFAULT_FOR_LOOP_END_EXPORTS],
                 },
             }]);
+        } else if (type === 'stringPrimitive') {
+            setNodes(ns => [...ns, { id, type: 'stringPrimitive', position, data: { label: 'String', text: '' } }]);
+        } else if (type === 'listPrimitive') {
+            setNodes(ns => [...ns, { id, type: 'listPrimitive', position, data: { label: 'List', data: [] } }]);
+        } else if (type === 'dictionaryPrimitive') {
+            setNodes(ns => [...ns, { id, type: 'dictionaryPrimitive', position, data: { label: 'Dictionary', data: {} } }]);
+        } else if (type === 'booleanPrimitive') {
+            setNodes(ns => [...ns, { id, type: 'booleanPrimitive', position, data: { label: 'Boolean', value: false } }]);
+        } else if (type === 'intPrimitive') {
+            setNodes(ns => [...ns, { id, type: 'intPrimitive', position, data: { label: 'Int', value: 0 } }]);
+        } else if (type === 'dateTimePrimitive') {
+            setNodes(ns => [...ns, { id, type: 'dateTimePrimitive', position, data: { label: 'DateTime', iso: null, use_now: false } }]);
         } else if (type === 'structurePrimitive') {
             setNodes(ns => [...ns, { id, type: 'structurePrimitive', position, data: { label: 'Structure', structure_id: '' } }]);
         } else if (type === 'documentPrimitive') {
@@ -2072,6 +2104,43 @@ export const WorkflowEditor: React.FC<Props> = ({
                 type: 'sandboxPromptUserAction',
                 position,
                 data: { label: extra.label ?? 'Prompt for User Action' },
+            }]);
+        } else if (type === 'sandboxForceSimulationPause') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxForceSimulationPause',
+                position,
+                data: { label: extra.label ?? 'Force Simulation Pause' },
+            }]);
+        } else if (type === 'sandboxGetCellItems') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxGetCellItems',
+                position,
+                data: { label: extra.label ?? 'Get cell items' },
+            }]);
+        } else if (type === 'sandboxRemoveItemAtCell') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxRemoveItemAtCell',
+                position,
+                data: {
+                    label: extra.label ?? 'Remove item',
+                    required_inputs: [{ key: 'item_id', type: 'string', value: null }],
+                },
+            }]);
+        } else if (type === 'sandboxSpawnItemAtCell') {
+            setNodes(ns => [...ns, {
+                id,
+                type: 'sandboxSpawnItemAtCell',
+                position,
+                data: {
+                    label: extra.label ?? 'Spawn item',
+                    required_inputs: [
+                        { key: 'definition_id', type: 'string', value: null },
+                        { key: 'target', type: 'string', value: 'self' },
+                    ],
+                },
             }]);
         } else if (type === 'intToString') {
             setNodes(ns => [...ns, { id, type: 'intToString', position, data: { label: extra.label ?? 'Int to String' } }]);
@@ -2460,7 +2529,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 }
             }
         }
-    }, [activeWf?.id, recordGraphBeforeMutation]);
+    }, [activeWf?.id, recordGraphBeforeMutation, workflows]);
 
     const handleExposeCustomSkillChange = useCallback(
         async (value: boolean) => {
@@ -2645,6 +2714,27 @@ export const WorkflowEditor: React.FC<Props> = ({
         };
         rec.stop();
     }, [transcribeCapture]);
+
+    const handleBroadcastContinue = useCallback(async () => {
+        const cap = broadcastCapture;
+        if (cap == null) return;
+        setBroadcastAckPending(true);
+        setBroadcastAckError(null);
+        try {
+            await ApiClient.postWorkflowBroadcastAck(cap.runId, {
+                nodeId: cap.nodeId,
+                forLoopId: cap.forLoopId,
+                forLoopIteration: cap.forLoopIteration,
+            });
+            setBroadcastCapture(null);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            setBroadcastAckError(msg);
+            showStatusToast(msg);
+        } finally {
+            setBroadcastAckPending(false);
+        }
+    }, [broadcastCapture, showStatusToast]);
 
     const handleAudioFileInputRuntimeFile = useCallback(async (file: File | null) => {
         const cap = audioFileInputCapture;
@@ -2840,6 +2930,21 @@ export const WorkflowEditor: React.FC<Props> = ({
                         });
                         setTranscribeFileUploading(false);
                         setTranscribeFileError(null);
+                    } else if (event.event === "input_required" && event.kind === "broadcast_message") {
+                        const rawSegments = (event as { segments?: unknown }).segments;
+                        setBroadcastCapture({
+                            runId: String(event.run_id),
+                            nodeId: String(event.node_id),
+                            forLoopId:
+                                event.for_loop_id != null && String(event.for_loop_id).trim() !== ''
+                                    ? String(event.for_loop_id)
+                                    : null,
+                            forLoopIteration:
+                                typeof event.for_loop_iteration === "number" ? event.for_loop_iteration : 0,
+                            segments: parseBroadcastSegmentsFromEffects(rawSegments),
+                        });
+                        setBroadcastAckPending(false);
+                        setBroadcastAckError(null);
                     } else if (event.event === "node_end") {
                         const nodeResult: NodeRunResult = event.result;
                         const handledTcRaw = (event as { handled_by_try_catch?: unknown }).handled_by_try_catch;
@@ -3017,6 +3122,9 @@ export const WorkflowEditor: React.FC<Props> = ({
             setTranscribeCapture(null);
             setTranscribeUi("idle");
             setTranscribeError(null);
+            setBroadcastCapture(null);
+            setBroadcastAckPending(false);
+            setBroadcastAckError(null);
             setIsRunning(false);
             setRunningNodeIds(new Set());
             if (workflowRunAbortRef.current === runAbort) {
@@ -3970,6 +4078,22 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 />
                             </div>
                         </div>
+                    ) : null}
+                    {broadcastCapture && isRunning ? (
+                        <>
+                            <BroadcastMessageModal
+                                segments={broadcastCapture.segments}
+                                continuing={broadcastAckPending}
+                                onContinue={() => {
+                                    void handleBroadcastContinue();
+                                }}
+                            />
+                            {broadcastAckError ? (
+                                <p className="pointer-events-none absolute bottom-2 left-1/2 z-[121] -translate-x-1/2 text-xs text-rose-600 dark:text-rose-400">
+                                    {broadcastAckError}
+                                </p>
+                            ) : null}
+                        </>
                     ) : null}
                 </div>
             </div>
@@ -6661,7 +6785,7 @@ export const WorkflowEditor: React.FC<Props> = ({
 
                         {selectedNode.type === 'forLoopEndControl' && (() => {
                             const d = selectedNode.data as { for_loop_id?: string; exports?: string[]; label?: string };
-                            const exportsStr = Array.isArray(d.exports) ? d.exports.join(', ') : 'odds, evens';
+                            const exportsStr = Array.isArray(d.exports) ? d.exports.join(', ') : DEFAULT_FOR_LOOP_END_EXPORTS.join(', ');
                             return (
                                 <InspectorSection title="For Loop End">
                                     <div className="space-y-3">
@@ -6689,7 +6813,12 @@ export const WorkflowEditor: React.FC<Props> = ({
                                                 onFocus={recordGraphBeforeMutation}
                                                 onChange={e => {
                                                     const parts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-                                                    patchSelectedNodeData({ exports: parts.length > 0 ? parts : ['odds', 'evens'] });
+                                                    const oldExports = Array.isArray(d.exports) ? d.exports : [...DEFAULT_FOR_LOOP_END_EXPORTS];
+                                                    const newExports = parts.length > 0 ? parts : [...DEFAULT_FOR_LOOP_END_EXPORTS];
+                                                    patchSelectedNodeData({ exports: newExports });
+                                                    setEdges(es =>
+                                                        remapForLoopEndExportEdges(es, selectedNode.id, oldExports, newExports),
+                                                    );
                                                 }}
                                                 className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg"
                                             />
@@ -6753,6 +6882,75 @@ export const WorkflowEditor: React.FC<Props> = ({
                                             className="w-4 h-4 rounded border-mw-border text-amber-600 focus:ring-amber-500"
                                         />
                                         <label htmlFor="prepend-add-line" className="text-xs font-medium text-mw-text-primary">Add additional line (blank line between prepended text and target)</label>
+                                    </div>
+                                </InspectorSection>
+                            );
+                        })()}
+
+                        {(selectedNode.type === 'broadcastMessage' || selectedNode.type === 'messageUtility') && (() => {
+                            const d = selectedNode.data as any;
+                            let requiredInputs: RequiredInput[] = d?.required_inputs ?? [];
+                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'message')) {
+                                requiredInputs = [...requiredInputs, { key: 'message', type: 'any' as const, value: null }];
+                            }
+                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'title')) {
+                                requiredInputs = [...requiredInputs, { key: 'title', type: 'string' as const, value: null }];
+                            }
+                            const updateInput = (idx: number, patch: Partial<RequiredInput>, withHistory = true) => {
+                                const next = [...requiredInputs];
+                                next[idx] = { ...next[idx], ...patch };
+                                if (withHistory) updateSelectedNodeData({ required_inputs: next });
+                                else patchSelectedNodeData({ required_inputs: next });
+                            };
+                            const messageIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'message');
+                            const titleIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'title');
+                            const severity = normalizeBroadcastSeverity(d?.severity);
+                            return (
+                                <InspectorSection
+                                    title="Broadcast"
+                                    description="Pauses the run and shows a modal with this message. Wire any value into message for dynamic debug output."
+                                >
+                                    <div>
+                                        <label className="text-xs font-medium text-mw-text-secondary block mb-1">Severity</label>
+                                        <select
+                                            value={severity}
+                                            onChange={e => updateSelectedNodeData({ severity: e.target.value })}
+                                            className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-mw-primary"
+                                        >
+                                            <option value="info">Info</option>
+                                            <option value="notice">Notice</option>
+                                            <option value="success">Success</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-mw-text-secondary block mb-1">Title (optional)</label>
+                                        <input
+                                            type="text"
+                                            value={(titleIdx >= 0 ? requiredInputs[titleIdx]?.value : null) as string ?? ''}
+                                            onFocus={recordGraphBeforeMutation}
+                                            onChange={e =>
+                                                titleIdx >= 0 && updateInput(titleIdx, { value: e.target.value || null }, false)
+                                            }
+                                            placeholder="Or connect from upstream"
+                                            className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-mw-primary"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-mw-text-secondary block mb-1">Message</label>
+                                        <textarea
+                                            value={
+                                                messageIdx >= 0 && typeof requiredInputs[messageIdx]?.value === 'string'
+                                                    ? (requiredInputs[messageIdx]?.value as string)
+                                                    : ''
+                                            }
+                                            onFocus={recordGraphBeforeMutation}
+                                            onChange={e =>
+                                                messageIdx >= 0 && updateInput(messageIdx, { value: e.target.value || null }, false)
+                                            }
+                                            rows={4}
+                                            placeholder="Or connect any upstream value"
+                                            className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-mw-primary"
+                                        />
                                     </div>
                                 </InspectorSection>
                             );
@@ -6986,6 +7184,161 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 </p>
                             </InspectorSection>
                         )}
+
+                        {selectedNode.type === 'sandboxRemoveItemAtCell' && (() => {
+                            const d = selectedNode.data as any;
+                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
+                            if (!requiredInputs.some((i: RequiredInput) => i.key === 'item_id')) {
+                                requiredInputs = [...requiredInputs, { key: 'item_id', type: 'string' as const, value: null }];
+                            }
+                            const updateInput = (idx: number, patch: Partial<RequiredInput>, withHistory = true) => {
+                                const next = [...requiredInputs];
+                                next[idx] = { ...next[idx], ...patch };
+                                if (withHistory) updateSelectedNodeData({ required_inputs: next });
+                                else patchSelectedNodeData({ required_inputs: next });
+                            };
+                            const itemIdIdx = requiredInputs.findIndex((i: RequiredInput) => i.key === 'item_id');
+                            const itemIdVal = itemIdIdx >= 0 ? requiredInputs[itemIdIdx]?.value : null;
+                            return (
+                                <>
+                                    <InspectorSection
+                                        title="About"
+                                        description="Removes a pickable from the fixture cell during a use_fixture workflow. Use the placed item instance id (not definition_id). Usually wired from a For Loop item via Dictionary Value by Key id; you can also type an id here."
+                                    />
+                                    <InspectorSection title="Item id">
+                                        <div>
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                item_id (item_id handle)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={itemIdVal != null ? String(itemIdVal) : ''}
+                                                onFocus={recordGraphBeforeMutation}
+                                                onChange={e => {
+                                                    if (itemIdIdx >= 0) {
+                                                        updateInput(itemIdIdx, { value: e.target.value || null }, false);
+                                                    }
+                                                }}
+                                                placeholder="Leave empty or connect from upstream"
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                            />
+                                        </div>
+                                    </InspectorSection>
+                                </>
+                            );
+                        })()}
+
+                        {selectedNode.type === 'sandboxSpawnItemAtCell' && (() => {
+                            const d = selectedNode.data as any;
+                            const spawnKeys = ['definition_id', 'target', 'energy', 'color'] as const;
+                            let requiredInputs: RequiredInput[] = Array.isArray(d?.required_inputs) ? [...d.required_inputs] : [];
+                            for (const key of spawnKeys) {
+                                if (!requiredInputs.some((i: RequiredInput) => i.key === key)) {
+                                    requiredInputs.push({
+                                        key,
+                                        type: key === 'energy' ? 'int' : 'string',
+                                        value: key === 'target' ? 'self' : null,
+                                    });
+                                }
+                            }
+                            requiredInputs = requiredInputs.filter((i: RequiredInput) =>
+                                spawnKeys.includes(i.key as (typeof spawnKeys)[number]),
+                            );
+                            const updateInput = (idx: number, patch: Partial<RequiredInput>, withHistory = true) => {
+                                const next = [...requiredInputs];
+                                next[idx] = { ...next[idx], ...patch };
+                                if (withHistory) updateSelectedNodeData({ required_inputs: next });
+                                else patchSelectedNodeData({ required_inputs: next });
+                            };
+                            const idxFor = (key: string) => requiredInputs.findIndex((i: RequiredInput) => i.key === key);
+                            const definitionIdIdx = idxFor('definition_id');
+                            const targetIdx = idxFor('target');
+                            const energyIdx = idxFor('energy');
+                            const colorIdx = idxFor('color');
+                            const definitionIdVal =
+                                definitionIdIdx >= 0 && requiredInputs[definitionIdIdx]?.value != null
+                                    ? String(requiredInputs[definitionIdIdx].value)
+                                    : '';
+                            const targetVal =
+                                targetIdx >= 0 && requiredInputs[targetIdx]?.value != null
+                                    ? String(requiredInputs[targetIdx].value)
+                                    : 'self';
+                            const energyVal = energyIdx >= 0 ? requiredInputs[energyIdx]?.value : null;
+                            const colorVal =
+                                colorIdx >= 0 && requiredInputs[colorIdx]?.value != null
+                                    ? String(requiredInputs[colorIdx].value)
+                                    : '';
+                            return (
+                                <>
+                                    <InspectorSection
+                                        title="About"
+                                        description="Spawns a pickable at the fixture cell (or a neighbor) during a use_fixture workflow. Set values here or wire each handle from upstream."
+                                    />
+                                    <InspectorSection title="Spawn settings">
+                                        <SandboxItemDefinitionField
+                                            id={`spawn-item-def-${selectedNode.id}`}
+                                            value={definitionIdVal}
+                                            itemDefinitions={itemDefinitions}
+                                            onChange={v => {
+                                                if (definitionIdIdx >= 0) updateInput(definitionIdIdx, { value: v || null });
+                                            }}
+                                        />
+                                        <div className="mt-3">
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                target (target handle)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={targetVal}
+                                                onChange={e => {
+                                                    if (targetIdx >= 0) updateInput(targetIdx, { value: e.target.value || 'self' });
+                                                }}
+                                                placeholder="self"
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                            />
+                                            <p className="text-[10px] text-mw-text-secondary mt-0.5">
+                                                Use <code className="text-[10px]">self</code> for the fixture cell, or an offset like <code className="text-[10px]">1 0</code>.
+                                            </p>
+                                        </div>
+                                        <div className="mt-3">
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                energy (optional, energy handle)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={typeof energyVal === 'number' ? energyVal : ''}
+                                                onFocus={recordGraphBeforeMutation}
+                                                onChange={e => {
+                                                    const raw = e.target.value;
+                                                    const v = raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0);
+                                                    if (energyIdx >= 0) updateInput(energyIdx, { value: v }, false);
+                                                }}
+                                                placeholder="Definition default"
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                            />
+                                        </div>
+                                        <div className="mt-3">
+                                            <label className="text-xs font-medium text-mw-text-secondary block mb-1">
+                                                color (optional, color handle)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={colorVal}
+                                                onFocus={recordGraphBeforeMutation}
+                                                onChange={e => {
+                                                    if (colorIdx >= 0) {
+                                                        updateInput(colorIdx, { value: e.target.value || null }, false);
+                                                    }
+                                                }}
+                                                placeholder="#RRGGBB for ball spawn"
+                                                className="w-full px-2 py-1.5 text-xs border border-mw-border bg-mw-card text-mw-text-primary rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                            />
+                                        </div>
+                                    </InspectorSection>
+                                </>
+                            );
+                        })()}
 
                         {/* Structure Primitive nodes */}
                         {selectedNode.type === 'structurePrimitive' && (
@@ -7829,7 +8182,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                                     onConfirmDelete={handleDeleteEdge}
                                 />
                             ) : activeWf ? (
-                                <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                                <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
                                     <WorkflowExplorerWorkflowMetadata
                                         workflow={activeWf}
                                         nodeCount={nodes.length}

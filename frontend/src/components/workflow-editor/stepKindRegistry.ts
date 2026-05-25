@@ -21,6 +21,11 @@ for (const s of manifest.steps) {
     }
 }
 
+/** Legacy persisted graphs (`utility_type: message`) map to the Broadcast Message canvas node. */
+const legacyFlowTypeByKey = new Map<string, string>([
+    ['utility:message', 'broadcastMessage'],
+]);
+
 /** Editor-only annotations (not in shared manifest; excluded from executor). */
 const annotationFlowTypeByKey = new Map<string, string>([
     ['annotation:note', 'annotationNote'],
@@ -36,7 +41,9 @@ export function expectedReactFlowTypeForAppNode(n: AppGraphNode): string | null 
     if (n.kind === 'utility' && 'utility_type' in n && (n as { utility_type: string }).utility_type === 'simple_llm_call') {
         return flowTypeByKey.get('skill:simple_llm_call') ?? null;
     }
-    if (n.kind === 'utility') return flowTypeByKey.get(`utility:${n.utility_type}`) ?? null;
+    if (n.kind === 'utility') {
+        return legacyFlowTypeByKey.get(`utility:${n.utility_type}`) ?? flowTypeByKey.get(`utility:${n.utility_type}`) ?? null;
+    }
     if (n.kind === 'skill') return flowTypeByKey.get(`skill:${n.skill_type}`) ?? null;
     if (n.kind === 'control') return flowTypeByKey.get(`control:${n.control_type}`) ?? null;
     if (n.kind === 'start' || n.kind === 'stop' || n.kind === 'workflow') {
