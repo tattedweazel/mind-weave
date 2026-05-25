@@ -165,6 +165,10 @@ def _empty_probe_tail() -> dict:
     return {"stack_count": 0, "items": []}
 
 
+def _fixture_probe_tail() -> dict:
+    return {**_empty_probe_tail(), "color": "#8B5CF6"}
+
+
 def test_sandbox_get_position(client: TestClient):
     tick = _tick_dict(x=4, y=3)
     u_res = _run_utility_graph(client, utility_type="sandbox_get_position", tick=tick, output_kind="dictionary")
@@ -214,7 +218,7 @@ def test_sandbox_get_position_from_fixture_override(client: TestClient):
         "y": 1,
         "kind": "fixture",
         "region_label": None,
-        **_empty_probe_tail(),
+        **_fixture_probe_tail(),
     }
 
 

@@ -11,6 +11,7 @@ import {
     forwardRingSlot,
     INVENTORY_SELECTION_HINT,
     nearbyCellKindBadgeClass,
+    nearbyCellKindBadgeStyle,
     nearbyCellKindLabel,
     nearbyCellsToRingMap,
     nearbyRegionChipBadgeClass,
@@ -43,10 +44,16 @@ function facingCompassHighlight(facing: SandboxFacing, direction: 'N' | 'E' | 'S
 
 function CellKindBadges({ cell }: { cell: CellProbeJson }) {
     const regionChip = nearbyRegionChipLabel(cell.region_label);
+    const kindBadgeStyle = nearbyCellKindBadgeStyle(cell);
     return (
         <>
             <span
-                className={`text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border ${nearbyCellKindBadgeClass(cell.kind)}`}
+                className={
+                    kindBadgeStyle
+                        ? 'text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border'
+                        : `text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded border ${nearbyCellKindBadgeClass(cell.kind)}`
+                }
+                style={kindBadgeStyle ?? undefined}
             >
                 {nearbyCellKindLabel(cell.kind)}
             </span>

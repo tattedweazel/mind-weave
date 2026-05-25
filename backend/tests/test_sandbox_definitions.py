@@ -11,7 +11,7 @@ def test_item_definition_crud_smoke(client: TestClient):
     name = f"Test Item {uuid.uuid4().hex[:8]}"
     create = client.post(
         "/api/v1/sandbox-definitions/items",
-        json={"name": name, "label": "Test", "default_energy": 10},
+        json={"name": name, "label": "Test", "custom_metadata": {"energy": 10}},
     )
     assert create.status_code == 201, create.text
     item = create.json()

@@ -65,8 +65,6 @@ export function getItemFieldValue(
 ): number | undefined {
     if (key === 'energy') {
         if (typeof item.energy === 'number') return item.energy;
-        const def = ctx.itemDefinitions?.find(d => d.id === item.definition_id);
-        if (def?.default_energy != null) return def.default_energy;
         if (resolvedItemType(item) === 'food') return SANDBOX_DEFAULT_FOOD_ENERGY;
         return undefined;
     }

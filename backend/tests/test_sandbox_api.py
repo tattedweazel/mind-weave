@@ -826,6 +826,7 @@ def test_fixture_workflow_get_position_via_use_fixture(client: TestClient):
         "region_label": None,
         "stack_count": 0,
         "items": [],
+        "color": "#8B5CF6",
     }
     env = body["envelope"]
     assert env.get("last_fixture_errors", {}).get("c1") in (None, "")

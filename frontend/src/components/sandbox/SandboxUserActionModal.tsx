@@ -13,7 +13,7 @@ import {
     X,
 } from 'lucide-react';
 
-import type { ItemDefinitionRead } from '../../api/types';
+import type { FixtureDefinitionRead, ItemDefinitionRead } from '../../api/types';
 import type { SandboxCreatureJson, SandboxFacing, SandboxSandboxStateJson } from '../../domain/sandbox/types';
 import {
     forwardCellAllowsPlaceItem,
@@ -24,6 +24,7 @@ import {
     forwardCellPlaceBlockedReason,
     runSensoryProbe,
     type NearbyCellItemSummaryJson,
+    type ProbeLabelContext,
     type SandboxSensoryProbeKind,
 } from '../../sandbox/sandboxSensoryProbes';
 import { PICK_UP_SELECTION_HINT } from '../../sandbox/sandboxSensoryProbeDisplay';
@@ -40,7 +41,10 @@ export interface SandboxUserActionModalProps {
     creatureTotal: number;
     onConfirm: (action: SandboxCreatureUserAction) => void;
     onDismiss: () => void;
-    itemDefinitions?: ReadonlyArray<Pick<ItemDefinitionRead, 'id' | 'name' | 'label' | 'default_color'>>;
+    itemDefinitions?: ReadonlyArray<
+        Pick<ItemDefinitionRead, 'id' | 'name' | 'label' | 'default_color' | 'custom_metadata' | 'pickable'>
+    >;
+    fixtureDefinitions?: ReadonlyArray<Pick<FixtureDefinitionRead, 'id' | 'color'>>;
 }
 
 const PROBE_BUTTONS: { kind: SandboxSensoryProbeKind; label: string }[] = [
@@ -66,6 +70,7 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
     onConfirm,
     onDismiss,
     itemDefinitions,
+    fixtureDefinitions,
 }) => {
     const [selectedAction, setSelectedAction] = useState<SandboxUserDecisionAction | null>(null);
     const [selectedInventoryIndex, setSelectedInventoryIndex] = useState<number | null>(null);
@@ -103,14 +108,22 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
         [creature, sandboxState],
     );
 
+    const probeLabelContext = useMemo<ProbeLabelContext>(
+        () => ({
+            itemDefinitions,
+            fixtureDefinitions,
+        }),
+        [itemDefinitions, fixtureDefinitions],
+    );
+
     const openInventoryProbe = useCallback(() => {
         const kind: SandboxSensoryProbeKind = 'inventory';
         if (probeCache[kind] === undefined) {
-            const value = runSensoryProbe(kind, creature, sandboxState);
+            const value = runSensoryProbe(kind, creature, sandboxState, probeLabelContext);
             setProbeCache(prev => ({ ...prev, [kind]: value }));
         }
         setActiveProbe(kind);
-    }, [creature, probeCache, sandboxState]);
+    }, [creature, probeCache, sandboxState, probeLabelContext]);
 
     const selectAction = useCallback(
         (action: SandboxUserDecisionAction) => {
@@ -182,11 +195,11 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
                 setActiveProbe(kind);
                 return;
             }
-            const value = runSensoryProbe(kind, creature, sandboxState);
+            const value = runSensoryProbe(kind, creature, sandboxState, probeLabelContext);
             setProbeCache(prev => ({ ...prev, [kind]: value }));
             setActiveProbe(kind);
         },
-        [activeProbe, probeCache, creature, sandboxState],
+        [activeProbe, probeCache, creature, sandboxState, probeLabelContext],
     );
 
     useEffect(() => {

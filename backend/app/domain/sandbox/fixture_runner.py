@@ -63,7 +63,10 @@ def build_fixture_interaction_input(
     definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
 ) -> FixtureInteractionInput:
     cell_items = pickables_at_cell(
-        state.world.items, fixture_item.position.x, fixture_item.position.y
+        state.world.items,
+        fixture_item.position.x,
+        fixture_item.position.y,
+        definition_defaults,
     )
     summaries = [
         pickable_item_probe_summary(it, definition_labels, definition_defaults)

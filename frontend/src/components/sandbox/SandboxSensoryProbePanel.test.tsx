@@ -126,6 +126,17 @@ describe('SandboxSensoryProbePanel', () => {
         expect(screen.getByText('You')).toBeInTheDocument();
     });
 
+    it('renders fixture badge with definition color inline styles', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="position"
+                value={{ x: 3, y: 1, kind: 'fixture', region_label: null, color: '#EF4444' }}
+            />,
+        );
+        const badge = screen.getByText('Fixture');
+        expect(badge).toHaveStyle({ backgroundColor: '#EF4444' });
+    });
+
     it('renders region chip for labeled region-only cell', () => {
         render(
             <SandboxSensoryProbePanel

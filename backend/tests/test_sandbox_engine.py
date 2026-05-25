@@ -473,7 +473,7 @@ def test_pick_up_and_place_definition_backed_item_preserves_definition_id():
     assert st.creatures[0].inventory == []
 
 
-def test_pick_up_definition_backed_item_uses_definition_default_energy():
+def test_pick_up_definition_backed_item_requires_instance_energy():
     from app.domain.sandbox.item_helpers import ItemDefinitionDefaults
 
     st = _state_with_creature(x=2, y=2, facing="N")
@@ -486,7 +486,11 @@ def test_pick_up_definition_backed_item_uses_definition_default_energy():
             position=GridCell(x=2, y=1),
         )
     )
-    defaults = {"item-def-milk": ItemDefinitionDefaults(default_energy=25, default_color="#FFFFFF")}
+    defaults = {
+        "item-def-milk": ItemDefinitionDefaults(
+            custom_metadata={"energy": 25},
+        ),
+    }
     eng = SandboxEngine()
     eng.apply_decision(
         st,
@@ -494,10 +498,8 @@ def test_pick_up_definition_backed_item_uses_definition_default_energy():
         DecisionIntent(action="pick_up_item"),
         definition_defaults=defaults,
     )
-    assert len(st.creatures[0].inventory) == 1
-    assert st.creatures[0].inventory[0].definition_id == "item-def-milk"
-    assert st.creatures[0].inventory[0].energy == 25
-    assert not any(it.id == "milk1" for it in st.world.items)
+    assert st.creatures[0].inventory == []
+    assert any(it.id == "milk1" for it in st.world.items)
 
 
 def test_pick_up_fails_without_removing_world_item_when_unconvertible():

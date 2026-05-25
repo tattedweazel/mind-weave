@@ -48,10 +48,6 @@ export function inventoryEntryEnergy(
 ): number | null {
     if (!inventoryEntryShowsEnergy(entry, ctx)) return null;
     if (typeof entry.energy === 'number') return entry.energy;
-    const def = definitionForEntry(entry, ctx);
-    if (def && 'default_energy' in def && typeof def.default_energy === 'number') {
-        return def.default_energy;
-    }
     return null;
 }
 

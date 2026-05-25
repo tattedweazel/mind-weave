@@ -3,7 +3,6 @@
  */
 
 import type { SandboxFacing, SandboxGridCellJson } from '../domain/sandbox/types';
-import { SANDBOX_DEFAULT_FOOD_ENERGY } from './sandboxItemInspectorFields';
 
 export type SandboxPlaceItemInteraction = {
     type: 'place_item';
@@ -82,16 +81,12 @@ export function placeBallInteraction(cell: SandboxGridCellJson, color: string): 
 }
 
 export function materializeItemDefinitionPlacementOptions(def: {
-    default_energy?: number | null;
     default_color?: string | null;
 }): { color?: string; energy?: number } {
-    if (def.default_energy != null) {
-        return { energy: def.default_energy };
-    }
     if (def.default_color) {
         return { color: def.default_color };
     }
-    return { energy: SANDBOX_DEFAULT_FOOD_ENERGY };
+    return {};
 }
 
 export function placeItemDefinitionInteraction(

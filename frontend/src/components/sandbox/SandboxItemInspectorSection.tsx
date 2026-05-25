@@ -145,6 +145,16 @@ export const SandboxItemInspectorSection: React.FC<SandboxItemInspectorSectionPr
                         </div>
                     </>
                 ) : null}
+                {def?.customMetadata && Object.keys(def.customMetadata).length > 0
+                    ? Object.entries(def.customMetadata).map(([key, value]) => (
+                          <React.Fragment key={key}>
+                              <div className="text-mw-text-secondary">{key}</div>
+                              <div className="text-mw-text-primary text-right font-mono text-[10px] break-all">
+                                  {JSON.stringify(value)}
+                              </div>
+                          </React.Fragment>
+                      ))
+                    : null}
                 {readOnly
                     ? editableFields.map(field => {
                           const value = getItemFieldValue(item, field.key, definitionContext);

@@ -50,6 +50,11 @@ class SandboxNodeResolverMixin:
 
         return item_definition_probe_maps(self.session, self.user_id)
 
+    def _sandbox_fixture_definition_color_map(self: WorkflowExecutorResolverMixin):
+        from app.domain.services.sandbox_definition_service import fixture_definition_color_map
+
+        return fixture_definition_color_map(self.session, self.user_id)
+
     def _resolve_sandbox_tick_primitive_node(
         self: WorkflowExecutorResolverMixin,
         node: SandboxTickPrimitiveNode,
@@ -97,6 +102,7 @@ class SandboxNodeResolverMixin:
         )
 
         definition_maps = self._sandbox_item_definition_probe_maps()
+        fixture_colors = self._sandbox_fixture_definition_color_map()
         fx_raw = _executor_mod()._resolve_sandbox_fixture_dict(upstream, input_overrides)
         if fx_raw is not None:
             try:
@@ -104,6 +110,7 @@ class SandboxNodeResolverMixin:
                     fx_raw,
                     definition_labels=definition_maps.labels,
                     definition_defaults=definition_maps.defaults,
+                    fixture_definition_colors=fixture_colors,
                 )
             except Exception as exc:
                 return _executor_mod()._error_with_resolved_inputs(
@@ -127,6 +134,7 @@ class SandboxNodeResolverMixin:
                 raw,
                 definition_labels=definition_maps.labels,
                 definition_defaults=definition_maps.defaults,
+                fixture_definition_colors=fixture_colors,
             )
         except Exception as exc:
             return _executor_mod()._error_with_resolved_inputs(
@@ -182,10 +190,12 @@ class SandboxNodeResolverMixin:
             )
         try:
             definition_maps = self._sandbox_item_definition_probe_maps()
+            fixture_colors = self._sandbox_fixture_definition_color_map()
             cells = nearby_cells_from_tick_dict(
                 raw,
                 definition_labels=definition_maps.labels,
                 definition_defaults=definition_maps.defaults,
+                fixture_definition_colors=fixture_colors,
             )
         except Exception as exc:
             return _executor_mod()._error_with_resolved_inputs(

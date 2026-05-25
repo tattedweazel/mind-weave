@@ -10,7 +10,6 @@ import {
     removeItemAtCellInteraction,
     removeRegionAtCellInteraction,
 } from './sandboxCellInteractions';
-import { SANDBOX_DEFAULT_FOOD_ENERGY } from './sandboxItemInspectorFields';
 
 describe('sandboxCellInteractions', () => {
     it('builds place_item payload', () => {
@@ -64,27 +63,25 @@ describe('sandboxCellInteractions', () => {
         });
     });
 
-    it('materializes energy-only placement when definition has both defaults', () => {
+    it('materializes color-only placement when definition has color default', () => {
         expect(
             materializeItemDefinitionPlacementOptions({
-                default_energy: 25,
                 default_color: '#FFFFFF',
             }),
-        ).toEqual({ energy: 25 });
+        ).toEqual({ color: '#FFFFFF' });
         expect(
             placeItemDefinitionInteraction(
                 { x: 1, y: 1 },
-                'item-def-milk',
+                'item-def-ball',
                 materializeItemDefinitionPlacementOptions({
-                    default_energy: 25,
                     default_color: '#FFFFFF',
                 }),
             ),
         ).toEqual({
             type: 'place_item',
             cell: { x: 1, y: 1 },
-            definition_id: 'item-def-milk',
-            energy: 25,
+            definition_id: 'item-def-ball',
+            color: '#FFFFFF',
         });
     });
 
@@ -96,10 +93,8 @@ describe('sandboxCellInteractions', () => {
         ).toEqual({ color: '#AABBCC' });
     });
 
-    it('falls back to default food energy when definition has no defaults', () => {
-        expect(materializeItemDefinitionPlacementOptions({})).toEqual({
-            energy: SANDBOX_DEFAULT_FOOD_ENERGY,
-        });
+    it('returns empty options when definition has only custom metadata', () => {
+        expect(materializeItemDefinitionPlacementOptions({})).toEqual({});
     });
 
     it('builds remove_region payload', () => {

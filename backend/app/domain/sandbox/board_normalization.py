@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from app.domain.sandbox.constants import DEFAULT_FOOD_ENERGY
 from app.domain.sandbox.item_helpers import (
     ItemDefinitionDefaults,
     resolved_pickable_color,
@@ -53,9 +52,7 @@ def normalize_board_item(
     if color is not None:
         return item.model_copy(update={"color": color, "energy": None, "type": BALL_ITEM_TYPE})
 
-    return item.model_copy(
-        update={"energy": DEFAULT_FOOD_ENERGY, "color": None, "type": "food"},
-    )
+    return item.model_copy(update={"energy": None, "color": None, "type": None})
 
 
 def normalize_board_definition(

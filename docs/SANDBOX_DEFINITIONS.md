@@ -25,6 +25,7 @@ Sandbox toolbar: **Simulation | Board Builder | Definitions**
 - Workflow pickers use the same eligibility rules as creature brains (`sandbox_enabled` projects plus **Shared**), grouped by project folder
 - Cell **Place item** pickers list **user** item/terrain definitions only (`!is_system`); seeded Food/Ball/Wall remain reachable via **Built-ins** in the cell action modal
 - Saving or deleting a definition refreshes shared Sandbox pickers (cell action modal, region inspector workflow lists) without a page reload
+- Item definitions include a **Custom metadata** key/value editor (JSON values). Metadata is **opaque** at runtime — workflows read keys explicitly (e.g. **Dictionary Value by Key**).
 
 ## Definition JSON shapes
 
@@ -34,10 +35,10 @@ Sandbox toolbar: **Simulation | Board Builder | Definitions**
 |-------|----------|-------|
 | `name` | yes | Unique per user |
 | `label` | yes | Display label on cards and probes |
-| `default_energy` | no | Default energy when placed (food-like items); takes precedence over `default_color` for placement and pickup semantics |
-| `default_color` | no | Visual default (`#RRGGBB`); used for rendering and ball-like placement when `default_energy` is unset |
+| `custom_metadata` | no | Free-form JSON object (default `{}`). Opaque key/value bag for workflows (e.g. `{ "energy": 48, "ingredients": ["milk"] }`). **Not** auto-materialized onto board instances — legacy food semantics apply only to built-in Food/Ball and explicit instance `energy`/`color`. |
+| `default_color` | no | Visual default (`#RRGGBB`); when set, Board Builder materializes instance `color` (ball-like rendering path) |
 | `shape` | no | `circle` \| `square` (render hint; consumed by Phaser for definition-backed instances; defaults to `circle` when unknown) |
-| `pickable` | yes | Default `true` for items |
+| `pickable` | yes | Default `true`. When `false`, the item remains placeable and visible but is excluded from pick-up lists, **Get Cell Items**, and probe `stack_count` (e.g. recipe cards). |
 
 ### TerrainDefinition
 
@@ -94,18 +95,22 @@ Placed objects reference definitions:
   "definition_kind": "item",
   "role": "pickable",
   "position": { "x": 5, "y": 5 },
-  "energy": 48
+  "color": "#FF6B6B"
 }
 ```
 
 | `definition_kind` | `role` | Notes |
 |-------------------|--------|-------|
-| `item` | `pickable` | Optional instance overrides: `energy`, `color`. Board Builder materializes **energy OR color** on the instance (not both): when `default_energy` is set, only instance `energy` is stored and visual color comes from the definition; when only `default_color` is set, instance `color` is stored (ball-like). Save/load normalizes invalid pairs (e.g. strips instance `color` when instance `energy` is present). |
+| `item` | `pickable` | Optional instance overrides: `energy`, `color`. Board Builder materializes from **`default_color` only** (instance `color`, ball-like) when the definition has a color default; otherwise the instance stays a **generic pickable** with no forced `type: food` and no auto `energy`. Explicit instance `energy` or `color` on save still normalizes invalid pairs (e.g. strips instance `color` when instance `energy` is present). **`custom_metadata` is not copied to instances** — probes expose it from the definition lookup. |
 | `terrain` | `solid` | Blocks movement |
-| `fixture` | `solid` | Blocks movement; allows pickable stack |
+| `fixture` | `solid` | Blocks movement; allows pickable stack. Visual color resolved at render/probe time from fixture definition `color` (optional instance `color` override). |
 | `region` | — | Region layer; optional trigger override |
 
 Creatures reference `creature_definition_id` or inline template fields during migration.
+
+### Chai Recipe pattern
+
+Use `pickable: false` plus opaque metadata (e.g. `{ "ingredients": ["steamed_milk", "chai_powder"] }`). Ingredient items are separate **pickable** definitions placed on the fixture cell. Fixture workflows match pickable ingredients via **Get Cell Items**; recipe metadata is read from the wired `definition_id` or **Dictionary Value by Key** on probe `custom_metadata` — not via pick-up.
 
 ## Stacked cells
 
@@ -116,13 +121,13 @@ Creatures reference `creature_definition_id` or inline template fields during mi
 | Pickables | 0..N non-solid items (may share cell with fixture) |
 | Creature | 0..1 |
 
-**Pick up** (workflow **Pick Up Item** utility) removes the **most recently placed** pickable from the forward cell stack when `item_id` and `pick_all` are omitted.
+**Pick up** (workflow **Pick Up Item** utility) removes the **most recently placed** pickable from the forward cell stack when `item_id` and `pick_all` are omitted. Pick-up succeeds only when the instance resolves to inventoryable **food** (`energy` on instance) or **ball** (`color` on instance) — metadata alone does not inventory.
 
 Remote Control **Pick up** accepts optional `item_id` (one pickable) or `pick_all: true` (every pickable on the forward cell). Omit both only for workflow-emitted `{action: "pick_up_item"}` (LIFO single pick).
 
 In Board Builder and paused Simulation cell edits, **Remove item** clears pickables and terrain only (fixtures remain). When multiple pickables share a cell, the cell action menu opens a picker to remove one item or **Remove all**.
 
-**Explorer (cell inspect):** When you inspect a cell in Simulation or Board Builder, the Explorer lists each occupant in layer order (region, fixture, terrain, pickables). Fixture and definition-backed item instances show their definition **label**, **name**, and role-appropriate fields (workflow for fixtures; shape, color, and energy for items). Built-in food/ball/wall instances keep legacy section titles (**Food**, **Ball**, **Terrain**).
+**Explorer (cell inspect):** When you inspect a cell in Simulation or Board Builder, the Explorer lists each occupant in layer order (region, fixture, terrain, pickables). Fixture and definition-backed item instances show their definition **label**, **name**, and role-appropriate fields (workflow for fixtures; shape, color, instance energy, and read-only **custom metadata** for items). Built-in food/ball/wall instances keep legacy section titles (**Food**, **Ball**, **Terrain**).
 
 ## Fixture interaction (`use_fixture`)
 
@@ -131,7 +136,7 @@ When a creature (or Remote Control user) emits `{ "action": "use_fixture" }`:
 1. Engine resolves the **forward adjacent** fixture instance and `FixtureDefinition`
 2. Rejects if no fixture or workflow_id does not resolve
 3. Runs the fixture workflow with `FixtureInteractionInput` via `sandbox_fixture` override
-4. Fixture utility nodes may mutate world state (list/remove/spawn items). **Get Position** probes the **fixture cell** (including `stack_count` and pickable `items` with resolved `label`); **Get Facing**, **Get Nearby**, and **Get Inventory** resolve context from the injected `sandbox_fixture` override using the **actor** position/facing without requiring a Start `sandbox_tick` slot.
+4. Fixture utility nodes may mutate world state (list/remove/spawn items). **Get Position** probes the **fixture cell** (including `stack_count` and pickable `items` with resolved `label` and `custom_metadata`); **Get Facing**, **Get Nearby**, and **Get Inventory** resolve context from the injected `sandbox_fixture` override using the **actor** position/facing without requiring a Start `sandbox_tick` slot.
 5. No Stop/DecisionIntent parse — side effects are the outcome
 
 When a fixture workflow runs during simulation, its node logs appear in the Simulation **Run Logs** tab under **Triggered workflows** (see [SANDBOX.md — Run Logs](SANDBOX.md#run-logs)). Fixture failures are recorded in `envelope.last_fixture_errors`, separate from creature brain errors.
@@ -168,6 +173,7 @@ Same loop body, but the list comes directly from **Get Cell Items** (no Start / 
 |----------|------|-------|
 | Display **label** | Loop item → `label` → **Is?** vs String primitive (e.g. `"Key"`) | Uses resolved display label from the cell probe |
 | **definition_id** | Loop item → `definition_id` → **Is?** vs String primitive (ItemDefinition UUID) | Prefer for definition-backed pickables where probe `kind` is always `"item"` |
+| **Metadata key** | Loop item → `custom_metadata` → **Dictionary Value by Key** | Read opaque definition metadata exposed on the probe summary |
 
 Copy UUIDs from the **Definitions** tab, or pick an item definition in the **Spawn Item** Explorer panel (dropdown + manual override).
 
@@ -183,7 +189,7 @@ Copy UUIDs from the **Definitions** tab, or pick an item definition in the **Spa
 
 **Spawn Item** defaults `target` to **`self`** (same cell as the fixture). Optional `target` offset strings (`"dx dy"`) spawn on a neighbor cell instead.
 
-See [SANDBOX.md — Cell probe shape](SANDBOX.md#cell-probe-shape) for the `items[]` summary fields (`id`, `label`, `definition_id`).
+See [SANDBOX.md — Cell probe shape](SANDBOX.md#cell-probe-shape) for the `items[]` summary fields (`id`, `label`, `definition_id`, `custom_metadata`).
 
 ## HTTP API
 
@@ -209,6 +215,8 @@ One-time Alembic migration maps legacy inline types:
 | `region` | Inline → RegionDefinition or instance with `definition_kind: region` |
 
 Existing boards and live sessions are rewritten to `definition_id` references.
+
+Former `default_energy` values on item definitions were copied into `custom_metadata.energy` as preserved data for workflows; the column was dropped. That key does **not** auto-materialize food semantics on placement or pickup.
 
 ## Seeded defaults
 

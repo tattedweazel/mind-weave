@@ -36,7 +36,7 @@ export interface InspectorDefinitionSummary {
     name: string;
     label: string;
     shape?: string;
-    defaultEnergy?: number | null;
+    customMetadata?: Record<string, unknown>;
     defaultColor?: string | null;
     workflowId?: string;
 }
@@ -103,7 +103,7 @@ export function inspectorDefinitionSummary(
         name: def.name,
         label: def.label,
         shape: def.shape,
-        defaultEnergy: def.default_energy,
+        customMetadata: def.custom_metadata ?? {},
         defaultColor: def.default_color,
     };
 }
@@ -175,8 +175,7 @@ export function itemHasEnergySemantics(
     if (kind === 'pickable' && hasDefinitionId(item) && resolvedItemType(item) === 'food') {
         return true;
     }
-    const def = inspectorDefinitionSummary(item, ctx);
-    return def?.defaultEnergy != null;
+    return false;
 }
 
 export function toItemRenderCatalog(ctx: SandboxInspectorDefinitionContext): SandboxItemRenderCatalog {
@@ -185,6 +184,10 @@ export function toItemRenderCatalog(ctx: SandboxInspectorDefinitionContext): San
             id: def.id,
             shape: def.shape === 'rect' ? 'square' : def.shape,
             default_color: def.default_color,
+        })),
+        fixtureDefinitions: (ctx.fixtureDefinitions ?? []).map(def => ({
+            id: def.id,
+            color: def.color,
         })),
     };
 }

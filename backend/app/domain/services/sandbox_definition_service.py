@@ -91,12 +91,13 @@ class _DefinitionServiceBase(Generic[T]):
 
 
 def _item_read(row: ItemDefinition) -> ItemDefinitionRead:
+    meta = row.custom_metadata if isinstance(row.custom_metadata, dict) else {}
     return ItemDefinitionRead(
         id=str(row.id),
         user_id=str(row.user_id) if row.user_id else None,
         name=row.name,
         label=row.label,
-        default_energy=row.default_energy,
+        custom_metadata=dict(meta),
         default_color=row.default_color,
         shape=row.shape,  # type: ignore[arg-type]
         pickable=row.pickable,
@@ -142,8 +143,9 @@ def item_definition_probe_maps(
         key = str(row.id)
         labels[key] = row.label or row.name
         defaults[key] = ItemDefinitionDefaults(
-            default_energy=row.default_energy,
             default_color=row.default_color,
+            custom_metadata=dict(row.custom_metadata or {}),
+            pickable=bool(row.pickable),
         )
     return ItemDefinitionProbeMaps(labels=labels, defaults=defaults)
 
@@ -151,6 +153,18 @@ def item_definition_probe_maps(
 def item_definition_label_map(session: Session, user_id: Optional[uuid.UUID]) -> dict[str, str]:
     """Map item definition id → display label for cell-probe summaries."""
     return item_definition_probe_maps(session, user_id).labels
+
+
+def fixture_definition_color_map(
+    session: Session, user_id: Optional[uuid.UUID]
+) -> dict[str, str]:
+    """Map fixture definition id → color for cell-probe fixture summaries."""
+    rows = FixtureDefinitionService(session, user_id).list_all()
+    out: dict[str, str] = {}
+    for row in rows:
+        if row.color:
+            out[str(row.id)] = row.color
+    return out
 
 
 def _terrain_read(row: TerrainDefinition) -> TerrainDefinitionRead:
@@ -350,7 +364,7 @@ def seed_default_definitions(session: Session) -> None:
                 "id": uuid.UUID(BUILTIN_FOOD_ID),
                 "name": "Food",
                 "label": "Food",
-                "default_energy": 48,
+                "custom_metadata": {"energy": 48},
                 "shape": "circle",
                 "pickable": True,
                 "is_system": True,

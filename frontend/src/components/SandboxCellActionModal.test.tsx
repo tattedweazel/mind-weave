@@ -173,7 +173,7 @@ const userItemDefinition: ItemDefinitionRead = {
     id: 'item-user-1',
     name: 'custom_snack',
     label: 'Custom Snack',
-    default_energy: 32,
+    custom_metadata: { energy: 32 },
     default_color: '#FF6B6B',
     shape: 'circle',
     pickable: true,
@@ -184,7 +184,7 @@ const systemItemDefinition: ItemDefinitionRead = {
     id: 'item-system-1',
     name: 'builtin-food',
     label: 'Food',
-    default_energy: 48,
+    custom_metadata: { energy: 48 },
     default_color: null,
     shape: 'circle',
     pickable: true,
@@ -444,7 +444,6 @@ describe('SandboxCellActionModal', () => {
                 cell: { x: 2, y: 3 },
                 definition_id: 'item-user-1',
                 color: '#FF6B6B',
-                energy: 32,
             });
         });
     });

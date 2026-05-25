@@ -9,6 +9,7 @@ import {
 import {
     CELL_PX,
     DEFAULT_REGION_COLOR,
+    FIXTURE_FILL,
     FOOD_FILL,
     REGION_UNDERLAY_ALPHA,
     WALL_FILL,
@@ -30,12 +31,19 @@ export interface SandboxItemDefinitionRenderEntry {
     default_color?: string | null;
 }
 
+export interface SandboxFixtureDefinitionRenderEntry {
+    id: string;
+    color?: string | null;
+}
+
 export interface SandboxItemRenderCatalog {
     itemDefinitions: ReadonlyArray<SandboxItemDefinitionRenderEntry>;
+    fixtureDefinitions: ReadonlyArray<SandboxFixtureDefinitionRenderEntry>;
 }
 
 export const EMPTY_SANDBOX_ITEM_RENDER_CATALOG: SandboxItemRenderCatalog = {
     itemDefinitions: [],
+    fixtureDefinitions: [],
 };
 
 export interface SandboxPickableVisual {
@@ -70,6 +78,23 @@ function lookupItemDefinition(
 ): SandboxItemDefinitionRenderEntry | undefined {
     if (!definitionId) return undefined;
     return catalog.itemDefinitions.find(def => def.id === definitionId);
+}
+
+function lookupFixtureDefinition(
+    catalog: SandboxItemRenderCatalog,
+    definitionId: string | undefined,
+): SandboxFixtureDefinitionRenderEntry | undefined {
+    if (!definitionId) return undefined;
+    return catalog.fixtureDefinitions.find(def => def.id === definitionId);
+}
+
+export function resolveFixtureColor(
+    item: SandboxItemJson,
+    catalog: SandboxItemRenderCatalog = EMPTY_SANDBOX_ITEM_RENDER_CATALOG,
+): string {
+    if (item.color != null) return item.color;
+    const definition = lookupFixtureDefinition(catalog, item.definition_id);
+    return definition?.color ?? FIXTURE_FILL;
 }
 
 export function resolvePickableVisual(
@@ -109,7 +134,7 @@ export function drawSandboxItem(
 
     if (layer === 'solid') {
         if (isFixtureItem(item)) {
-            const fixtureColor = item.color ?? '#8B5CF6';
+            const fixtureColor = resolveFixtureColor(item, catalog);
             g.fillStyle(hexToRgbInt(fixtureColor), 1);
             g.fillRect(cellX + 4, cellY + 4, CELL_PX - 8, CELL_PX - 8);
             g.lineStyle(2, hexToRgbInt('#ffffff'), 0.6);
@@ -143,6 +168,10 @@ export function buildSandboxItemRenderCatalog(
         shape: DefinitionShape;
         default_color?: string | null;
     }>,
+    fixtureDefinitions: ReadonlyArray<{
+        id: string;
+        color?: string | null;
+    }> = [],
 ): SandboxItemRenderCatalog {
-    return { itemDefinitions };
+    return { itemDefinitions, fixtureDefinitions };
 }

@@ -16,7 +16,8 @@ const ctx = {
             id: 'item-def-1',
             name: 'golden_key',
             label: 'Golden Key',
-            default_energy: 10,
+            custom_metadata: { energy: 10 },
+            default_color: '#FFD700',
             shape: 'square' as const,
             pickable: true,
             is_system: false,
@@ -104,7 +105,19 @@ describe('sandboxItemInspectorDisplay', () => {
         expect(inspectorWorkflowLabel('wf-abc-12345678', ctx.workflows)).toBe('Open Door');
     });
 
-    it('itemHasEnergySemantics for definition-backed pickables', () => {
+    it('itemHasEnergySemantics for definition-backed pickables with instance energy', () => {
+        const item: SandboxItemJson = {
+            id: 'k1',
+            definition_id: 'item-def-1',
+            definition_kind: 'item',
+            role: 'pickable',
+            position: { x: 0, y: 0 },
+            energy: 5,
+        };
+        expect(itemHasEnergySemantics(item, ctx)).toBe(true);
+    });
+
+    it('itemHasEnergySemantics false for generic definition pickables without instance energy', () => {
         const item: SandboxItemJson = {
             id: 'k1',
             definition_id: 'item-def-1',
@@ -112,7 +125,7 @@ describe('sandboxItemInspectorDisplay', () => {
             role: 'pickable',
             position: { x: 0, y: 0 },
         };
-        expect(itemHasEnergySemantics(item, ctx)).toBe(true);
+        expect(itemHasEnergySemantics(item, ctx)).toBe(false);
     });
 
     it('inspectorDefinitionSummary returns fixture workflow id', () => {

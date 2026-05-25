@@ -80,7 +80,17 @@ describe('sandboxSensoryProbes', () => {
             kind: 'food',
             region_label: null,
             stack_count: 1,
-            items: [{ id: 'f1', kind: 'food', definition_id: null, energy: 10, color: null, label: 'Food (10)' }],
+            items: [
+                {
+                    id: 'f1',
+                    kind: 'food',
+                    definition_id: null,
+                    energy: 10,
+                    color: null,
+                    custom_metadata: {},
+                    label: 'Food (10)',
+                },
+            ],
         });
     });
 
@@ -140,7 +150,17 @@ describe('sandboxSensoryProbes', () => {
             kind: 'food',
             region_label: 'target',
             stack_count: 1,
-            items: [{ id: 'f1', kind: 'food', definition_id: null, energy: 10, color: null, label: 'Food (10)' }],
+            items: [
+                {
+                    id: 'f1',
+                    kind: 'food',
+                    definition_id: null,
+                    energy: 10,
+                    color: null,
+                    custom_metadata: {},
+                    label: 'Food (10)',
+                },
+            ],
         });
     });
 
@@ -174,11 +194,47 @@ describe('sandboxSensoryProbes', () => {
             },
         ]);
         const probe = creaturePositionFromState(c, st, {
-            itemDefinitions: [{ id: 'def-1', name: 'golden_key', label: 'Golden Key', default_energy: 48 }],
+            itemDefinitions: [
+                {
+                    id: 'def-1',
+                    name: 'golden_key',
+                    label: 'Golden Key',
+                    custom_metadata: { energy: 48 },
+                },
+            ],
         });
         expect(probe.items[0]?.label).toBe('Golden Key');
         expect(probe.items[0]?.kind).toBe('item');
         expect(probe.items[0]?.energy).toBe(48);
+        expect(probe.items[0]?.custom_metadata).toEqual({ energy: 48 });
+    });
+
+    it('excludes pickable:false definitions from stack_count and pickables', () => {
+        const c = creature({ position: { x: 2, y: 2 } });
+        const st = state(c, [
+            {
+                id: 'recipe1',
+                definition_id: 'def-recipe',
+                definition_kind: 'item',
+                role: 'pickable',
+                position: { x: 2, y: 2 },
+            },
+        ]);
+        const ctx = {
+            itemDefinitions: [
+                {
+                    id: 'def-recipe',
+                    name: 'chai_recipe',
+                    label: 'Chai Recipe',
+                    pickable: false,
+                    custom_metadata: { ingredients: ['milk', 'powder'] },
+                },
+            ],
+        };
+        const probe = creaturePositionFromState(c, st, ctx);
+        expect(probe.stack_count).toBe(0);
+        expect(probe.items).toEqual([]);
+        expect(forwardCellPickables(c, st, ctx)).toEqual([]);
     });
 
     it('inventory from creature', () => {
@@ -273,6 +329,40 @@ describe('sandboxSensoryProbes', () => {
         expect(nearby[0]?.kind).toBe('fixture');
         expect(nearby[0]?.stack_count).toBe(1);
         expect(nearby[0]?.items).toHaveLength(1);
+    });
+
+    it('includes fixture color from definition in nearby probes', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        const fixtureState = state(c, [
+            {
+                id: 'fix1',
+                type: 'fixture',
+                definition_id: 'fx-def-red',
+                position: { x: 3, y: 1 },
+            },
+        ]);
+        const nearby = nearbyCellsFromState(c, fixtureState, {
+            fixtureDefinitions: [{ id: 'fx-def-red', color: '#EF4444' }],
+        });
+        expect(nearby[0]?.kind).toBe('fixture');
+        expect(nearby[0]?.color).toBe('#EF4444');
+    });
+
+    it('uses instance fixture color over definition in probes', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        const fixtureState = state(c, [
+            {
+                id: 'fix1',
+                type: 'fixture',
+                definition_id: 'fx-def-red',
+                position: { x: 3, y: 1 },
+                color: '#22C55E',
+            },
+        ]);
+        const nearby = nearbyCellsFromState(c, fixtureState, {
+            fixtureDefinitions: [{ id: 'fx-def-red', color: '#EF4444' }],
+        });
+        expect(nearby[0]?.color).toBe('#22C55E');
     });
 
     it('forwardCellAllowsPlaceItem matches board builder placement rules', () => {

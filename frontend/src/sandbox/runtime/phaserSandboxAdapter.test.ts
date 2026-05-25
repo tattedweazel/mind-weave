@@ -430,6 +430,7 @@ describe('PhaserSandboxAdapter', () => {
             {
                 renderCatalog: {
                     itemDefinitions: [{ id: 'item-def-1', shape: 'circle', default_color: '#FFFFFF' }],
+                    fixtureDefinitions: [],
                 },
             },
         );

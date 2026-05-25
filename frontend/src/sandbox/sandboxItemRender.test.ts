@@ -4,9 +4,11 @@ import type { SandboxItemJson } from '../domain/sandbox/types';
 import {
     drawSandboxItem,
     getSandboxItemRenderLayer,
+    resolveFixtureColor,
     resolvePickableVisual,
     SANDBOX_ITEM_RENDER_LAYERS,
 } from './sandboxItemRender';
+import { FIXTURE_FILL } from './sandboxVisualDefaults';
 
 function mockGraphics() {
     return {
@@ -21,7 +23,7 @@ function mockGraphics() {
 
 function drawItemsInLayerOrder(
     items: SandboxItemJson[],
-    catalog = { itemDefinitions: [] as const },
+    catalog = { itemDefinitions: [] as const, fixtureDefinitions: [] as const },
 ) {
     const g = mockGraphics();
     for (const layer of SANDBOX_ITEM_RENDER_LAYERS) {
@@ -71,6 +73,7 @@ describe('resolvePickableVisual', () => {
             { id: 'item-def-circle', shape: 'circle' as const, default_color: '#EEEEEE' },
             { id: 'item-def-square', shape: 'square' as const, default_color: '#CCCCCC' },
         ],
+        fixtureDefinitions: [] as const,
     };
 
     it('uses instance color and definition shape when both are present', () => {
@@ -134,6 +137,56 @@ describe('resolvePickableVisual', () => {
     });
 });
 
+describe('resolveFixtureColor', () => {
+    const catalog = {
+        itemDefinitions: [] as const,
+        fixtureDefinitions: [{ id: 'fx-def-1', color: '#EF4444' }],
+    };
+
+    it('uses instance color when set', () => {
+        expect(
+            resolveFixtureColor(
+                {
+                    id: 'fx1',
+                    type: 'fixture',
+                    definition_id: 'fx-def-1',
+                    position: { x: 0, y: 0 },
+                    color: '#22C55E',
+                },
+                catalog,
+            ),
+        ).toBe('#22C55E');
+    });
+
+    it('falls back to fixture definition color when instance color is missing', () => {
+        expect(
+            resolveFixtureColor(
+                {
+                    id: 'fx1',
+                    type: 'fixture',
+                    definition_id: 'fx-def-1',
+                    position: { x: 0, y: 0 },
+                },
+                catalog,
+            ),
+        ).toBe('#EF4444');
+    });
+
+    it('falls back to FIXTURE_FILL when definition is missing or has no color', () => {
+        expect(
+            resolveFixtureColor(
+                {
+                    id: 'fx1',
+                    type: 'fixture',
+                    definition_id: 'unknown',
+                    position: { x: 0, y: 0 },
+                },
+                catalog,
+            ),
+        ).toBe(FIXTURE_FILL);
+    });
+});
+
 describe('drawSandboxItem layer ordering', () => {
     it('draws fixture solid before definition-backed pickable regardless of array order', () => {
         const fixture: SandboxItemJson = {
@@ -155,6 +208,7 @@ describe('drawSandboxItem layer ordering', () => {
 
         const g = drawItemsInLayerOrder([pickable, fixture], {
             itemDefinitions: [{ id: 'item-def-1', shape: 'circle', default_color: '#FFFFFF' }],
+            fixtureDefinitions: [],
         });
 
         expect(g.fillRect).toHaveBeenCalled();
@@ -182,6 +236,7 @@ describe('drawSandboxItem layer ordering', () => {
 
         const g = drawItemsInLayerOrder([pickable, region], {
             itemDefinitions: [{ id: 'item-def-1', shape: 'circle', default_color: '#FFFFFF' }],
+            fixtureDefinitions: [],
         });
 
         const regionRectOrder = g.fillRect.mock.invocationCallOrder[0]!;
@@ -201,9 +256,28 @@ describe('drawSandboxItem layer ordering', () => {
         const g = mockGraphics();
         drawSandboxItem(g, pickable, 8, 8, {
             itemDefinitions: [{ id: 'item-def-square', shape: 'square', default_color: '#111111' }],
+            fixtureDefinitions: [],
         });
 
         expect(g.fillRect).toHaveBeenCalled();
         expect(g.fillCircle).not.toHaveBeenCalled();
+    });
+
+    it('draws fixture with definition color from catalog', () => {
+        const fixture: SandboxItemJson = {
+            id: 'fx1',
+            type: 'fixture',
+            definition_kind: 'fixture',
+            role: 'solid',
+            definition_id: 'fx-def-red',
+            position: { x: 0, y: 0 },
+        };
+        const g = mockGraphics();
+        drawSandboxItem(g, fixture, 8, 8, {
+            itemDefinitions: [],
+            fixtureDefinitions: [{ id: 'fx-def-red', color: '#EF4444' }],
+        });
+
+        expect(g.fillStyle).toHaveBeenCalledWith(0xef4444, 1);
     });
 });

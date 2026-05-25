@@ -211,8 +211,8 @@ export const SandboxView: React.FC = () => {
     const [creatureDefinitions, setCreatureDefinitions] = useState<CreatureDefinitionRead[]>([]);
     const [regionDefinitions, setRegionDefinitions] = useState<RegionDefinitionRead[]>([]);
     const renderCatalog = React.useMemo(
-        () => buildSandboxItemRenderCatalog(itemDefinitions),
-        [itemDefinitions],
+        () => buildSandboxItemRenderCatalog(itemDefinitions, fixtureDefinitions),
+        [itemDefinitions, fixtureDefinitions],
     );
     const [boards, setBoards] = useState<SandboxBoardJson[]>([]);
     const [boardProjects, setBoardProjects] = useState<BoardProject[]>([]);
@@ -2342,6 +2342,7 @@ export const SandboxView: React.FC = () => {
                     onConfirm={handleUserActionConfirm}
                     onDismiss={handleUserActionDismiss}
                     itemDefinitions={itemDefinitions}
+                    fixtureDefinitions={fixtureDefinitions}
                 />
             ) : null}
             {cellActionCell ? (

@@ -3,7 +3,7 @@
  */
 
 import type { NearbyCellJson, NearbyCellKind } from './sandboxSensoryProbes';
-import { normalizeHexColor } from './sandboxColorUtils';
+import { hexChipStyle, normalizeHexColor } from './sandboxColorUtils';
 
 const DEFAULT_BALL_COLOR = '#3B82F6';
 
@@ -70,6 +70,16 @@ export function nearbyCellKindLabel(kind: NearbyCellKind): string {
 
 export function nearbyCellKindBadgeClass(kind: NearbyCellKind): string {
     return NEARBY_CELL_KIND_BADGE_CLASSES[kind];
+}
+
+/** Inline badge styles for fixture cells with a resolved color; null when Tailwind fallback applies. */
+export function nearbyCellKindBadgeStyle(
+    cell: Pick<NearbyCellJson, 'kind' | 'color'>,
+): { backgroundColor: string; color: string; borderColor: string } | null {
+    if (cell.kind !== 'fixture' || cell.color == null) return null;
+    const normalized = normalizeHexColor(cell.color);
+    if (!normalized) return null;
+    return hexChipStyle(normalized);
 }
 
 /** Label for the Region chip in Remote Control nearby tiles; null when no region on cell. */

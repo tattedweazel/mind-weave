@@ -252,8 +252,11 @@ def _find_pickable_at_cell(
     g: GridCell,
     *,
     item_id: str | None = None,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
 ) -> SandboxItem | None:
-    pickables = pickables_at_cell(state.world.items, g.x, g.y)
+    pickables = pickables_at_cell(
+        state.world.items, g.x, g.y, definition_defaults
+    )
     if not pickables:
         return None
     if item_id:
@@ -670,7 +673,9 @@ class SandboxEngine:
             fwd = _forward_cell(creature, w, h)
             if fwd is not None and not _creature_blocks_cell(state, fwd, exclude_id=creature.id):
                 if dec.pick_all:
-                    pickables = pickables_at_cell(state.world.items, fwd.x, fwd.y)
+                    pickables = pickables_at_cell(
+                        state.world.items, fwd.x, fwd.y, definition_defaults
+                    )
                     for pickable in pickables:
                         _try_pick_up_item(
                             state,
@@ -679,7 +684,12 @@ class SandboxEngine:
                             definition_defaults,
                         )
                 else:
-                    pickable = _find_pickable_at_cell(state, fwd, item_id=dec.item_id)
+                    pickable = _find_pickable_at_cell(
+                        state,
+                        fwd,
+                        item_id=dec.item_id,
+                        definition_defaults=definition_defaults,
+                    )
                     if pickable is not None:
                         _try_pick_up_item(
                             state,

@@ -70,10 +70,11 @@ Wire one action node (or a conditional that picks one) to **Stop** `output` (dic
 | `region_label` | string \| null | Region underlay label; `null` when no region; `""` when region exists but is unlabeled |
 | `stack_count` | int | Number of pickables at the cell (0 when none) |
 | `items` | list | Pickable summaries at the cell (excludes fixture, region, wall, creatures) |
+| `color` | string \| null | Present when `kind` is `fixture`: instance override → fixture definition `color` → default `#8B5CF6` |
 
-Each item summary: `{ id, kind, definition_id?, energy?, color?, label }`. **`kind`** is `item` for definition-backed pickables, or legacy built-in types (`food`, `ball`) when no definition is linked. **`energy`** and **`color`** use instance values when set, otherwise fall back to the item definition defaults. **`label`** is resolved for display: instance `label` when set, else the item definition's label, else a built-in fallback (`Food (48)`, `Ball (#RRGGBB)`, etc.).
+Each item summary: `{ id, kind, definition_id?, energy?, color?, custom_metadata?, label }`. **`kind`** is `item` for definition-backed pickables, or legacy built-in types (`food`, `ball`) when no definition is linked. **`energy`** and **`color`** reflect **instance** values only (no definition fallback). **`custom_metadata`** is the full opaque object from the linked ItemDefinition (empty `{}` when none). **`label`** is resolved for display: instance `label` when set, else the item definition's label, else a built-in fallback (`Food (48)`, `Ball (#RRGGBB)`, `Item`, etc.).
 
-**Pick up** uses the same energy/color resolution when converting a world pickable into `creature.inventory`: instance override → item definition default → no pickup (the world item stays on the cell). Energy semantics take precedence over visual color when both exist on an ItemDefinition.
+**Pick up** converts a world pickable into `creature.inventory` only when the instance resolves to **food** (`energy` on instance) or **ball** (`color` on instance). Definition `custom_metadata` does not enable pickup. Items with `pickable: false` on their definition are omitted from pick-up lists and probe `stack_count`.
 
 In **creature brain** / `sandbox_tick` context, **Get Position** probes the focused creature's cell. In **fixture workflows** (server-injected `sandbox_fixture` run override), **Get Position** probes the **fixture cell** (where stacked pickables live). **Get Facing**, **Get Nearby**, and **Get Inventory** still use the interacting actor's position/facing in fixture workflows. **Get Cell Items**, **Remove Item**, and **Spawn Item** run during fixture `use_fixture` workflows only; see [SANDBOX_DEFINITIONS.md — Fixture interaction](SANDBOX_DEFINITIONS.md#fixture-interaction-use_fixture).
 
@@ -89,7 +90,7 @@ On each **Step** or **Play** tick, the SPA **auto-pauses**, opens a **remote-con
 |---------------|----------|
 | D-pad | **Forward**, **Turn left**, **Turn right**, **Idle** |
 | Secondary | **Use** when forward cell has a **fixture**; **Pick up item** when forward cell has one or more pickables (`stack_count > 0`), including on fixture cells — when multiple pickables are stacked, choose one item or **Pick up all**, then **Confirm** (optional tick fields: `item_id`, `pick_all`); **Place item** only when the creature holds at least one item — opens **Inventory** selection (choose a held item; **Confirm** requires a **placeable** forward cell: empty, pickable stack, or fixture stack — not wall/terrain, another creature, or out of bounds) |
-| Sensory probes | **Nearby**, **Position**, **Facing**, **Inventory** — client-side reads from the current envelope (no extra HTTP). One structured readout at a time (latest click replaces the previous): compass ring for **Nearby** (primary kind badge plus a separate **Region** chip when `region_label` is present; labeled regions show the label text, unlabeled regions show **Region**), coordinate rows for **Position**, compass badge for **Facing**, inventory cards for **Inventory** (built-in balls show a colored **Ball** label and matching swatch; built-in food shows **Food** with a separate energy badge; definition-backed held items show **Item · {label}** when `definition_id` is present, with energy or color as appropriate; selectable rows when **Place item** is active). Optional collapsible **Raw JSON** for debugging. Re-click the active probe to collapse; cached results restore on re-open for the modal session. |
+| Sensory probes | **Nearby**, **Position**, **Facing**, **Inventory** — client-side reads from the current envelope (no extra HTTP). One structured readout at a time (latest click replaces the previous): compass ring for **Nearby** (primary kind badge plus a separate **Region** chip when `region_label` is present; labeled regions show the label text, unlabeled regions show **Region**; **Fixture** badges use the resolved definition color when available), coordinate rows for **Position**, compass badge for **Facing**, inventory cards for **Inventory** (built-in balls show a colored **Ball** label and matching swatch; built-in food shows **Food** with a separate energy badge; definition-backed held items show **Item · {label}** when `definition_id` is present, with energy or color as appropriate; selectable rows when **Place item** is active). Optional collapsible **Raw JSON** for debugging. Re-click the active probe to collapse; cached results restore on re-open for the modal session. |
 | Cancel | Aborts the tick; playback stays paused |
 | Confirm | Submits the tick; **Play** resumes if it was active before the modal opened (**Step** stays paused) |
 
@@ -252,7 +253,7 @@ Implementation: [`SandboxView.tsx`](../frontend/src/components/SandboxView.tsx),
 | Food | Pink circle |
 | Ball | Colored circle (placement color) |
 | Wall | Gray square |
-| Fixture | Purple inset square with white stroke |
+| Fixture | Colored inset square with white stroke; color from instance or fixture definition `color` (default `#8B5CF6`) |
 | Definition item | Circle or square from ItemDefinition `shape`; color from instance or definition `default_color` |
 | Region | Full-cell colored underlay (~35% opacity), drawn under other items |
 | Cell | 48px |

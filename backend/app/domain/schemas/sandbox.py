@@ -81,6 +81,7 @@ class NearbyCell(BaseModel):
     region_label: Optional[str] = None
     stack_count: int = 0
     items: list[dict[str, Any]] = Field(default_factory=list)
+    color: Optional[str] = None
 
 
 class RegionTriggerConfig(BaseModel):
@@ -143,7 +144,7 @@ class SandboxItem(BaseModel):
                 elif self.color is not None:
                     effective = BALL_ITEM_TYPE
                 else:
-                    effective = "food"
+                    effective = None
         if effective == REGION_ITEM_TYPE:
             if not self.color:
                 raise ValueError("region items require color")

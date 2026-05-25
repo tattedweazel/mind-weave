@@ -29,7 +29,7 @@ def test_normalize_board_item_strips_color_when_energy_present():
     assert item.type == "food"
 
 
-def test_normalize_board_item_hydrates_energy_from_definition_defaults():
+def test_normalize_board_item_hydrates_color_from_definition_defaults():
     item = SandboxItem(
         id="milk1",
         definition_id="item-def-milk",
@@ -37,11 +37,36 @@ def test_normalize_board_item_hydrates_energy_from_definition_defaults():
         role="pickable",
         position=GridCell(x=1, y=1),
     )
-    defaults = {"item-def-milk": ItemDefinitionDefaults(default_energy=25, default_color="#FFFFFF")}
+    defaults = {
+        "item-def-milk": ItemDefinitionDefaults(
+            default_color="#FFFFFF",
+            custom_metadata={"energy": 25},
+        ),
+    }
     normalized = normalize_board_item(item, defaults)
-    assert normalized.energy == 25
+    assert normalized.energy is None
+    assert normalized.color == "#FFFFFF"
+    assert normalized.type == "ball"
+
+
+def test_normalize_board_item_stays_generic_without_defaults():
+    item = SandboxItem(
+        id="recipe1",
+        definition_id="item-def-recipe",
+        definition_kind="item",
+        role="pickable",
+        position=GridCell(x=1, y=1),
+    )
+    defaults = {
+        "item-def-recipe": ItemDefinitionDefaults(
+            custom_metadata={"ingredients": ["milk", "chai"]},
+            pickable=False,
+        ),
+    }
+    normalized = normalize_board_item(item, defaults)
+    assert normalized.energy is None
     assert normalized.color is None
-    assert normalized.type == "food"
+    assert normalized.type is None
 
 
 def test_normalize_board_definition_applies_to_all_items():

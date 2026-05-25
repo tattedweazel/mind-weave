@@ -10,7 +10,8 @@ import type {
     SandboxSandboxStateJson,
 } from '../domain/sandbox/types';
 import { canPlacePickableItem } from './sandboxCellOccupants';
-import { isPickableItem, isRegionItemResolved, isSolidItem, resolvedItemType } from './sandboxItemResolve';
+import { isFixtureItem, isPickableItem, isRegionItemResolved, isSolidItem, resolvedItemType } from './sandboxItemResolve';
+import { resolveFixtureColor } from './sandboxItemRender';
 
 export type NearbyCellKind =
     | 'empty'
@@ -27,18 +28,27 @@ export interface NearbyCellItemSummaryJson {
     definition_id?: string | null;
     energy?: number | null;
     color?: string | null;
+    custom_metadata?: Record<string, unknown>;
     label?: string;
 }
 
-export interface PickableLabelContext {
+export interface ProbeLabelContext {
     itemDefinitions?: ReadonlyArray<{
         id: string;
         name: string;
         label: string;
-        default_energy?: number | null;
         default_color?: string | null;
+        custom_metadata?: Record<string, unknown>;
+        pickable?: boolean;
+    }>;
+    fixtureDefinitions?: ReadonlyArray<{
+        id: string;
+        color?: string | null;
     }>;
 }
+
+/** @deprecated use ProbeLabelContext */
+export type PickableLabelContext = ProbeLabelContext;
 
 function probeItemKind(item: SandboxItemJson): string {
     if (item.definition_kind === 'item' && item.definition_id) {
@@ -47,39 +57,37 @@ function probeItemKind(item: SandboxItemJson): string {
     return resolvedItemType(item);
 }
 
-function definitionDefaultsForItem(
-    item: SandboxItemJson,
-    context?: PickableLabelContext,
-): { default_energy?: number | null; default_color?: string | null } | null {
+function definitionForItem(item: SandboxItemJson, context?: ProbeLabelContext) {
     const defId = item.definition_id;
     if (!defId || !context?.itemDefinitions) return null;
-    const def = context.itemDefinitions.find(d => d.id === defId);
-    if (!def) return null;
-    return { default_energy: def.default_energy, default_color: def.default_color };
+    return context.itemDefinitions.find(d => d.id === defId) ?? null;
 }
 
-function resolvedPickableEnergy(item: SandboxItemJson, context?: PickableLabelContext): number | null {
-    if (item.energy != null) return item.energy;
-    return definitionDefaultsForItem(item, context)?.default_energy ?? null;
+function resolvedPickableEnergy(item: SandboxItemJson): number | null {
+    return item.energy ?? null;
 }
 
-function resolvedPickableColor(item: SandboxItemJson, context?: PickableLabelContext): string | null {
+function resolvedPickableColor(item: SandboxItemJson, context?: ProbeLabelContext): string | null {
     if (item.color != null) return item.color;
-    return definitionDefaultsForItem(item, context)?.default_color ?? null;
+    return definitionForItem(item, context)?.default_color ?? null;
 }
 
-function resolvePickableDisplayLabel(item: SandboxItemJson, context?: PickableLabelContext): string {
+function resolvedCustomMetadata(item: SandboxItemJson, context?: ProbeLabelContext): Record<string, unknown> {
+    const def = definitionForItem(item, context);
+    if (!def?.custom_metadata) return {};
+    return { ...def.custom_metadata };
+}
+
+function resolvePickableDisplayLabel(item: SandboxItemJson, context?: ProbeLabelContext): string {
     if (item.label?.trim()) return item.label.trim();
-    const defId = item.definition_id;
-    if (defId && context?.itemDefinitions) {
-        const def = context.itemDefinitions.find(d => d.id === defId);
-        if (def) return def.label || def.name;
-    }
+    const def = definitionForItem(item, context);
+    if (def) return def.label || def.name;
     const type = resolvedItemType(item);
-    const energy = resolvedPickableEnergy(item, context);
+    const energy = resolvedPickableEnergy(item);
     const color = resolvedPickableColor(item, context);
     if (type === 'food') return energy != null ? `Food (${energy})` : 'Food';
     if (type === 'ball') return color ? `Ball (${color})` : 'Ball';
+    if (type === 'item') return 'Item';
     return type;
 }
 
@@ -90,6 +98,8 @@ export interface NearbyCellJson {
     region_label?: string | null;
     stack_count?: number;
     items?: NearbyCellItemSummaryJson[];
+    /** Present when kind is fixture; instance override → definition color → default. */
+    color?: string | null;
 }
 
 /** Cell probe shape shared by Position probe and Get position utility output. */
@@ -121,39 +131,71 @@ function cellItemsSummary(
     x: number,
     y: number,
     state: SandboxSandboxStateJson,
-    labelContext?: PickableLabelContext,
+    labelContext?: ProbeLabelContext,
 ): { stack_count: number; items: NearbyCellItemSummaryJson[] } {
     const cellItems = itemsAtCell(state.world.items, x, y);
-    const pickables = cellItems.filter(isPickableItem);
+    const pickables = cellItems.filter(it => isPickableItem(it, labelContext?.itemDefinitions));
     return {
         stack_count: pickables.length,
         items: pickables.map(it => ({
             id: it.id,
             kind: probeItemKind(it),
             definition_id: it.definition_id ?? null,
-            energy: resolvedPickableEnergy(it, labelContext),
+            energy: resolvedPickableEnergy(it),
             color: resolvedPickableColor(it, labelContext),
+            custom_metadata: resolvedCustomMetadata(it, labelContext),
             label: resolvePickableDisplayLabel(it, labelContext),
         })),
     };
 }
 
-export function creaturePositionFromState(
-    creature: SandboxCreatureJson,
+function fixtureColorAtCell(
+    x: number,
+    y: number,
     state: SandboxSandboxStateJson,
-    labelContext?: PickableLabelContext,
+    labelContext?: ProbeLabelContext,
+): string | null {
+    const fixture = itemsAtCell(state.world.items, x, y).find(isFixtureItem);
+    if (!fixture) return null;
+    return resolveFixtureColor(fixture, {
+        itemDefinitions: [],
+        fixtureDefinitions: labelContext?.fixtureDefinitions ?? [],
+    });
+}
+
+function buildCellProbe(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    state: SandboxSandboxStateJson,
+    excludeCreatureId: string,
+    labelContext?: ProbeLabelContext,
 ): CellProbeJson {
-    const { x, y } = creature.position;
-    const { width, height } = state.world.grid;
+    const kind = cellKind(x, y, width, height, state, excludeCreatureId);
     const { stack_count, items } = cellItemsSummary(x, y, state, labelContext);
-    return {
+    const probe: CellProbeJson = {
         x,
         y,
-        kind: cellKind(x, y, width, height, state, creature.id),
+        kind,
         region_label: regionLabelAtCell(x, y, state),
         stack_count,
         items,
     };
+    if (kind === 'fixture') {
+        probe.color = fixtureColorAtCell(x, y, state, labelContext);
+    }
+    return probe;
+}
+
+export function creaturePositionFromState(
+    creature: SandboxCreatureJson,
+    state: SandboxSandboxStateJson,
+    labelContext?: ProbeLabelContext,
+): CellProbeJson {
+    const { x, y } = creature.position;
+    const { width, height } = state.world.grid;
+    return buildCellProbe(x, y, width, height, state, creature.id, labelContext);
 }
 
 export function creatureFacingFromState(creature: SandboxCreatureJson): SandboxFacing {
@@ -205,25 +247,15 @@ function regionLabelAtCell(x: number, y: number, state: SandboxSandboxStateJson)
 export function nearbyCellsFromState(
     creature: SandboxCreatureJson,
     state: SandboxSandboxStateJson,
-    labelContext?: PickableLabelContext,
+    labelContext?: ProbeLabelContext,
 ): NearbyCellJson[] {
     const { width, height } = state.world.grid;
     const start = FACING_START_INDEX[creature.facing];
     const ordered = [...NEIGHBOR_OFFSETS_N.slice(start), ...NEIGHBOR_OFFSETS_N.slice(0, start)];
     const { x: px, y: py } = creature.position;
-    return ordered.map(({ dx, dy }) => {
-        const x = px + dx;
-        const y = py + dy;
-        const { stack_count, items } = cellItemsSummary(x, y, state, labelContext);
-        return {
-            x,
-            y,
-            kind: cellKind(x, y, width, height, state, creature.id),
-            region_label: regionLabelAtCell(x, y, state),
-            stack_count,
-            items,
-        };
-    });
+    return ordered.map(({ dx, dy }) =>
+        buildCellProbe(px + dx, py + dy, width, height, state, creature.id, labelContext),
+    );
 }
 
 /** Kind of the cell immediately in front of the creature (index 0 of nearby ring). */
@@ -251,7 +283,7 @@ function forwardCellCoordinates(
 export function forwardCellPickables(
     creature: SandboxCreatureJson,
     state: SandboxSandboxStateJson,
-    labelContext?: PickableLabelContext,
+    labelContext?: ProbeLabelContext,
 ): NearbyCellItemSummaryJson[] {
     const coords = forwardCellCoordinates(creature, state);
     if (!coords) return [];
@@ -301,12 +333,13 @@ export function runSensoryProbe(
     kind: SandboxSensoryProbeKind,
     creature: SandboxCreatureJson,
     state: SandboxSandboxStateJson,
+    labelContext?: ProbeLabelContext,
 ): unknown {
     switch (kind) {
         case 'nearby':
-            return nearbyCellsFromState(creature, state);
+            return nearbyCellsFromState(creature, state, labelContext);
         case 'position':
-            return creaturePositionFromState(creature, state);
+            return creaturePositionFromState(creature, state, labelContext);
         case 'facing':
             return creatureFacingFromState(creature);
         case 'inventory':

@@ -21,10 +21,12 @@ from app.domain.schemas.sandbox import (
 from app.domain.sandbox.item_helpers import (
     ItemDefinitionDefaults,
     cell_pickables_probe_summary,
+    fixture_at_cell,
     is_region_item,
     is_solid_item,
     items_at_cell,
     region_at_cell,
+    resolved_fixture_color,
     resolved_item_type,
 )
 
@@ -80,13 +82,14 @@ def cell_probe_at(
     exclude_creature_id: str | None = None,
     definition_labels: Mapping[str, str] | None = None,
     definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+    fixture_definition_colors: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     kind = _cell_kind(x, y, width, height, world, creatures, exclude_creature_id)
     region_label = _region_label_at_cell(x, y, world)
     stack_count, item_summaries = cell_pickables_probe_summary(
         world.items, x, y, definition_labels, definition_defaults
     )
-    return {
+    probe: dict[str, Any] = {
         "x": x,
         "y": y,
         "kind": kind,
@@ -94,6 +97,11 @@ def cell_probe_at(
         "stack_count": stack_count,
         "items": item_summaries,
     }
+    if kind == "fixture":
+        fixture = fixture_at_cell(world.items, x, y)
+        if fixture is not None:
+            probe["color"] = resolved_fixture_color(fixture, fixture_definition_colors)
+    return probe
 
 
 def creature_position_from_tick_dict(
@@ -101,6 +109,7 @@ def creature_position_from_tick_dict(
     *,
     definition_labels: Mapping[str, str] | None = None,
     definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+    fixture_definition_colors: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     tick = parse_tick(raw)
     pos = tick.creature.position
@@ -114,6 +123,7 @@ def creature_position_from_tick_dict(
         exclude_creature_id=tick.creature.id,
         definition_labels=definition_labels,
         definition_defaults=definition_defaults,
+        fixture_definition_colors=fixture_definition_colors,
     )
 
 
@@ -122,6 +132,7 @@ def fixture_cell_probe_from_fixture_dict(
     *,
     definition_labels: Mapping[str, str] | None = None,
     definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+    fixture_definition_colors: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Probe the fixture cell (where stacked pickables live) from ``FixtureInteractionInput``."""
     from app.domain.schemas.sandbox import FixtureInteractionInput
@@ -139,6 +150,7 @@ def fixture_cell_probe_from_fixture_dict(
         exclude_creature_id=None,
         definition_labels=definition_labels,
         definition_defaults=definition_defaults,
+        fixture_definition_colors=fixture_definition_colors,
     )
 
 
@@ -151,6 +163,7 @@ def nearby_cells_from_tick_dict(
     *,
     definition_labels: Mapping[str, str] | None = None,
     definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+    fixture_definition_colors: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     tick = parse_tick(raw)
     cells = nearby_cells_clockwise(
@@ -163,8 +176,9 @@ def nearby_cells_from_tick_dict(
         exclude_creature_id=tick.creature.id,
         definition_labels=definition_labels,
         definition_defaults=definition_defaults,
+        fixture_definition_colors=fixture_definition_colors,
     )
-    return [c.model_dump(mode="json") for c in cells]
+    return [c.model_dump(mode="json", exclude_none=False) for c in cells]
 
 
 def nearby_cells_clockwise(
@@ -178,6 +192,7 @@ def nearby_cells_clockwise(
     exclude_creature_id: str | None = None,
     definition_labels: Mapping[str, str] | None = None,
     definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+    fixture_definition_colors: Mapping[str, str] | None = None,
 ) -> list[NearbyCell]:
     start = _FACING_START_INDEX[facing]
     ordered_offsets = _NEIGHBOR_OFFSETS_N[start:] + _NEIGHBOR_OFFSETS_N[:start]
@@ -194,6 +209,7 @@ def nearby_cells_clockwise(
             exclude_creature_id=exclude_creature_id,
             definition_labels=definition_labels,
             definition_defaults=definition_defaults,
+            fixture_definition_colors=fixture_definition_colors,
         )
         out.append(NearbyCell.model_validate(probe))
     return out

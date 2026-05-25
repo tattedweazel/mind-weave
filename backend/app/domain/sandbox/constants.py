@@ -12,6 +12,9 @@ DEFAULT_CREATURE_FACING = "N"
 # Food (board items only; not consumable in navigation model)
 DEFAULT_FOOD_ENERGY = 48
 
+# Fixture placeholder visual (docs/SANDBOX.md)
+FIXTURE_FILL = "#8B5CF6"
+
 RECENT_ACTIONS_MAX = 10
 
 DECISION_ACTION_STRINGS = frozenset({"move_forward", "turn_left", "turn_right", "idle"})

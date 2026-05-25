@@ -4,6 +4,7 @@ import type { NearbyCellKind } from './sandboxSensoryProbes';
 import {
     forwardRingSlot,
     nearbyCellKindBadgeClass,
+    nearbyCellKindBadgeStyle,
     nearbyCellKindLabel,
     nearbyCellsToRingMap,
     nearbyRegionChipLabel,
@@ -68,5 +69,15 @@ describe('sandboxSensoryProbeDisplay', () => {
         expect(nearbyRegionChipLabel('target')).toBe('target');
         expect(nearbyRegionChipLabel('')).toBe('Region');
         expect(nearbyRegionChipLabel('  ')).toBe('Region');
+    });
+
+    it('nearbyCellKindBadgeStyle returns inline styles for fixture cells with color', () => {
+        expect(nearbyCellKindBadgeStyle({ kind: 'fixture', color: '#EF4444' })).toEqual({
+            backgroundColor: '#EF4444',
+            color: '#ffffff',
+            borderColor: '#EF4444',
+        });
+        expect(nearbyCellKindBadgeStyle({ kind: 'fixture', color: null })).toBeNull();
+        expect(nearbyCellKindBadgeStyle({ kind: 'wall', color: '#EF4444' })).toBeNull();
     });
 });

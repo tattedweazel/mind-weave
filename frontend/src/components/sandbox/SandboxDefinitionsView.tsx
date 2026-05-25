@@ -29,7 +29,7 @@ import { DEFAULT_REGION_TRIGGER, SANDBOX_FACING_VALUES, type SandboxFacing } fro
 import { MANAGER_INPUT_CLS, MANAGER_LABEL_CLS } from '../managerShellStyles';
 import { SandboxColorPicker } from './SandboxColorPicker';
 import { SandboxRegionInspectorSection } from './SandboxRegionInspectorSection';
-import { SandboxWorkflowSelect } from './SandboxWorkflowSelect';
+import { CustomMetadataEditor, validateCustomMetadata } from './CustomMetadataEditor';
 
 export type DefinitionCategory = 'items' | 'terrain' | 'fixtures' | 'creatures' | 'regions';
 
@@ -63,7 +63,17 @@ function definitionCardColor(def: AnyDefinition): string | null {
     return null;
 }
 
+function itemDefinitionCardSubtitle(def: ItemDefinitionRead): string {
+    const keyCount = Object.keys(def.custom_metadata ?? {}).length;
+    const metaPart = keyCount > 0 ? `Metadata · ${keyCount} key${keyCount === 1 ? '' : 's'}` : null;
+    const pickPart = def.pickable ? 'Pickable' : 'Not pickable';
+    return metaPart ? `${pickPart} · ${metaPart}` : pickPart;
+}
+
 function definitionCardSubtitle(def: AnyDefinition): string {
+    if ('custom_metadata' in def) {
+        return itemDefinitionCardSubtitle(def as ItemDefinitionRead);
+    }
     if ('workflow_id' in def && def.workflow_id) {
         return `Workflow · ${def.workflow_id.slice(0, 8)}…`;
     }
@@ -92,7 +102,7 @@ export const SandboxDefinitionsView: React.FC<SandboxDefinitionsViewProps> = ({
     const [itemForm, setItemForm] = useState({
         name: '',
         label: '',
-        default_energy: '48',
+        custom_metadata: {} as Record<string, unknown>,
         default_color: '',
         shape: 'circle' as 'circle' | 'square' | 'rect',
         pickable: true,
@@ -161,7 +171,7 @@ export const SandboxDefinitionsView: React.FC<SandboxDefinitionsViewProps> = ({
         setItemForm({
             name: '',
             label: '',
-            default_energy: '48',
+            custom_metadata: {},
             default_color: '',
             shape: 'circle',
             pickable: true,
@@ -196,7 +206,7 @@ export const SandboxDefinitionsView: React.FC<SandboxDefinitionsViewProps> = ({
             setItemForm({
                 name: d.name,
                 label: d.label,
-                default_energy: String(d.default_energy ?? 48),
+                custom_metadata: { ...(d.custom_metadata ?? {}) },
                 default_color: d.default_color ?? '',
                 shape: d.shape,
                 pickable: d.pickable,
@@ -253,10 +263,15 @@ export const SandboxDefinitionsView: React.FC<SandboxDefinitionsViewProps> = ({
                     setError('Name and label are required.');
                     return;
                 }
+                const metaError = validateCustomMetadata(itemForm.custom_metadata);
+                if (metaError) {
+                    setError(metaError);
+                    return;
+                }
                 const payload = {
                     name: itemForm.name.trim(),
                     label: itemForm.label.trim(),
-                    default_energy: parseInt(itemForm.default_energy, 10) || 0,
+                    custom_metadata: itemForm.custom_metadata,
                     default_color: itemForm.default_color.trim() || null,
                     shape: itemForm.shape,
                     pickable: itemForm.pickable,
@@ -406,16 +421,10 @@ export const SandboxDefinitionsView: React.FC<SandboxDefinitionsViewProps> = ({
                             placeholder="Display label"
                         />
                     </div>
-                    <div>
-                        <label className={MANAGER_LABEL_CLS}>Default energy</label>
-                        <input
-                            type="number"
-                            min={0}
-                            value={itemForm.default_energy}
-                            onChange={e => setItemForm(f => ({ ...f, default_energy: e.target.value }))}
-                            className={MANAGER_INPUT_CLS}
-                        />
-                    </div>
+                    <CustomMetadataEditor
+                        value={itemForm.custom_metadata}
+                        onChange={custom_metadata => setItemForm(f => ({ ...f, custom_metadata }))}
+                    />
                     <div>
                         <span className={MANAGER_LABEL_CLS}>Default color</span>
                         <SandboxColorPicker

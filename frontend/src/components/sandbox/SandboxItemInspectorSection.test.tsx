@@ -33,7 +33,7 @@ const definitionContext = {
             id: 'item-def-1',
             name: 'golden_key',
             label: 'Golden Key',
-            default_energy: 10,
+            custom_metadata: { energy: 10 },
             default_color: '#FFD700',
             shape: 'square' as const,
             pickable: true,

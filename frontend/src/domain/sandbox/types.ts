@@ -27,7 +27,7 @@ export interface SandboxGridCellJson {
     y: number;
 }
 
-export type SandboxItemType = 'food' | 'wall' | 'region' | 'ball' | 'fixture';
+export type SandboxItemType = 'food' | 'wall' | 'region' | 'ball' | 'fixture' | 'item';
 
 export type SandboxDefinitionKind = 'item' | 'terrain' | 'fixture' | 'region';
 

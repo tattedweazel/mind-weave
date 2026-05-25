@@ -23,7 +23,7 @@ const sampleItem: ItemDefinitionRead = {
     id: 'item-1',
     name: 'food_snack',
     label: 'Snack',
-    default_energy: 48,
+    custom_metadata: { energy: 48 },
     default_color: '#FF6B6B',
     shape: 'circle',
     pickable: true,

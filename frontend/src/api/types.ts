@@ -1567,7 +1567,7 @@ export interface ItemDefinitionRead {
     user_id?: string | null;
     name: string;
     label: string;
-    default_energy?: number | null;
+    custom_metadata?: Record<string, unknown>;
     default_color?: string | null;
     shape: DefinitionShape;
     pickable: boolean;
@@ -1578,7 +1578,7 @@ export interface ItemDefinitionRead {
 export interface ItemDefinitionCreate {
     name: string;
     label: string;
-    default_energy?: number | null;
+    custom_metadata?: Record<string, unknown>;
     default_color?: string | null;
     shape?: DefinitionShape;
     pickable?: boolean;
@@ -1587,7 +1587,7 @@ export interface ItemDefinitionCreate {
 export interface ItemDefinitionUpdate {
     name?: string;
     label?: string;
-    default_energy?: number | null;
+    custom_metadata?: Record<string, unknown>;
     default_color?: string | null;
     shape?: DefinitionShape;
     pickable?: boolean;

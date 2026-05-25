@@ -558,7 +558,7 @@ class ItemDefinition(SQLModel, table=True):
     user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
     name: str = Field(index=True)
     label: str = Field(default="")
-    default_energy: Optional[int] = Field(default=48)
+    custom_metadata: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     default_color: Optional[str] = Field(default=None)
     shape: str = Field(default="circle")
     pickable: bool = Field(default=True)

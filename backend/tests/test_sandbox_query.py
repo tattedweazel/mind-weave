@@ -100,6 +100,7 @@ def test_creature_position_reports_food_under_creature():
                 "definition_id": None,
                 "energy": 10,
                 "color": None,
+                "custom_metadata": {},
                 "label": "Food (10)",
             }
         ],
@@ -123,14 +124,18 @@ def test_creature_position_includes_pickable_label_from_definition_map():
         raw,
         definition_labels={"def-key": "Golden Key"},
         definition_defaults={
-            "def-key": ItemDefinitionDefaults(default_energy=25, default_color="#AABBCC"),
+            "def-key": ItemDefinitionDefaults(
+                default_color="#AABBCC",
+                custom_metadata={"energy": 25},
+            ),
         },
     )
     assert probe["stack_count"] == 1
     assert probe["items"][0]["kind"] == "item"
     assert probe["items"][0]["label"] == "Golden Key"
-    assert probe["items"][0]["energy"] == 25
+    assert probe["items"][0]["energy"] is None
     assert probe["items"][0]["color"] == "#AABBCC"
+    assert probe["items"][0]["custom_metadata"] == {"energy": 25}
 
 
 def test_fixture_cell_probe_from_fixture_dict():
@@ -170,7 +175,9 @@ def test_fixture_cell_probe_from_fixture_dict():
     probe = fixture_cell_probe_from_fixture_dict(
         raw,
         definition_labels={"def-key": "Key"},
-        definition_defaults={"def-key": ItemDefinitionDefaults(default_energy=25)},
+        definition_defaults={
+            "def-key": ItemDefinitionDefaults(custom_metadata={"energy": 25}),
+        },
     )
     assert probe["x"] == 4 and probe["y"] == 3
     assert probe["kind"] == "fixture"
@@ -178,6 +185,68 @@ def test_fixture_cell_probe_from_fixture_dict():
     assert probe["items"][0]["kind"] == "item"
     assert probe["items"][0]["label"] == "Key"
     assert probe["items"][0]["energy"] == 10
+
+
+def test_fixture_cell_probe_resolves_color_from_definition_map():
+    creature = _creature_dict(x=4, y=4, facing="N")
+    fx_pos = {"x": 4, "y": 3}
+    raw = {
+        "tick": 1,
+        "fixture": {
+            "id": "fx1",
+            "position": fx_pos,
+            "label": "Door",
+        },
+        "actor": creature,
+        "cell_items": [],
+        "world": {
+            "grid": {"width": 8, "height": 8},
+            "items": [
+                {
+                    "id": "fx1",
+                    "type": FIXTURE_ITEM_TYPE,
+                    "definition_kind": "fixture",
+                    "definition_id": "fx-def-red",
+                    "position": fx_pos,
+                },
+            ],
+        },
+    }
+    probe = fixture_cell_probe_from_fixture_dict(
+        raw,
+        fixture_definition_colors={"fx-def-red": "#EF4444"},
+    )
+    assert probe["kind"] == "fixture"
+    assert probe["color"] == "#EF4444"
+
+
+def test_fixture_cell_probe_prefers_instance_color():
+    creature = _creature_dict(x=4, y=4, facing="N")
+    fx_pos = {"x": 4, "y": 3}
+    raw = {
+        "tick": 1,
+        "fixture": {"id": "fx1", "position": fx_pos},
+        "actor": creature,
+        "cell_items": [],
+        "world": {
+            "grid": {"width": 8, "height": 8},
+            "items": [
+                {
+                    "id": "fx1",
+                    "type": FIXTURE_ITEM_TYPE,
+                    "definition_kind": "fixture",
+                    "definition_id": "fx-def-red",
+                    "position": fx_pos,
+                    "color": "#22C55E",
+                },
+            ],
+        },
+    }
+    probe = fixture_cell_probe_from_fixture_dict(
+        raw,
+        fixture_definition_colors={"fx-def-red": "#EF4444"},
+    )
+    assert probe["color"] == "#22C55E"
 
 
 def test_tick_dict_from_fixture_dict_still_maps_actor_for_nearby():
@@ -311,3 +380,30 @@ def test_nearby_no_region_has_null_region_label():
     creature = CreatureState(id="c1", workflow_id="wf", position=GridCell(x=3, y=2), facing="N")
     cells = nearby_cells_clockwise("N", creature.position, 5, 5, world, [creature], exclude_creature_id="c1")
     assert cells[0].region_label is None
+
+
+def test_pickable_false_definition_excluded_from_probe_stack():
+    raw = _minimal_tick(
+        creature_pos={"x": 2, "y": 2},
+        items=[
+            {
+                "id": "recipe1",
+                "definition_id": "def-recipe",
+                "definition_kind": "item",
+                "role": "pickable",
+                "position": {"x": 2, "y": 2},
+            },
+        ],
+    )
+    probe = creature_position_from_tick_dict(
+        raw,
+        definition_labels={"def-recipe": "Chai Recipe"},
+        definition_defaults={
+            "def-recipe": ItemDefinitionDefaults(
+                pickable=False,
+                custom_metadata={"ingredients": ["milk"]},
+            ),
+        },
+    )
+    assert probe["stack_count"] == 0
+    assert probe["items"] == []

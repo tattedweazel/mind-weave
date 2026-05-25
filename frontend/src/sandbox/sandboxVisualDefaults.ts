@@ -9,6 +9,7 @@ export const CREATURE_FILL = '#38bdf8';
 export const CREATURE_SELECTED_FILL = '#fbbf24';
 export const FOOD_FILL = '#f472b6';
 export const WALL_FILL = '#64748b';
+export const FIXTURE_FILL = '#8B5CF6';
 export const REGION_UNDERLAY_ALPHA = 0.35;
 export const DEFAULT_REGION_COLOR = '#3B82F6';
 

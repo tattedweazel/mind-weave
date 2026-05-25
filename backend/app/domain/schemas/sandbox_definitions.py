@@ -20,30 +20,34 @@ DefinitionShape = Literal["circle", "square", "rect"]
 class ItemDefinitionCreate(BaseModel):
     name: str = Field(min_length=1)
     label: str = Field(min_length=1)
-    default_energy: Optional[int] = Field(default=48, ge=0)
+    custom_metadata: dict[str, Any] = Field(default_factory=dict)
     default_color: Optional[str] = None
     shape: DefinitionShape = "circle"
     pickable: bool = True
 
     @model_validator(mode="after")
-    def _normalize_color(self) -> ItemDefinitionCreate:
+    def _normalize(self) -> ItemDefinitionCreate:
         if self.default_color is not None:
             self.default_color = normalize_hex_color(self.default_color)
+        if not isinstance(self.custom_metadata, dict):
+            raise ValueError("custom_metadata must be an object")
         return self
 
 
 class ItemDefinitionUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1)
     label: Optional[str] = Field(default=None, min_length=1)
-    default_energy: Optional[int] = Field(default=None, ge=0)
+    custom_metadata: Optional[dict[str, Any]] = None
     default_color: Optional[str] = None
     shape: Optional[DefinitionShape] = None
     pickable: Optional[bool] = None
 
     @model_validator(mode="after")
-    def _normalize_color(self) -> ItemDefinitionUpdate:
+    def _normalize(self) -> ItemDefinitionUpdate:
         if self.default_color is not None:
             self.default_color = normalize_hex_color(self.default_color)
+        if self.custom_metadata is not None and not isinstance(self.custom_metadata, dict):
+            raise ValueError("custom_metadata must be an object")
         return self
 
 
@@ -158,7 +162,7 @@ class ItemDefinitionRead(BaseModel):
     user_id: Optional[str] = None
     name: str
     label: str
-    default_energy: Optional[int] = None
+    custom_metadata: dict[str, Any] = Field(default_factory=dict)
     default_color: Optional[str] = None
     shape: DefinitionShape = "circle"
     pickable: bool = True
