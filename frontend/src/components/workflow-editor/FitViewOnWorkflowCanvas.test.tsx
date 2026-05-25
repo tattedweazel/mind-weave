@@ -23,27 +23,41 @@ vi.mock('@xyflow/react', async importOriginal => {
     };
 });
 
-function FlowWithFit({ fitKey }: { fitKey: string | null }) {
+function FlowWithFit({ fitKey, edgesReady = true }: { fitKey: string | null; edgesReady?: boolean }) {
     const [ready, setReady] = useState(false);
     return (
         <ReactFlowProvider>
             <div style={{ width: 400, height: 300 }}>
                 <ReactFlow nodes={[]} edges={[]} onInit={() => setReady(true)}>
-                    {ready ? <FitViewOnWorkflowCanvasKey fitKey={fitKey} /> : null}
+                    {ready ? (
+                        <FitViewOnWorkflowCanvasKey fitKey={fitKey} edgesReady={edgesReady} />
+                    ) : null}
                 </ReactFlow>
             </div>
         </ReactFlowProvider>
     );
 }
 
-function FlowWithResize({ fitKey }: { fitKey: string | null }) {
+function FlowWithResize({
+    fitKey,
+    edgesReady = true,
+}: {
+    fitKey: string | null;
+    edgesReady?: boolean;
+}) {
     const [ready, setReady] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
     return (
         <ReactFlowProvider>
             <div ref={ref} style={{ width: 400, height: 300 }}>
                 <ReactFlow nodes={[]} edges={[]} onInit={() => setReady(true)}>
-                    {ready ? <FitViewOnWorkflowCanvasResize fitKey={fitKey} containerRef={ref} /> : null}
+                    {ready ? (
+                        <FitViewOnWorkflowCanvasResize
+                            fitKey={fitKey}
+                            edgesReady={edgesReady}
+                            containerRef={ref}
+                        />
+                    ) : null}
                 </ReactFlow>
             </div>
         </ReactFlowProvider>
@@ -120,6 +134,20 @@ describe('FitViewOnWorkflowCanvasKey', () => {
             expect(mockFitView).toHaveBeenCalledWith({ ...WORKFLOW_CANVAS_FIT_VIEW_OPTIONS });
         });
     });
+
+    it('does not call fitView when edgesReady is false even if nodes are initialized', async () => {
+        mockUseNodesInitialized.mockReturnValue(true);
+        const { rerender } = render(<FlowWithFit fitKey="wf-1" edgesReady={false} />);
+        await act(async () => {
+            await new Promise(r => setTimeout(r, 0));
+        });
+        expect(mockFitView).not.toHaveBeenCalled();
+
+        rerender(<FlowWithFit fitKey="wf-1" edgesReady={true} />);
+        await waitFor(() => {
+            expect(mockFitView).toHaveBeenCalledWith({ ...WORKFLOW_CANVAS_FIT_VIEW_OPTIONS });
+        });
+    });
 });
 
 describe('FitViewOnWorkflowCanvasResize', () => {
@@ -158,22 +186,32 @@ describe('FitViewOnWorkflowCanvasResize', () => {
         });
     });
 
-    it('does not call fitView again when useNodesInitialized toggles (resize is container-driven only)', async () => {
-        const { rerender } = render(<FlowWithResize fitKey="wf-1" />);
-        await waitFor(() => {
-            expect(mockFitView).toHaveBeenCalledTimes(1);
-        });
-        mockFitView.mockClear();
+    it('does not call fitView until nodesInitialized is true', async () => {
         mockUseNodesInitialized.mockReturnValue(false);
-        rerender(<FlowWithResize fitKey="wf-1" />);
-        await act(async () => {
-            await new Promise(r => setTimeout(r, 0));
-        });
-        mockUseNodesInitialized.mockReturnValue(true);
-        rerender(<FlowWithResize fitKey="wf-1" />);
+        const { rerender } = render(<FlowWithResize fitKey="wf-1" />);
         await act(async () => {
             await new Promise(r => setTimeout(r, 200));
         });
         expect(mockFitView).not.toHaveBeenCalled();
+
+        mockUseNodesInitialized.mockReturnValue(true);
+        rerender(<FlowWithResize fitKey="wf-1" />);
+        await waitFor(() => {
+            expect(mockFitView).toHaveBeenCalledWith({ ...WORKFLOW_CANVAS_FIT_VIEW_OPTIONS });
+        });
+    });
+
+    it('does not call fitView when edgesReady is false even if nodes are initialized', async () => {
+        mockUseNodesInitialized.mockReturnValue(true);
+        const { rerender } = render(<FlowWithResize fitKey="wf-1" edgesReady={false} />);
+        await act(async () => {
+            await new Promise(r => setTimeout(r, 200));
+        });
+        expect(mockFitView).not.toHaveBeenCalled();
+
+        rerender(<FlowWithResize fitKey="wf-1" edgesReady={true} />);
+        await waitFor(() => {
+            expect(mockFitView).toHaveBeenCalledWith({ ...WORKFLOW_CANVAS_FIT_VIEW_OPTIONS });
+        });
     });
 });

@@ -103,6 +103,8 @@ import { nextUniqueStartSlotKey, validateStartSlotKey } from './startSlotKeyHelp
 import { RunInputsExplorer } from './RunInputsExplorer';
 import { EdgeInspectorPanel } from './EdgeInspectorPanel';
 import { WorkflowExplorerWorkflowMetadata } from './WorkflowExplorerWorkflowMetadata';
+import { WorkflowGraphIssuesPanel } from './WorkflowGraphIssuesPanel';
+import { findWorkflowGraphWiringIssues, resolveEdgesForWiringValidation } from './workflowGraphWiringIssues';
 import { WorkflowRunLogsNodeResultsList } from './WorkflowRunLogsNodeResultsList';
 import { WorkflowNodeRunOutputBody } from './WorkflowNodeRunOutputBody';
 import { isWorkflowInspectorOpen } from './workflowInspectorVisibility';
@@ -141,12 +143,7 @@ import {
     sortWorkflowPalettesForDisplay,
 } from '../../domain/paletteDefaults';
 import { getHandleColor } from './constants';
-import {
-    FitViewOnWorkflowCanvasKey,
-    FitViewOnWorkflowCanvasResize,
-    WORKFLOW_CANVAS_MIN_ZOOM,
-} from './FitViewOnWorkflowCanvas';
-import { nodeTypes } from './nodeTypes';
+import { WorkflowEditorCanvas } from './WorkflowEditorCanvas';
 import { normalizeAnnotationTextAlign } from './annotationTextAlign';
 import { AnnotationStackOrderControls } from './AnnotationStackOrderControls';
 import {
@@ -358,6 +355,9 @@ export const WorkflowEditor: React.FC<Props> = ({
         [nodes],
     );
     const [edges, setEdges] = useState<Edge[]>([]);
+    const [flowEdgesReady, setFlowEdgesReady] = useState(true);
+    const [flowEdgesDeferToken, setFlowEdgesDeferToken] = useState(0);
+    const pendingFlowEdgesRef = useRef<Edge[] | null>(null);
     const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
 
     const graphHistoryRef = useRef(createWorkflowGraphHistory());
@@ -423,6 +423,7 @@ export const WorkflowEditor: React.FC<Props> = ({
 
     const [workflowImportModalOpen, setWorkflowImportModalOpen] = useState(false);
     const [workflowImportNotice, setWorkflowImportNotice] = useState<string | null>(null);
+    const [pendingFlowEdges, setPendingFlowEdges] = useState<Edge[] | null>(null);
     const [bundleExportBusy, setBundleExportBusy] = useState(false);
     const copyWithFeedback = useCopyWithFeedback();
     const showStatusToast = useStatusToast();
@@ -479,11 +480,26 @@ export const WorkflowEditor: React.FC<Props> = ({
         graphHistoryRef.current.pushSnapshot(nodesForUndoRef.current, edgesForUndoRef.current);
     }, []);
 
+    const enqueueFlowEdges = useCallback((next: Edge[]) => {
+        pendingFlowEdgesRef.current = next;
+        setPendingFlowEdges(next);
+        setFlowEdgesReady(next.length === 0);
+        setEdges([]);
+        setFlowEdgesDeferToken(t => t + 1);
+    }, []);
+
+    const commitFlowEdges = useCallback((next: Edge[]) => {
+        pendingFlowEdgesRef.current = null;
+        setPendingFlowEdges(null);
+        setEdges(next);
+        setFlowEdgesReady(true);
+    }, []);
+
     const applyGraphHistorySnapshot = useCallback((snap: { nodes: Node[]; edges: Edge[] }) => {
         isApplyingGraphHistoryRef.current = true;
         try {
             setNodes(snap.nodes);
-            setEdges(snap.edges);
+            enqueueFlowEdges(snap.edges);
             setSelectedEdge(se => (se && snap.edges.some(e => e.id === se.id) ? se : null));
             setPendingNodeDelete(null);
             setDeletingEdgeId(null);
@@ -491,7 +507,7 @@ export const WorkflowEditor: React.FC<Props> = ({
         } finally {
             isApplyingGraphHistoryRef.current = false;
         }
-    }, []);
+    }, [enqueueFlowEdges]);
 
     const undoGraph = useCallback(() => {
         if (!graphHistoryRef.current.canUndo()) return false;
@@ -988,6 +1004,8 @@ export const WorkflowEditor: React.FC<Props> = ({
         graphHistoryRef.current.clear();
         setActiveWf(null);
         setLastSavedWf(null);
+        pendingFlowEdgesRef.current = null;
+        setFlowEdgesReady(true);
         setNodes([]);
         setEdges([]);
         setSelectedEdge(null);
@@ -1042,7 +1060,11 @@ export const WorkflowEditor: React.FC<Props> = ({
         setNodes(flowNodes.map(n => ({ ...n, selected: false })));
         const pal = wf.palette_id ? palettes.find(p => p.id === wf.palette_id) : resolveFallbackWorkflowPalette(palettes);
         const colors = pal?.colors ? normalizeWorkflowPaletteColors(pal.colors) : DEFAULT_PALETTE_COLORS;
-        setEdges(filteredEdges.map((e: AppGraphEdge, i: number) => appEdgeToFlow(e, i, enrichedForEdges, colors, filteredEdges)));
+        enqueueFlowEdges(
+            filteredEdges.map((e: AppGraphEdge, i: number) =>
+                appEdgeToFlow(e, i, enrichedForEdges, colors, filteredEdges),
+            ),
+        );
         setSelectedEdge(null);
         setPendingNodeDelete(null);
         setNodeDeleteKeyboardMessage(null);
@@ -1400,9 +1422,51 @@ export const WorkflowEditor: React.FC<Props> = ({
         [nodes, edges, paletteColors, workflows, structures, documents, outputOverrides],
     );
 
+    const edgesForWiringValidation = React.useMemo(
+        () => resolveEdgesForWiringValidation(edges, pendingFlowEdges),
+        [edges, pendingFlowEdges],
+    );
+    const wiringIssues = React.useMemo(
+        () => findWorkflowGraphWiringIssues(nodesForFlow, edgesForWiringValidation),
+        [nodesForFlow, edgesForWiringValidation],
+    );
+    const brokenEdgeIds = React.useMemo(
+        () => new Set(wiringIssues.map(issue => issue.edgeId)),
+        [wiringIssues],
+    );
+    const visibleWiringEdgeCount = React.useMemo(
+        () => edgesForWiringValidation.filter(e => !brokenEdgeIds.has(e.id)).length,
+        [edgesForWiringValidation, brokenEdgeIds],
+    );
+    const edgesForCanvas = React.useMemo(
+        () => edges.filter(e => !brokenEdgeIds.has(e.id)),
+        [edges, brokenEdgeIds],
+    );
     const edgesForFlow = React.useMemo(
-        () => styleEdgesForCanvas(edges, nodesForFlow, paletteColors, selectedEdge?.id ?? null),
-        [edges, nodesForFlow, paletteColors, selectedEdge],
+        () => styleEdgesForCanvas(edgesForCanvas, nodesForFlow, paletteColors, selectedEdge?.id ?? null),
+        [edgesForCanvas, nodesForFlow, paletteColors, selectedEdge],
+    );
+
+    const focusWiringIssueNode = useCallback(
+        (nodeId: string) => {
+            setSelectedEdge(null);
+            setNodes(ns => ns.map(n => ({ ...n, selected: n.id === nodeId })));
+            if (overlayPanels && inspectorOpen) {
+                setCompactPaletteOpen(false);
+                setCompactExplorerOpen(true);
+            }
+        },
+        [overlayPanels, inspectorOpen],
+    );
+
+    const deleteWiringIssueEdge = useCallback(
+        (edgeId: string) => {
+            recordGraphBeforeMutation();
+            setEdges(es => es.filter(e => e.id !== edgeId));
+            setSelectedEdge(se => (se?.id === edgeId ? null : se));
+            setDeletingEdgeId(id => (id === edgeId ? null : id));
+        },
+        [recordGraphBeforeMutation],
     );
 
     // ReactFlow handlers
@@ -1547,17 +1611,12 @@ export const WorkflowEditor: React.FC<Props> = ({
         [nodes, edges],
     );
 
-    // Drag-and-drop from palette
-    const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
-    const onDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        const type = e.dataTransfer.getData('nodeType');
-        if (!type) return;
-        const rf = reactFlowInstanceRef.current;
-        if (!rf) return;
-        const extra = JSON.parse(e.dataTransfer.getData('nodeExtra') || '{}');
-        const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-        const position = { x: p.x - 80, y: p.y - 40 };
+    // Drag-and-drop from palette (position from WorkflowEditorCanvas via useReactFlow)
+    const handlePaletteDrop = useCallback((
+        type: string,
+        position: { x: number; y: number },
+        extra: Record<string, unknown>,
+    ) => {
         const id = genId();
         recordGraphBeforeMutation();
         if (type === 'simpleLLMCall') {
@@ -3779,43 +3838,26 @@ export const WorkflowEditor: React.FC<Props> = ({
                             />
                         </>
                     )}
-                    <div
-                        ref={reactFlowWrapper}
-                        className="flex-1 min-h-0 overflow-hidden touch-none"
-                        onDragOver={onDragOver}
-                        onDrop={onDrop}
-                    >
-                    <WorkflowGraphUndoContext.Provider value={workflowGraphUndoContextValue}>
-                    <ReactFlow
-                        nodes={nodesForFlow} edges={edgesForFlow}
-                        onInit={instance => {
-                            reactFlowInstanceRef.current = instance;
-                        }}
-                        defaultEdgeOptions={{ zIndex: 1000 }}
-                        connectionMode={ConnectionMode.Loose}
-                        deleteKeyCode={null}
-                        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+                    <WorkflowEditorCanvas
+                        fitKey={activeWf?.id ?? null}
+                        flowEdgesReady={flowEdgesReady}
+                        flowEdgesDeferToken={flowEdgesDeferToken}
+                        pendingFlowEdgesRef={pendingFlowEdgesRef}
+                        onCommitFlowEdges={commitFlowEdges}
+                        nodes={nodesForFlow}
+                        edges={edgesForFlow}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
                         onNodeDragStart={onNodeDragStart}
                         onNodeDragStop={onNodeDragStop}
-                        onConnect={onConnect} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick} onPaneClick={onPaneClick}
+                        onConnect={onConnect}
+                        onNodeClick={onNodeClick}
+                        onEdgeClick={onEdgeClick}
+                        onPaneClick={onPaneClick}
                         isValidConnection={isValidConnection}
-                        nodeTypes={nodeTypes}
-                        minZoom={WORKFLOW_CANVAS_MIN_ZOOM}
-                        zoomOnScroll
-                        zoomOnPinch
-                        panOnScroll={false}
-                        zoomOnDoubleClick={false}
-                        preventScrolling
-                        colorMode={typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'}
-                        proOptions={{ hideAttribution: true }}
-                        className="bg-mw-page">
-                        <FitViewOnWorkflowCanvasKey fitKey={activeWf?.id ?? null} />
-                        <FitViewOnWorkflowCanvasResize fitKey={activeWf?.id ?? null} containerRef={reactFlowWrapper} />
-                        <Background />
-                        <Controls />
-                    </ReactFlow>
-                    </WorkflowGraphUndoContext.Provider>
-                    </div>
+                        onPaletteDrop={handlePaletteDrop}
+                        undoContextValue={workflowGraphUndoContextValue}
+                    />
                     {transcribeCapture && isRunning ? (
                         <div
                             className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-3"
@@ -3967,7 +4009,18 @@ export const WorkflowEditor: React.FC<Props> = ({
                         <button 
                             onClick={() => setInspectorTab('logs')}
                             className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-semibold uppercase tracking-wide transition-colors ${inspectorTab === 'logs' ? 'text-mw-primary border-b-2 border-mw-primary bg-mw-card' : 'text-mw-text-secondary hover:text-mw-text-primary border-b-2 border-transparent'}`}>
-                            Run Logs {runResult && <span className={`w-4 h-4 rounded-full ${runResult.status === 'ok' ? 'bg-green-500' : runResult.status === 'partial' ? 'bg-amber-500' : 'bg-red-500'}`}></span>}
+                            Run Logs{' '}
+                            {wiringIssues.length > 0 ? (
+                                <span
+                                    className="w-2 h-2 rounded-full bg-amber-500 shrink-0"
+                                    title={`${wiringIssues.length} graph wiring issue${wiringIssues.length === 1 ? '' : 's'}`}
+                                />
+                            ) : null}
+                            {runResult ? (
+                                <span
+                                    className={`w-4 h-4 rounded-full ${runResult.status === 'ok' ? 'bg-green-500' : runResult.status === 'partial' ? 'bg-amber-500' : 'bg-red-500'}`}
+                                />
+                            ) : null}
                         </button>
                     </div>
                     
@@ -7789,6 +7842,15 @@ export const WorkflowEditor: React.FC<Props> = ({
                                         onGraphExecutionLimitsChange={patchGraphExecutionLimits}
                                         onRunExecutionLimitsChange={setRunExecutionLimitsOverrides}
                                     />
+                                    <div className="px-4 pb-4">
+                                        <WorkflowGraphIssuesPanel
+                                            issues={wiringIssues}
+                                            visibleEdgeCount={visibleWiringEdgeCount}
+                                            hiddenEdgeCount={brokenEdgeIds.size}
+                                            onFocusNode={focusWiringIssueNode}
+                                            onDeleteEdge={deleteWiringIssueEdge}
+                                        />
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="p-6 text-center text-sm text-mw-text-secondary">Select a node or connection on the canvas to configure it.</div>
@@ -7796,6 +7858,13 @@ export const WorkflowEditor: React.FC<Props> = ({
                         ) : (
                             /* RUN LOGS TAB */
                             <div className="p-4 space-y-4">
+                                <WorkflowGraphIssuesPanel
+                                    issues={wiringIssues}
+                                    visibleEdgeCount={visibleWiringEdgeCount}
+                                    hiddenEdgeCount={brokenEdgeIds.size}
+                                    onFocusNode={focusWiringIssueNode}
+                                    onDeleteEdge={deleteWiringIssueEdge}
+                                />
                                 {!runResult && !isRunning && (
                                     <div className="text-center text-sm text-mw-text-secondary mt-4">Run the workflow to see execution logs here.</div>
                                 )}

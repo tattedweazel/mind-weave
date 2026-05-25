@@ -24,6 +24,9 @@ Usage (from backend/):
   uv run python scripts/analyze_workflow_definition.py \\
     --workflow-id f2df2602-ba7a-4bad-b1cd-af0d69509766 --summarize
 
+  uv run python scripts/analyze_workflow_definition.py \\
+    --workflow-id <uuid> --wiring-issues
+
 DATABASE_URL comes from the environment (see app.core.config / .env). The script
 changes cwd to ``backend/`` before importing ``app`` (same as ``run_workflow_stream.py``)
 so ``sqlite:///./mindweave.db`` resolves correctly when run from the repo root.
@@ -138,6 +141,183 @@ def _summarize_upsert_document_view(graph: dict[str, Any], id_to_label: dict[str
             print("  required_inputs excerpts: (none or non-inline)")
 
 
+def _start_output_handles(raw: dict[str, Any]) -> list[str]:
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+    req = data.get("required_inputs")
+    if req is None:
+        keys = ["user_input"]
+    elif isinstance(req, list) and len(req) == 0:
+        keys = ["output"]
+    elif isinstance(req, list):
+        keys = [str(r.get("key")) for r in req if isinstance(r, dict) and r.get("key")]
+    else:
+        keys = ["output"]
+    return ["signal_out", *keys]
+
+
+def _stop_target_handles(raw: dict[str, Any]) -> list[str]:
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+    outs = data.get("required_outputs")
+    if isinstance(outs, list) and outs and isinstance(outs[0], dict):
+        data_key = outs[0].get("key") or "output"
+    else:
+        data_key = "output"
+    return ["trigger", str(data_key)]
+
+
+def _node_target_handles(raw: dict[str, Any]) -> list[str] | None:
+    kind = raw.get("kind")
+    if kind == "start":
+        return []
+    if kind == "stop":
+        return _stop_target_handles(raw)
+    if kind == "annotation":
+        return []
+    if kind == "control" and raw.get("control_type") == "for_loop_end":
+        data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+        exports = data.get("exports")
+        if isinstance(exports, list) and exports:
+            keys = [str(x) for x in exports]
+        else:
+            keys = ["export"]
+        return ["trigger", *keys]
+    if kind == "workflow":
+        return None
+    # Common static inputs (+ trigger) for offline checks
+    ut = raw.get("utility_type")
+    sk = raw.get("skill_type")
+    pt = raw.get("primitive_type")
+    ct = raw.get("control_type")
+    static: dict[tuple[str, str], list[str]] = {
+        ("utility", "broadcast_message"): ["trigger", "message", "title"],
+        ("utility", "add_to_list"): ["trigger", "list", "value"],
+        ("utility", "dictionary_value_by_key"): ["trigger", "key", "dictionary", "fallback"],
+        ("skill", "simple_llm_call"): ["trigger", "additional_context", "user_prompt", "structure"],
+        ("skill", "gmail_list_messages"): ["trigger", "after", "before", "unread_only", "query", "max_results"],
+        ("primitive", "string"): ["trigger", "input"],
+        ("primitive", "list"): ["trigger", "input"],
+        ("primitive", "dictionary"): ["trigger", "input"],
+        ("control", "for_loop"): ["trigger", "input"],
+        ("control", "basic_conditional"): ["trigger", "condition"],
+        ("control", "is"): ["trigger", "input_a", "input_b"],
+        ("control", "is_empty"): ["trigger", "value"],
+    }
+    if ut and ("utility", ut) in static:
+        return static[("utility", ut)]
+    if sk and ("skill", sk) in static:
+        return static[("skill", sk)]
+    if pt and ("primitive", pt) in static:
+        return static[("primitive", pt)]
+    if ct and ("control", ct) in static:
+        return static[("control", ct)]
+    if kind in ("utility", "skill", "primitive", "control"):
+        return ["trigger", "input"]
+    return None
+
+
+def _node_source_handles(raw: dict[str, Any]) -> list[str] | None:
+    kind = raw.get("kind")
+    if kind in ("start", "stop", "annotation"):
+        if kind == "start":
+            return _start_output_handles(raw)
+        return []
+    if kind == "workflow":
+        return None
+    ct = raw.get("control_type")
+    if kind == "control":
+        if ct in ("basic_conditional", "is", "is_empty", "gt", "lt", "gte", "lte", "between"):
+            return ["signal_out", "true", "false"]
+        if ct == "for_loop":
+            return ["signal_out", "item", "summary"]
+        if ct == "for_loop_end":
+            return ["signal_out", "output"]
+        if ct == "try_catch":
+            return ["signal_out", "try", "catch", "output", "envelope"]
+        if ct in ("and", "or", "xor", "not"):
+            return ["signal_out", "output"]
+    if kind in ("utility", "skill", "primitive"):
+        return ["signal_out", "output"]
+    return None
+
+
+def _normalize_handles(
+    raw_edge: dict[str, Any],
+    src_raw: dict[str, Any] | None,
+    tgt_raw: dict[str, Any] | None,
+) -> tuple[str | None, str | None]:
+    sh = raw_edge.get("source_handle")
+    th = raw_edge.get("target_handle")
+    source_handle = sh if sh not in (None, "") else None
+    target_handle = th if th not in (None, "") else None
+    if src_raw and source_handle is None and src_raw.get("kind") == "start":
+        data = src_raw.get("data") if isinstance(src_raw.get("data"), dict) else {}
+        req = data.get("required_inputs")
+        if isinstance(req, list) and req and isinstance(req[0], dict):
+            source_handle = str(req[0].get("key") or "user_input")
+        else:
+            source_handle = "output"
+    if tgt_raw and tgt_raw.get("kind") == "stop" and target_handle not in ("trigger",):
+        data = tgt_raw.get("data") if isinstance(tgt_raw.get("data"), dict) else {}
+        outs = data.get("required_outputs")
+        if target_handle in (None, ""):
+            if isinstance(outs, list) and outs and isinstance(outs[0], dict):
+                target_handle = str(outs[0].get("key") or "output")
+            else:
+                target_handle = "output"
+    return source_handle, target_handle
+
+
+def find_graph_wiring_issues(graph: dict[str, Any]) -> list[str]:
+    """Return human-readable wiring issue lines (subset aligned with SPA graph issues panel)."""
+    node_by_id: dict[str, dict[str, Any]] = {}
+    for raw in graph.get("nodes") or []:
+        if isinstance(raw, dict) and isinstance(raw.get("id"), str):
+            node_by_id[raw["id"]] = raw
+    id_to_label = _node_id_to_label(graph)
+    issues: list[str] = []
+    for i, raw_e in enumerate(graph.get("edges") or []):
+        if not isinstance(raw_e, dict):
+            continue
+        src_id = raw_e.get("source")
+        tgt_id = raw_e.get("target")
+        if not isinstance(src_id, str) or not isinstance(tgt_id, str):
+            continue
+        src_raw = node_by_id.get(src_id)
+        tgt_raw = node_by_id.get(tgt_id)
+        prefix = f"[edge {i}] {src_id!r} -> {tgt_id!r}"
+        if src_raw is None:
+            issues.append(f"{prefix}: missing source node")
+            continue
+        if tgt_raw is None:
+            issues.append(f"{prefix}: missing target node")
+            continue
+        if src_raw.get("kind") == "annotation" or tgt_raw.get("kind") == "annotation":
+            issues.append(f"{prefix}: annotation nodes cannot be wired")
+            continue
+        source_handle, target_handle = _normalize_handles(raw_e, src_raw, tgt_raw)
+        src_handles = _node_source_handles(src_raw)
+        tgt_handles = _node_target_handles(tgt_raw)
+        src_label = id_to_label.get(src_id, src_id)
+        tgt_label = id_to_label.get(tgt_id, tgt_id)
+        if src_handles is None:
+            issues.append(
+                f"{prefix}: source {src_label!r} is a nested workflow — open in the editor Graph issues panel for full handle checks"
+            )
+        elif source_handle and source_handle not in src_handles:
+            issues.append(
+                f"{prefix}: source {src_label!r} has no output {source_handle!r}; valid: {', '.join(src_handles)}"
+            )
+        if tgt_handles is None:
+            issues.append(
+                f"{prefix}: target {tgt_label!r} is a nested workflow — open in the editor Graph issues panel for full handle checks"
+            )
+        elif target_handle and target_handle not in tgt_handles:
+            issues.append(
+                f"{prefix}: target {tgt_label!r} has no input {target_handle!r}; valid: {', '.join(tgt_handles)}"
+            )
+    return issues
+
+
 def analyze_graph_dict(graph: dict[str, Any]) -> tuple[list[str], list[str]]:
     """Return (info_lines, error_lines). Empty error_lines means graph passes loop validators."""
     nodes_by_id = _parse_nodes(graph)
@@ -188,9 +368,15 @@ def main() -> int:
         action="store_true",
         help="Print Upsert Document nodes, edges into them, and trimmed required_inputs name/content excerpts.",
     )
+    p.add_argument(
+        "--wiring-issues",
+        action="store_true",
+        help="List edge handle mismatches (missing nodes, unknown source_handle/target_handle).",
+    )
     args = p.parse_args()
     wf_uuid = _normalize_uuid(args.workflow_id)
 
+    wiring_issues: list[str] = []
     with Session(engine) as session:
         wf = session.get(WorkflowDefinition, wf_uuid)
         if wf is None:
@@ -221,6 +407,15 @@ def main() -> int:
                 )
         if args.summarize:
             _summarize_upsert_document_view(graph, id_to_label)
+        wiring_issues: list[str] = []
+        if args.wiring_issues:
+            wiring_issues = find_graph_wiring_issues(graph)
+            print("\nGraph wiring issues (--wiring-issues):")
+            if wiring_issues:
+                for line in wiring_issues:
+                    print(f"  - {line}")
+            else:
+                print("  (none detected by offline handle checks)")
         info, errs = analyze_graph_dict(graph)
         print()
         for line in info:
@@ -261,7 +456,9 @@ def main() -> int:
                         f"  step={row.step_number} node={row.node_id!r} label={lab!r} status={row.status!r}{err}"
                     )
 
-    return 0 if not errs else 3
+    if errs or (args.wiring_issues and wiring_issues):
+        return 3
+    return 0
 
 
 if __name__ == "__main__":

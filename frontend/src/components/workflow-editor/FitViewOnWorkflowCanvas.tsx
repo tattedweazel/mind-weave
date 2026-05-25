@@ -6,9 +6,11 @@
  * already have measured width/height; running it early can collapse the bounds to the first
  * measured node (often Start) instead of the full graph.
  *
+ * Also wait for edgesReady (deferred edge commit in WorkflowEditor) so edges referencing
+ * dynamic Start outputs (e.g. sandbox_tick) mount before fitView triggers edge layout.
+ *
  * {@link FitViewOnWorkflowCanvasResize} refits only when the canvas **container** resizes (e.g.
- * overlay panels, sidebar drag). It does not depend on node measurement, so adding nodes does not
- * trigger a refit.
+ * overlay panels, sidebar drag). It uses the same nodesInitialized + edgesReady guards.
  */
 import { useEffect, useRef, type RefObject } from 'react';
 import { useNodesInitialized, useReactFlow } from '@xyflow/react';
@@ -18,7 +20,13 @@ export const WORKFLOW_CANVAS_FIT_VIEW_OPTIONS = { padding: 0.12, duration: 200 }
 /** Deeper zoom-out than React Flow’s default minZoom (0.5) for large DAGs. */
 export const WORKFLOW_CANVAS_MIN_ZOOM = 0.05;
 
-export function FitViewOnWorkflowCanvasKey({ fitKey }: { fitKey: string | null }) {
+export function FitViewOnWorkflowCanvasKey({
+    fitKey,
+    edgesReady = true,
+}: {
+    fitKey: string | null;
+    edgesReady?: boolean;
+}) {
     const { fitView } = useReactFlow();
     const nodesInitialized = useNodesInitialized();
     const lastFittedForKeyRef = useRef<string | null>(null);
@@ -28,14 +36,14 @@ export function FitViewOnWorkflowCanvasKey({ fitKey }: { fitKey: string | null }
             lastFittedForKeyRef.current = null;
             return;
         }
-        if (!nodesInitialized) return;
+        if (!nodesInitialized || !edgesReady) return;
         if (lastFittedForKeyRef.current === fitKey) return;
         const raf = requestAnimationFrame(() => {
             fitView({ ...WORKFLOW_CANVAS_FIT_VIEW_OPTIONS });
             lastFittedForKeyRef.current = fitKey;
         });
         return () => cancelAnimationFrame(raf);
-    }, [fitKey, fitView, nodesInitialized]);
+    }, [fitKey, fitView, nodesInitialized, edgesReady]);
     return null;
 }
 
@@ -46,15 +54,18 @@ export function FitViewOnWorkflowCanvasKey({ fitKey }: { fitKey: string | null }
 export function FitViewOnWorkflowCanvasResize({
     fitKey,
     containerRef,
+    edgesReady = true,
 }: {
     fitKey: string | null;
     containerRef: RefObject<HTMLElement | null>;
+    edgesReady?: boolean;
 }) {
     const { fitView } = useReactFlow();
+    const nodesInitialized = useNodesInitialized();
 
     useEffect(() => {
         const el = containerRef.current;
-        if (!el || !fitKey) return;
+        if (!el || !fitKey || !nodesInitialized || !edgesReady) return;
 
         let timeoutId = 0;
         const scheduleFit = () => {
@@ -73,7 +84,7 @@ export function FitViewOnWorkflowCanvasResize({
             window.clearTimeout(timeoutId);
             ro.disconnect();
         };
-    }, [fitKey, fitView, containerRef]);
+    }, [fitKey, fitView, containerRef, nodesInitialized, edgesReady]);
 
     return null;
 }
