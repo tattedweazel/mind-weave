@@ -1,5 +1,10 @@
 import type { RegionTriggerMode, SandboxItemJson } from '../domain/sandbox/types';
 import { DEFAULT_REGION_TRIGGER } from '../domain/sandbox/types';
+import {
+    itemHasEnergySemantics,
+    type SandboxInspectorDefinitionContext,
+} from './sandboxItemInspectorDisplay';
+import { resolvedItemType } from './sandboxItemResolve';
 
 /** Matches backend `DEFAULT_FOOD_ENERGY` in sandbox/constants.py */
 export const SANDBOX_DEFAULT_FOOD_ENERGY = 48;
@@ -37,13 +42,33 @@ export const SANDBOX_ITEM_INSPECTOR_FIELDS: Record<string, SandboxItemEditableFi
     region: [],
 };
 
-export function getEditableItemFields(itemType: string): SandboxItemEditableField[] {
+export function getEditableItemFields(
+    item: SandboxItemJson,
+    ctx: SandboxInspectorDefinitionContext = {},
+): SandboxItemEditableField[] {
+    if (itemHasEnergySemantics(item, ctx)) {
+        return SANDBOX_ITEM_INSPECTOR_FIELDS.food ?? [];
+    }
+    const itemType = resolvedItemType(item);
     return SANDBOX_ITEM_INSPECTOR_FIELDS[itemType] ?? [];
 }
 
-export function getItemFieldValue(item: SandboxItemJson, key: SandboxItemEditableFieldKey): number | undefined {
+/** @deprecated Prefer getEditableItemFields(item, ctx) */
+export function getEditableItemFieldsForType(itemType: string): SandboxItemEditableField[] {
+    return SANDBOX_ITEM_INSPECTOR_FIELDS[itemType] ?? [];
+}
+
+export function getItemFieldValue(
+    item: SandboxItemJson,
+    key: SandboxItemEditableFieldKey,
+    ctx: SandboxInspectorDefinitionContext = {},
+): number | undefined {
     if (key === 'energy') {
-        return typeof item.energy === 'number' ? item.energy : undefined;
+        if (typeof item.energy === 'number') return item.energy;
+        const def = ctx.itemDefinitions?.find(d => d.id === item.definition_id);
+        if (def?.default_energy != null) return def.default_energy;
+        if (resolvedItemType(item) === 'food') return SANDBOX_DEFAULT_FOOD_ENERGY;
+        return undefined;
     }
     return undefined;
 }
@@ -68,10 +93,11 @@ export function validateItemFieldValue(field: SandboxItemEditableField, rawValue
 }
 
 export function isEditableItemFieldKey(
-    itemType: string,
+    item: SandboxItemJson,
     key: string,
+    ctx: SandboxInspectorDefinitionContext = {},
 ): key is SandboxItemEditableFieldKey {
-    return getEditableItemFields(itemType).some(field => field.key === key);
+    return getEditableItemFields(item, ctx).some(field => field.key === key);
 }
 
 export function regionTriggerFromItem(item: SandboxItemJson) {

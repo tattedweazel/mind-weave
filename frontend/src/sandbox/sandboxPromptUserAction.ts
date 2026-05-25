@@ -20,6 +20,8 @@ export interface SandboxCreatureUserAction {
     action: SandboxUserDecisionAction;
     item_type?: SandboxPlaceItemType;
     inventory_index?: number;
+    item_id?: string;
+    pick_all?: boolean;
 }
 
 export type CreatureUserActionsMap = Record<string, SandboxCreatureUserAction>;
@@ -58,21 +60,60 @@ export function autoReasonForUserAction(action: SandboxCreatureUserAction): stri
         }
         return `user: place_item:${action.item_type}`;
     }
+    if (action.action === 'pick_up_item') {
+        if (action.pick_all) {
+            return 'user: pick_up_item:all';
+        }
+        if (action.item_id) {
+            return `user: pick_up_item:${action.item_id}`;
+        }
+    }
     return `user: ${action.action}`;
 }
 
 export function buildCreatureUserActionsPayload(
     actions: CreatureUserActionsMap,
-): Record<string, { action: string; item_type?: string; inventory_index?: number }> {
-    const out: Record<string, { action: string; item_type?: string; inventory_index?: number }> = {};
+): Record<
+    string,
+    {
+        action: string;
+        item_type?: string;
+        inventory_index?: number;
+        item_id?: string;
+        pick_all?: boolean;
+    }
+> {
+    const out: Record<
+        string,
+        {
+            action: string;
+            item_type?: string;
+            inventory_index?: number;
+            item_id?: string;
+            pick_all?: boolean;
+        }
+    > = {};
     for (const [creatureId, act] of Object.entries(actions)) {
-        const row: { action: string; item_type?: string; inventory_index?: number } = { action: act.action };
+        const row: {
+            action: string;
+            item_type?: string;
+            inventory_index?: number;
+            item_id?: string;
+            pick_all?: boolean;
+        } = { action: act.action };
         if (act.action === 'place_item') {
             if (act.item_type) {
                 row.item_type = act.item_type;
             }
             if (act.inventory_index != null) {
                 row.inventory_index = act.inventory_index;
+            }
+        }
+        if (act.action === 'pick_up_item') {
+            if (act.pick_all) {
+                row.pick_all = true;
+            } else if (act.item_id) {
+                row.item_id = act.item_id;
             }
         }
         out[creatureId] = row;

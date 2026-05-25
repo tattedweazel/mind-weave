@@ -683,6 +683,13 @@ def build_generic_node_explorer(output_dump: dict[str, Any]) -> dict[str, Any]:
         detail_lines.append(_truncate_teaser(t) if t else "(empty)")
     elif kind == "conditional":
         detail_lines.append(f"branch: {output_dump.get('branch')}")
+        pt = output_dump.get("passthrough_value")
+        if isinstance(pt, list):
+            detail_lines.append(f"passthrough: list ({len(pt)} item(s))")
+        elif isinstance(pt, dict):
+            detail_lines.append(f"passthrough: dictionary ({len(pt)} key(s))")
+        elif pt is not None:
+            detail_lines.append(f"passthrough: {_truncate_teaser(str(pt))}")
     elif kind == "stop":
         t = _str(output_dump.get("text"))
         detail_lines.append(_truncate_teaser(t) if t else "(empty)")

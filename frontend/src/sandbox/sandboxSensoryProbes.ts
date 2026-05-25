@@ -9,6 +9,7 @@ import type {
     SandboxItemJson,
     SandboxSandboxStateJson,
 } from '../domain/sandbox/types';
+import { canPlacePickableItem } from './sandboxCellOccupants';
 import { isPickableItem, isRegionItemResolved, isSolidItem, resolvedItemType } from './sandboxItemResolve';
 
 export type NearbyCellKind =
@@ -234,15 +235,64 @@ export function forwardCellKind(
     return nearby[0]?.kind ?? 'out_of_bounds';
 }
 
-/** True when the forward cell holds a ball or food that can be picked up. */
+function forwardCellCoordinates(
+    creature: SandboxCreatureJson,
+    state: SandboxSandboxStateJson,
+): { x: number; y: number } | null {
+    const nearby = nearbyCellsFromState(creature, state);
+    const forward = nearby[0];
+    if (!forward || forward.kind === 'out_of_bounds' || forward.kind === 'creature') {
+        return null;
+    }
+    return { x: forward.x, y: forward.y };
+}
+
+/** Pickable summaries in the forward adjacent cell (may coexist with a fixture). */
+export function forwardCellPickables(
+    creature: SandboxCreatureJson,
+    state: SandboxSandboxStateJson,
+    labelContext?: PickableLabelContext,
+): NearbyCellItemSummaryJson[] {
+    const coords = forwardCellCoordinates(creature, state);
+    if (!coords) return [];
+    return cellItemsSummary(coords.x, coords.y, state, labelContext).items;
+}
+
+/** True when the forward cell holds one or more pickables (including on fixture cells). */
 export function forwardCellPickable(creature: SandboxCreatureJson, state: SandboxSandboxStateJson): boolean {
-    const kind = forwardCellKind(creature, state);
-    return kind === 'ball' || kind === 'food';
+    return forwardCellPickables(creature, state).length > 0;
 }
 
 /** True when the forward cell holds a fixture that can be used. */
 export function forwardCellHasFixture(creature: SandboxCreatureJson, state: SandboxSandboxStateJson): boolean {
     return forwardCellKind(creature, state) === 'fixture';
+}
+
+/** True when an inventory pickable may be placed on the forward cell (empty, fixture stack, or pickable stack). */
+export function forwardCellAllowsPlaceItem(
+    creature: SandboxCreatureJson,
+    state: SandboxSandboxStateJson,
+): boolean {
+    const coords = forwardCellCoordinates(creature, state);
+    if (!coords) return false;
+    const cellItems = itemsAtCell(state.world.items, coords.x, coords.y);
+    const hasCreature = state.creatures.some(
+        c => c.position.x === coords.x && c.position.y === coords.y,
+    );
+    return canPlacePickableItem(cellItems, hasCreature);
+}
+
+/** User-facing reason when forwardCellAllowsPlaceItem is false; null when placement is allowed. */
+export function forwardCellPlaceBlockedReason(
+    creature: SandboxCreatureJson,
+    state: SandboxSandboxStateJson,
+): string | null {
+    if (forwardCellAllowsPlaceItem(creature, state)) return null;
+    const kind = forwardCellKind(creature, state);
+    if (kind === 'out_of_bounds') return 'Forward cell is out of bounds';
+    if (kind === 'creature') return 'Forward cell is occupied by a creature';
+    if (kind === 'wall') return 'Forward cell is blocked by terrain';
+    return 'Forward cell cannot accept items';
 }
 
 export type SandboxSensoryProbeKind = 'nearby' | 'position' | 'facing' | 'inventory';

@@ -56,6 +56,21 @@ describe('sandboxPromptUserAction', () => {
             c3: { action: 'use_fixture' },
         });
         expect(autoReasonForUserAction({ action: 'use_fixture' })).toBe('user: use_fixture');
+        expect(
+            autoReasonForUserAction({ action: 'pick_up_item', item_id: 'f1' }),
+        ).toBe('user: pick_up_item:f1');
+        expect(autoReasonForUserAction({ action: 'pick_up_item', pick_all: true })).toBe(
+            'user: pick_up_item:all',
+        );
+        expect(
+            buildCreatureUserActionsPayload({
+                c1: { action: 'pick_up_item', item_id: 'f1' },
+                c2: { action: 'pick_up_item', pick_all: true },
+            }),
+        ).toEqual({
+            c1: { action: 'pick_up_item', item_id: 'f1' },
+            c2: { action: 'pick_up_item', pick_all: true },
+        });
     });
 
     it('filters creatures requiring user action', () => {

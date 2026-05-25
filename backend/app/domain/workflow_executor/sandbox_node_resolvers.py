@@ -386,11 +386,28 @@ class SandboxNodeResolverMixin:
         if isinstance(raw_inventory_index, int) and raw_inventory_index >= 0:
             inventory_index = raw_inventory_index
 
+        item_id = None
+        raw_item_id = raw_action.get("item_id")
+        if isinstance(raw_item_id, str) and raw_item_id.strip():
+            item_id = raw_item_id.strip()
+
+        pick_all = None
+        raw_pick_all = raw_action.get("pick_all")
+        if raw_pick_all is True:
+            pick_all = True
+
         if action == "place_item" and item_type:
             if inventory_index is not None:
                 auto_reason = f"user: place_item:{item_type}@{inventory_index}"
             else:
                 auto_reason = f"user: place_item:{item_type}"
+        elif action == "pick_up_item":
+            if pick_all:
+                auto_reason = "user: pick_up_item:all"
+            elif item_id:
+                auto_reason = f"user: pick_up_item:{item_id}"
+            else:
+                auto_reason = f"user: {action}"
         else:
             auto_reason = f"user: {action}"
 
@@ -400,6 +417,8 @@ class SandboxNodeResolverMixin:
                 auto_reason,
                 item_type=item_type,
                 inventory_index=inventory_index,
+                item_id=item_id,
+                pick_all=pick_all,
             )
         except Exception as exc:
             return _executor_mod()._error_with_resolved_inputs(

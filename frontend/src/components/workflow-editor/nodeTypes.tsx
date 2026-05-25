@@ -845,7 +845,7 @@ const SandboxTickPrimitiveNodeComp: React.FC<{
     const outputs: NodeSlot[] = [{ key: 'output', type: 'dictionary', label: 'sandbox_tick' }];
     return (
         <StyledNodeBase
-            typeLabel="Tick input"
+            typeLabel="Tick Input"
             nodeLabel={data.label}
             inputs={inputs}
             outputs={outputs}
@@ -1494,8 +1494,8 @@ const BroadcastMessageNodeComp: React.FC<{
 const BasicConditionalNodeComp: React.FC<{ data: { label: string; isRunning?: boolean; conditionHasValue?: boolean; paletteColors?: Record<string, string> } }> = ({ data }) => {
     const inputs: NodeSlot[] = [{ key: 'condition', type: 'boolean', label: 'Condition', hasValue: data.conditionHasValue }];
     const outputs: NodeSlot[] = [
-        { key: 'true', type: 'boolean', label: 'True' },
-        { key: 'false', type: 'boolean', label: 'False' },
+        { key: 'true', type: 'any', label: 'True' },
+        { key: 'false', type: 'any', label: 'False' },
     ];
     return (
         <StyledNodeBase
@@ -1521,8 +1521,8 @@ const IsNodeComp: React.FC<{ data: { label: string; isRunning?: boolean; inputAH
         { key: 'input_b', type: 'string', label: 'B', hasValue: data.inputBHasValue },
     ];
     const outputs: NodeSlot[] = [
-        { key: 'true', type: 'boolean', label: 'True' },
-        { key: 'false', type: 'boolean', label: 'False' },
+        { key: 'true', type: 'any', label: 'True' },
+        { key: 'false', type: 'any', label: 'False' },
     ];
     return (
         <StyledNodeBase
@@ -1547,8 +1547,8 @@ const IsEmptyNodeComp: React.FC<{
 }> = ({ data }) => {
     const inputs: NodeSlot[] = [{ key: 'value', type: 'any', label: 'value', hasValue: data.valueHasValue }];
     const outputs: NodeSlot[] = [
-        { key: 'true', type: 'boolean', label: 'True' },
-        { key: 'false', type: 'boolean', label: 'False' },
+        { key: 'true', type: 'any', label: 'True' },
+        { key: 'false', type: 'any', label: 'False' },
     ];
     return (
         <StyledNodeBase
@@ -1574,8 +1574,8 @@ const ComparisonControlComp: React.FC<{ data: { label: string; isRunning?: boole
         { key: 'input_b', type: 'string', label: 'B', hasValue: data.inputBHasValue },
     ];
     const outputs: NodeSlot[] = [
-        { key: 'true', type: 'boolean', label: 'True' },
-        { key: 'false', type: 'boolean', label: 'False' },
+        { key: 'true', type: 'any', label: 'True' },
+        { key: 'false', type: 'any', label: 'False' },
     ];
     return (
         <StyledNodeBase
@@ -1751,8 +1751,8 @@ const BetweenControlComp: React.FC<{
         { key: 'high', type: 'int', label: 'high', hasValue: data.highHasValue },
     ];
     const outputs: NodeSlot[] = [
-        { key: 'true', type: 'boolean', label: 'True' },
-        { key: 'false', type: 'boolean', label: 'False' },
+        { key: 'true', type: 'any', label: 'True' },
+        { key: 'false', type: 'any', label: 'False' },
     ];
     return (
         <StyledNodeBase

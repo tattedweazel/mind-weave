@@ -73,10 +73,11 @@ class DocumentNodeOutput(NodeOutput):
 
 
 class ConditionalNodeOutput(NodeOutput):
-    """Output from a Basic Conditional control node — indicates which branch was taken."""
+    """Output from a branching control node — indicates which branch was taken."""
 
     kind: Literal["conditional"] = "conditional"
     branch: Literal["true", "false"]
+    passthrough_value: Any | None = None
 
 
 class BooleanNodeOutput(NodeOutput):

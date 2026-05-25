@@ -53,6 +53,7 @@ export interface SandboxInventoryItemJson {
     type: SandboxInventoryItemType;
     color?: string;
     energy?: number;
+    definition_id?: string;
 }
 
 export interface SandboxCreatureJson {

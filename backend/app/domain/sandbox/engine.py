@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, Optional, assert_never
+from typing import Any, Mapping, Optional, assert_never
 
 from app.domain.sandbox.constants import (
     DEFAULT_CREATURE_FACING,
@@ -15,6 +15,7 @@ from app.domain.sandbox.constants import (
     SANDBOX_GRID_MIN_SIZE,
 )
 from app.domain.sandbox.item_helpers import (
+    ItemDefinitionDefaults,
     is_pickable_item,
     is_region_item,
     is_solid_item,
@@ -22,6 +23,8 @@ from app.domain.sandbox.item_helpers import (
     pickables_at_cell,
     region_at_cell,
     resolved_item_type,
+    resolved_pickable_color,
+    resolved_pickable_energy,
     solid_at_cell,
 )
 from app.domain.sandbox.region_triggers import RegionTriggerEvent, evaluate_transition_triggers
@@ -244,21 +247,73 @@ def _place_item_at_cell(
         )
 
 
-def _remove_pickable_item_at_cell(state: SandboxState, g: GridCell) -> SandboxItem | None:
+def _find_pickable_at_cell(
+    state: SandboxState,
+    g: GridCell,
+    *,
+    item_id: str | None = None,
+) -> SandboxItem | None:
     pickables = pickables_at_cell(state.world.items, g.x, g.y)
     if not pickables:
         return None
-    removed = pickables[-1]
+    if item_id:
+        return next((it for it in pickables if it.id == item_id), None)
+    return pickables[-1]
+
+
+def _try_pick_up_item(
+    state: SandboxState,
+    creature: CreatureState,
+    pickable: SandboxItem,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+) -> bool:
+    entry = _inventory_item_from_world_item(pickable, definition_defaults)
+    if entry is None:
+        return False
+    state.world.items = [it for it in state.world.items if it.id != pickable.id]
+    creature.inventory.append(entry)
+    return True
+
+
+def _remove_pickable_item_at_cell(
+    state: SandboxState,
+    g: GridCell,
+    *,
+    item_id: str | None = None,
+) -> SandboxItem | None:
+    pickables = pickables_at_cell(state.world.items, g.x, g.y)
+    if not pickables:
+        return None
+    if item_id:
+        removed = next((it for it in pickables if it.id == item_id), None)
+    else:
+        removed = pickables[-1]
+    if removed is None:
+        return None
     state.world.items = [it for it in state.world.items if it.id != removed.id]
     return removed
 
 
-def _inventory_item_from_world_item(it: SandboxItem) -> InventoryItem | None:
-    t = resolved_item_type(it)
-    if t == BALL_ITEM_TYPE and it.color:
-        return InventoryItem(type=BALL_ITEM_TYPE, color=it.color)
-    if t == "food" and it.energy is not None:
-        return InventoryItem(type="food", energy=it.energy)
+def _remove_all_pickables_at_cell(state: SandboxState, g: GridCell) -> list[SandboxItem]:
+    pickables = pickables_at_cell(state.world.items, g.x, g.y)
+    if not pickables:
+        return []
+    removed_ids = {it.id for it in pickables}
+    state.world.items = [it for it in state.world.items if it.id not in removed_ids]
+    return pickables
+
+
+def _inventory_item_from_world_item(
+    it: SandboxItem,
+    definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
+) -> InventoryItem | None:
+    def_id = it.definition_id if it.definition_id and it.definition_id.strip() else None
+    energy = resolved_pickable_energy(it, definition_defaults)
+    if energy is not None:
+        return InventoryItem(type="food", energy=energy, definition_id=def_id)
+    color = resolved_pickable_color(it, definition_defaults)
+    if color is not None:
+        return InventoryItem(type=BALL_ITEM_TYPE, color=color, definition_id=def_id)
     return None
 
 
@@ -574,6 +629,7 @@ class SandboxEngine:
         dec: DecisionIntent,
         *,
         region_trigger_session: RegionTriggerSessionState | None = None,
+        definition_defaults: Mapping[str, ItemDefinitionDefaults] | None = None,
     ) -> tuple[list[RegionTriggerEvent], RegionTriggerSessionState | None]:
         w, h = state.world.grid.width, state.world.grid.height
         act = dec.action
@@ -613,11 +669,24 @@ class SandboxEngine:
         if act == "pick_up_item":
             fwd = _forward_cell(creature, w, h)
             if fwd is not None and not _creature_blocks_cell(state, fwd, exclude_id=creature.id):
-                removed = _remove_pickable_item_at_cell(state, fwd)
-                if removed is not None:
-                    entry = _inventory_item_from_world_item(removed)
-                    if entry is not None:
-                        creature.inventory.append(entry)
+                if dec.pick_all:
+                    pickables = pickables_at_cell(state.world.items, fwd.x, fwd.y)
+                    for pickable in pickables:
+                        _try_pick_up_item(
+                            state,
+                            creature,
+                            pickable,
+                            definition_defaults,
+                        )
+                else:
+                    pickable = _find_pickable_at_cell(state, fwd, item_id=dec.item_id)
+                    if pickable is not None:
+                        _try_pick_up_item(
+                            state,
+                            creature,
+                            pickable,
+                            definition_defaults,
+                        )
             _append_recent(state, creature.id, "pick_up_item", dec.reason)
             return trigger_events, next_session
 
@@ -630,9 +699,21 @@ class SandboxEngine:
             )
             if fwd is not None and entry is not None and not _creature_at_cell(state, fwd):
                 if entry.type == BALL_ITEM_TYPE and entry.color:
-                    _place_item_at_cell(state, fwd, BALL_ITEM_TYPE, color=entry.color)
+                    _place_item_at_cell(
+                        state,
+                        fwd,
+                        BALL_ITEM_TYPE,
+                        color=entry.color,
+                        definition_id=entry.definition_id,
+                    )
                 elif entry.type == "food" and entry.energy is not None:
-                    _place_item_at_cell(state, fwd, "food", energy=entry.energy)
+                    _place_item_at_cell(
+                        state,
+                        fwd,
+                        "food",
+                        energy=entry.energy,
+                        definition_id=entry.definition_id,
+                    )
                 else:
                     creature.inventory.insert(0, entry)
             elif entry is not None:

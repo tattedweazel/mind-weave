@@ -93,13 +93,18 @@ import { SandboxDefinitionsView } from './sandbox/SandboxDefinitionsView';
 import { SandboxUserActionModal } from './sandbox/SandboxUserActionModal';
 import { SandboxCreatureInventorySection } from './sandbox/SandboxCreatureInventorySection';
 import { SandboxItemInspectorSection } from './sandbox/SandboxItemInspectorSection';
+import { SandboxFixtureInspectorSection } from './sandbox/SandboxFixtureInspectorSection';
 import { SandboxRegionInspectorSection } from './sandbox/SandboxRegionInspectorSection';
 import { BoardDeleteControl } from './sandbox/BoardDeleteControl';
 import { BoardProjectDeleteControl } from './sandbox/BoardProjectDeleteControl';
 import { filterNamesByPrefix } from './workflow-editor/workflowListFilter';
 import { addBoardCreatureInventoryEntry } from '../sandbox/sandboxCreatureInventory';
 import { parseSandboxFavoriteColors } from '../sandbox/sandboxFavoriteColors';
-import { isRegionItem } from '../sandbox/sandboxCellOccupants';
+import { isFixtureItem, isRegionItem } from '../sandbox/sandboxCellOccupants';
+import {
+    sortItemsForCellInspector,
+    type SandboxInspectorDefinitionContext,
+} from '../sandbox/sandboxItemInspectorDisplay';
 import { useCompactViewport } from '../hooks/useCompactViewport';
 import { InspectorSection } from './workflow-editor/InspectorSection';
 import { WorkflowRunLogsNodeResultsList } from './workflow-editor/WorkflowRunLogsNodeResultsList';
@@ -1209,6 +1214,21 @@ export const SandboxView: React.FC = () => {
         return getCellOccupantsFromSandboxState(builderPreviewState, inspectedCell);
     }, [mainTab, envelope, inspectedCell, builderPreviewState]);
 
+    const inspectorDefinitionContext = React.useMemo<SandboxInspectorDefinitionContext>(
+        () => ({
+            itemDefinitions,
+            terrainDefinitions,
+            fixtureDefinitions,
+            workflows,
+        }),
+        [itemDefinitions, terrainDefinitions, fixtureDefinitions, workflows],
+    );
+
+    const inspectedCellItems = React.useMemo(
+        () => sortItemsForCellInspector(inspectedOccupants?.items ?? []),
+        [inspectedOccupants?.items],
+    );
+
     const visibleErrors = collectSandboxVisibleErrors(envelope, selectedCreatureId);
     const activeBoardName =
         boards.find(b => b.id === (mainTab === 'simulation' ? selectedBoardId : builderBoardId))?.name ?? null;
@@ -1925,6 +1945,7 @@ export const SandboxView: React.FC = () => {
                                                             <SandboxCreatureInventorySection
                                                                 creature={creature}
                                                                 readOnly={mainTab === 'simulation'}
+                                                                itemDefinitions={itemDefinitions}
                                                                 onBoardChange={
                                                                     mainTab === 'builder'
                                                                         ? updater => {
@@ -1951,7 +1972,7 @@ export const SandboxView: React.FC = () => {
                                                         </div>
                                                     </InspectorSection>
                                                 ))}
-                                                {inspectedOccupants.items.map(it =>
+                                                {inspectedCellItems.map(it =>
                                                     isRegionItem(it) ? (
                                                         <SandboxRegionInspectorSection
                                                             key={it.id}
@@ -1968,11 +1989,18 @@ export const SandboxView: React.FC = () => {
                                                                 setBuilderDirty(true);
                                                             }}
                                                         />
+                                                    ) : isFixtureItem(it) ? (
+                                                        <SandboxFixtureInspectorSection
+                                                            key={it.id}
+                                                            item={it}
+                                                            definitionContext={inspectorDefinitionContext}
+                                                        />
                                                     ) : (
                                                         <SandboxItemInspectorSection
                                                             key={it.id}
                                                             item={it}
                                                             readOnly={mainTab !== 'builder'}
+                                                            definitionContext={inspectorDefinitionContext}
                                                             onItemChange={(itemId, patch) => {
                                                                 setLocalBoardDef(prev =>
                                                                     updateBoardItemMetadata(prev, itemId, patch),
@@ -2313,6 +2341,7 @@ export const SandboxView: React.FC = () => {
                     creatureTotal={userActionPrompt.creatures.length}
                     onConfirm={handleUserActionConfirm}
                     onDismiss={handleUserActionDismiss}
+                    itemDefinitions={itemDefinitions}
                 />
             ) : null}
             {cellActionCell ? (

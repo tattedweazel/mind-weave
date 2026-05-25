@@ -2021,20 +2021,20 @@ export const WorkflowEditor: React.FC<Props> = ({
                 },
             ]);
         } else if (type === 'sandboxTickPrimitive') {
-            setNodes(ns => [...ns, { id, type: 'sandboxTickPrimitive', position, data: { label: extra.label ?? 'Tick input' } }]);
+            setNodes(ns => [...ns, { id, type: 'sandboxTickPrimitive', position, data: { label: extra.label ?? 'Tick Input' } }]);
         } else if (type === 'sandboxGetPosition') {
-            setNodes(ns => [...ns, { id, type: 'sandboxGetPosition', position, data: { label: extra.label ?? 'Get position' } }]);
+            setNodes(ns => [...ns, { id, type: 'sandboxGetPosition', position, data: { label: extra.label ?? 'Get Position' } }]);
         } else if (type === 'sandboxGetFacing') {
-            setNodes(ns => [...ns, { id, type: 'sandboxGetFacing', position, data: { label: extra.label ?? 'Get facing' } }]);
+            setNodes(ns => [...ns, { id, type: 'sandboxGetFacing', position, data: { label: extra.label ?? 'Get Facing' } }]);
         } else if (type === 'sandboxGetNearby') {
-            setNodes(ns => [...ns, { id, type: 'sandboxGetNearby', position, data: { label: extra.label ?? 'Get nearby' } }]);
+            setNodes(ns => [...ns, { id, type: 'sandboxGetNearby', position, data: { label: extra.label ?? 'Get Nearby' } }]);
         } else if (type === 'sandboxMoveForward') {
             setNodes(ns => [...ns, {
                 id,
                 type: 'sandboxMoveForward',
                 position,
                 data: {
-                    label: extra.label ?? 'Move forward',
+                    label: extra.label ?? 'Move Forward',
                     required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
@@ -2044,7 +2044,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 type: 'sandboxTurnLeft',
                 position,
                 data: {
-                    label: extra.label ?? 'Turn left',
+                    label: extra.label ?? 'Turn Left',
                     required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
@@ -2054,7 +2054,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 type: 'sandboxTurnRight',
                 position,
                 data: {
-                    label: extra.label ?? 'Turn right',
+                    label: extra.label ?? 'Turn Right',
                     required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
@@ -2074,7 +2074,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 type: 'sandboxPickUpItem',
                 position,
                 data: {
-                    label: extra.label ?? 'Pick up item',
+                    label: extra.label ?? 'Pick Up Item',
                     required_inputs: [{ key: 'reason', type: 'string', value: null }],
                 },
             }]);
@@ -2084,7 +2084,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 type: 'sandboxPlaceItem',
                 position,
                 data: {
-                    label: extra.label ?? 'Place item',
+                    label: extra.label ?? 'Place Item',
                     required_inputs: [
                         { key: 'reason', type: 'string', value: null },
                         { key: 'item_type', type: 'string', value: null },
@@ -2096,7 +2096,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 id,
                 type: 'sandboxGetInventory',
                 position,
-                data: { label: extra.label ?? 'Get inventory' },
+                data: { label: extra.label ?? 'Get Inventory' },
             }]);
         } else if (type === 'sandboxPromptUserAction') {
             setNodes(ns => [...ns, {
@@ -2117,7 +2117,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 id,
                 type: 'sandboxGetCellItems',
                 position,
-                data: { label: extra.label ?? 'Get cell items' },
+                data: { label: extra.label ?? 'Get Cell Items' },
             }]);
         } else if (type === 'sandboxRemoveItemAtCell') {
             setNodes(ns => [...ns, {
@@ -2125,7 +2125,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 type: 'sandboxRemoveItemAtCell',
                 position,
                 data: {
-                    label: extra.label ?? 'Remove item',
+                    label: extra.label ?? 'Remove Item',
                     required_inputs: [{ key: 'item_id', type: 'string', value: null }],
                 },
             }]);
@@ -2135,7 +2135,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                 type: 'sandboxSpawnItemAtCell',
                 position,
                 data: {
-                    label: extra.label ?? 'Spawn item',
+                    label: extra.label ?? 'Spawn Item',
                     required_inputs: [
                         { key: 'definition_id', type: 'string', value: null },
                         { key: 'target', type: 'string', value: 'self' },
@@ -6343,7 +6343,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 <>
                                     <InspectorSection
                                         title="About"
-                                        description="Wire or set condition. True triggers True branch; False triggers False branch."
+                                        description="Wire or set condition. True triggers True branch; False triggers False branch. True/False handles also forward the condition value on the taken branch — wire one edge to trigger and another to a data input when needed."
                                     />
                                     <InspectorSection title="Condition">
                                         <div>
@@ -6381,7 +6381,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 <>
                                     <InspectorSection
                                         title="About"
-                                        description="Compares for equality; any type (string, list, dictionary, or wired from upstream)."
+                                        description="Compares for equality; any type (string, list, dictionary, or wired from upstream). True/False handles forward Input A on the taken branch — use separate edges for trigger and data."
                                     />
                                     <InspectorSection title="Inputs">
                                         <div>
@@ -6412,7 +6412,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                         {selectedNode.type === 'isEmptyControl' && (
                             <InspectorSection
                                 title="About"
-                                description="Branches True when the wired value is an empty list [] or empty object {}; False when it has at least one element or key. Value must be a list or dictionary."
+                                description="Branches True when the wired value is an empty list [] or empty object {}; False when it has at least one element or key. Value must be a list or dictionary. True/False handles forward that value on the taken branch — use separate edges for trigger and data instead of rewiring upstream."
                             />
                         )}
 
@@ -6426,7 +6426,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                                         {selectedNode.type === 'ltControl' && 'A < B: True if A is less than B.'}
                                         {selectedNode.type === 'gteControl' && 'A >= B: True if A is greater than or equal to B.'}
                                         {selectedNode.type === 'lteControl' && 'A <= B: True if A is less than or equal to B.'}
-                                        {' Wire A and B from Int, Len from List, or other numeric/string sources.'}
+                                        {' Wire A and B from Int, Len from List, or other numeric/string sources. True/False handles forward Input A on the taken branch.'}
                                     </>
                                 }
                             />
@@ -6512,7 +6512,7 @@ export const WorkflowEditor: React.FC<Props> = ({
                                 <>
                                     <InspectorSection
                                         title="About"
-                                        description="True branch when low ≤ value ≤ high (inclusive). Requires low ≤ high or the step errors."
+                                        description="True branch when low ≤ value ≤ high (inclusive). Requires low ≤ high or the step errors. True/False handles forward value on the taken branch."
                                     />
                                     <InspectorSection title="Bounds">
                                         <div className="space-y-2">

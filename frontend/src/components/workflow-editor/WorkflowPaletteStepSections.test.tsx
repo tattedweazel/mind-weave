@@ -34,11 +34,11 @@ describe('WorkflowPaletteStepSections', () => {
     it('renders Sandbox Utilities section with a sandbox tile', () => {
         render(<WorkflowPaletteStepSections {...baseProps} mode="edit" />);
         expect(screen.getByText('Sandbox Utilities')).toBeInTheDocument();
-        expect(screen.getByText('Tick input')).toBeInTheDocument();
-        expect(screen.getByText('Move forward')).toBeInTheDocument();
-        expect(screen.getByText('Get cell items')).toBeInTheDocument();
-        expect(screen.getByText('Remove item')).toBeInTheDocument();
-        expect(screen.getByText('Spawn item')).toBeInTheDocument();
+        expect(screen.getByText('Tick Input')).toBeInTheDocument();
+        expect(screen.getByText('Move Forward')).toBeInTheDocument();
+        expect(screen.getByText('Get Cell Items')).toBeInTheDocument();
+        expect(screen.getByText('Remove Item')).toBeInTheDocument();
+        expect(screen.getByText('Spawn Item')).toBeInTheDocument();
         expect(screen.queryByText('Fixture Utilities')).not.toBeInTheDocument();
     });
 

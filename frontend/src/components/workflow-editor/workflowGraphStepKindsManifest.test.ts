@@ -691,6 +691,14 @@ describe('getSourceOutputType vs manifest react_flow_type', () => {
         'validateAgainstStructure',
         'forLoopControl',
         'stop',
+        'basicConditional',
+        'isControl',
+        'isEmptyControl',
+        'gtControl',
+        'ltControl',
+        'gteControl',
+        'lteControl',
+        'betweenControl',
     ]);
 
     it.each(manifestSteps())('non-accidental output type for $react_flow_type ($kind)', (step) => {

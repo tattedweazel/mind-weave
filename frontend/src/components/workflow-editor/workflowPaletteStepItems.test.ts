@@ -34,11 +34,11 @@ describe('paletteDisplayNameForReactFlowType', () => {
         expect(paletteDisplayNameForReactFlowType('lenFromList')).toBe('Len from List');
         expect(paletteDisplayNameForReactFlowType('intToString')).toBe('Int to String');
         expect(paletteDisplayNameForReactFlowType('stop')).toBe('Stop');
-        expect(paletteDisplayNameForReactFlowType('sandboxGetPosition')).toBe('Get position');
-        expect(paletteDisplayNameForReactFlowType('sandboxTickPrimitive')).toBe('Tick input');
-        expect(paletteDisplayNameForReactFlowType('sandboxGetCellItems')).toBe('Get cell items');
-        expect(paletteDisplayNameForReactFlowType('sandboxRemoveItemAtCell')).toBe('Remove item');
-        expect(paletteDisplayNameForReactFlowType('sandboxSpawnItemAtCell')).toBe('Spawn item');
+        expect(paletteDisplayNameForReactFlowType('sandboxGetPosition')).toBe('Get Position');
+        expect(paletteDisplayNameForReactFlowType('sandboxTickPrimitive')).toBe('Tick Input');
+        expect(paletteDisplayNameForReactFlowType('sandboxGetCellItems')).toBe('Get Cell Items');
+        expect(paletteDisplayNameForReactFlowType('sandboxRemoveItemAtCell')).toBe('Remove Item');
+        expect(paletteDisplayNameForReactFlowType('sandboxSpawnItemAtCell')).toBe('Spawn Item');
     });
 
     it('returns fixed labels for non-palette canvas types', () => {

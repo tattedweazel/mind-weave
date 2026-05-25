@@ -102,8 +102,11 @@ export function applyBoardBuilderInteraction(
                         role: isTerrain ? 'solid' : 'pickable',
                         type: isTerrain ? 'wall' : undefined,
                         position: { x, y },
-                        ...(defColor ? { color: defColor } : {}),
-                        ...(interaction.energy != null ? { energy: interaction.energy } : {}),
+                        ...(interaction.energy != null
+                            ? { energy: interaction.energy }
+                            : defColor
+                              ? { color: defColor }
+                              : {}),
                     },
                 ],
             };
@@ -238,7 +241,7 @@ export function updateBoardItemMetadata(
     }
 
     const item = def.items[index];
-    const allowedFields = getEditableItemFields(resolvedItemType(item));
+    const allowedFields = getEditableItemFields(item);
     const nextItem = { ...item };
     let changed = false;
 
@@ -265,7 +268,7 @@ export function updateBoardItemMetadata(
         if (rawKey === 'color' || rawKey === 'trigger' || rawKey === 'label') {
             continue;
         }
-        if (!isEditableItemFieldKey(resolvedItemType(item), rawKey)) {
+        if (!isEditableItemFieldKey(item, rawKey)) {
             continue;
         }
         const field = allowedFields.find(f => f.key === rawKey);

@@ -28,6 +28,7 @@ import {
     placeWallInteraction,
     placeFixtureInteraction,
     placeItemDefinitionInteraction,
+    materializeItemDefinitionPlacementOptions,
     removeCreatureAtCellInteraction,
     removeFixtureAtCellInteraction,
     removeItemAtCellInteraction,
@@ -474,10 +475,11 @@ export const SandboxCellActionModal: React.FC<SandboxCellActionModalProps> = ({
                                                 className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2.5 hover:border-sky-500"
                                                 onClick={() =>
                                                     onComplete(
-                                                        placeItemDefinitionInteraction(cell, def.id, {
-                                                            color: def.default_color ?? undefined,
-                                                            energy: def.default_energy ?? undefined,
-                                                        }),
+                                                        placeItemDefinitionInteraction(
+                                                            cell,
+                                                            def.id,
+                                                            materializeItemDefinitionPlacementOptions(def),
+                                                        ),
                                                     )
                                                 }
                                             >

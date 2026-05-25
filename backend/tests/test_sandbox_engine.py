@@ -333,6 +333,62 @@ def test_pick_up_ball_forward_adjacent():
     assert st.creatures[0].inventory[0].color == "#3B82F6"
 
 
+def test_pick_up_item_by_id_on_stacked_cell():
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.world.items.extend(
+        [
+            SandboxItem(id="f1", type="food", position=GridCell(x=2, y=1), energy=10),
+            SandboxItem(id="f2", type="food", position=GridCell(x=2, y=1), energy=20),
+        ]
+    )
+    eng = SandboxEngine()
+    eng.apply_decision(
+        st,
+        st.creatures[0],
+        DecisionIntent(action="pick_up_item", item_id="f1"),
+    )
+    remaining = [it for it in st.world.items if it.position == GridCell(x=2, y=1)]
+    assert len(remaining) == 1
+    assert remaining[0].id == "f2"
+    assert len(st.creatures[0].inventory) == 1
+    assert st.creatures[0].inventory[0].energy == 10
+
+
+def test_pick_up_all_on_fixture_cell():
+    from app.domain.schemas.sandbox import FIXTURE_ITEM_TYPE
+
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.world.items.extend(
+        [
+            SandboxItem(
+                id="fx1",
+                type=FIXTURE_ITEM_TYPE,
+                definition_kind="fixture",
+                role="solid",
+                position=GridCell(x=2, y=1),
+            ),
+            SandboxItem(id="f1", type="food", position=GridCell(x=2, y=1), energy=10),
+            SandboxItem(
+                id="b1",
+                type="ball",
+                position=GridCell(x=2, y=1),
+                color="#AABBCC",
+            ),
+        ]
+    )
+    eng = SandboxEngine()
+    eng.apply_decision(
+        st,
+        st.creatures[0],
+        DecisionIntent(action="pick_up_item", pick_all=True),
+    )
+    cell_items = [it for it in st.world.items if it.position == GridCell(x=2, y=1)]
+    assert len(cell_items) == 1
+    assert cell_items[0].type == FIXTURE_ITEM_TYPE
+    assert len(st.creatures[0].inventory) == 2
+    assert {entry.type for entry in st.creatures[0].inventory} == {"food", "ball"}
+
+
 def test_place_item_from_inventory_forward():
     st = _state_with_creature(x=2, y=2, facing="N")
     st.creatures[0].inventory = [InventoryItem(type="ball", color="#AABBCC")]
@@ -384,3 +440,98 @@ def test_place_item_by_inventory_index():
     assert len(st.creatures[0].inventory) == 1
     assert st.creatures[0].inventory[0].type == "ball"
     assert st.creatures[0].inventory[0].color == "#222222"
+
+
+def test_pick_up_and_place_definition_backed_item_preserves_definition_id():
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.world.items.append(
+        SandboxItem(
+            id="key1",
+            definition_id="item-def-golden-key",
+            definition_kind="item",
+            role="pickable",
+            position=GridCell(x=2, y=1),
+            energy=10,
+        )
+    )
+    eng = SandboxEngine()
+    eng.apply_decision(st, st.creatures[0], DecisionIntent(action="pick_up_item"))
+    assert len(st.creatures[0].inventory) == 1
+    assert st.creatures[0].inventory[0].definition_id == "item-def-golden-key"
+    assert st.creatures[0].inventory[0].energy == 10
+
+    eng.apply_decision(
+        st,
+        st.creatures[0],
+        DecisionIntent(action="place_item", item_type="food", inventory_index=0),
+    )
+    placed = next(
+        it for it in st.world.items if it.position == GridCell(x=2, y=1)
+    )
+    assert placed.definition_id == "item-def-golden-key"
+    assert placed.energy == 10
+    assert st.creatures[0].inventory == []
+
+
+def test_pick_up_definition_backed_item_uses_definition_default_energy():
+    from app.domain.sandbox.item_helpers import ItemDefinitionDefaults
+
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.world.items.append(
+        SandboxItem(
+            id="milk1",
+            definition_id="item-def-milk",
+            definition_kind="item",
+            role="pickable",
+            position=GridCell(x=2, y=1),
+        )
+    )
+    defaults = {"item-def-milk": ItemDefinitionDefaults(default_energy=25, default_color="#FFFFFF")}
+    eng = SandboxEngine()
+    eng.apply_decision(
+        st,
+        st.creatures[0],
+        DecisionIntent(action="pick_up_item"),
+        definition_defaults=defaults,
+    )
+    assert len(st.creatures[0].inventory) == 1
+    assert st.creatures[0].inventory[0].definition_id == "item-def-milk"
+    assert st.creatures[0].inventory[0].energy == 25
+    assert not any(it.id == "milk1" for it in st.world.items)
+
+
+def test_pick_up_fails_without_removing_world_item_when_unconvertible():
+    st = _state_with_creature(x=2, y=2, facing="N")
+    st.world.items.append(
+        SandboxItem(
+            id="milk1",
+            definition_id="item-def-milk",
+            definition_kind="item",
+            role="pickable",
+            position=GridCell(x=2, y=1),
+        )
+    )
+    eng = SandboxEngine()
+    eng.apply_decision(st, st.creatures[0], DecisionIntent(action="pick_up_item"))
+    assert st.creatures[0].inventory == []
+    assert any(it.id == "milk1" for it in st.world.items)
+
+
+def test_board_definition_accepts_milk_like_item_with_energy_only():
+    from app.domain.schemas.sandbox import BoardDefinition, WorldGrid
+
+    board = BoardDefinition(
+        grid=WorldGrid(width=4, height=4),
+        items=[
+            SandboxItem(
+                id="milk1",
+                definition_id="item-def-milk",
+                definition_kind="item",
+                role="pickable",
+                position=GridCell(x=1, y=1),
+                energy=25,
+            ),
+        ],
+    )
+    assert board.items[0].energy == 25
+    assert board.items[0].color is None

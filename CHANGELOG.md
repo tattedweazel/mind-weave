@@ -4,6 +4,10 @@ Operator-facing notes for upgrades. See [docs/OPERATIONS.md](docs/OPERATIONS.md)
 
 ## [Unreleased]
 
+### Workflow controls (branch passthrough)
+
+- **Branching controls** — **True** / **False** handles on **Basic Conditional**, **Is?**, **Is Empty?**, ordered comparisons, and **Between** now forward the control’s primary wired value on the taken branch (`ConditionalNodeOutput.passthrough_value`), so branch bodies can use separate **trigger** and **data** edges from the same handle instead of rewiring upstream. Docs: [docs/WORKFLOW_TOOL_INVENTORY.md](docs/WORKFLOW_TOOL_INVENTORY.md).
+
 ### Contributor experience (local bootstrap + taxonomy docs)
 
 - **Hosted CI** — GitHub Actions were removed from this repository to avoid unexpected automation usage; run **`uv run pytest`** (from **`backend/`**) and **`npm run verify:palette-types`** (from **`frontend/`**) locally before merging when you touch those areas.

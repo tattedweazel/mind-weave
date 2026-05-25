@@ -34,8 +34,8 @@ Sandbox toolbar: **Simulation | Board Builder | Definitions**
 |-------|----------|-------|
 | `name` | yes | Unique per user |
 | `label` | yes | Display label on cards and probes |
-| `default_energy` | no | Default energy when placed (food-like items) |
-| `default_color` | no | Visual default (`#RRGGBB`) |
+| `default_energy` | no | Default energy when placed (food-like items); takes precedence over `default_color` for placement and pickup semantics |
+| `default_color` | no | Visual default (`#RRGGBB`); used for rendering and ball-like placement when `default_energy` is unset |
 | `shape` | no | `circle` \| `square` (render hint; consumed by Phaser for definition-backed instances; defaults to `circle` when unknown) |
 | `pickable` | yes | Default `true` for items |
 
@@ -100,7 +100,7 @@ Placed objects reference definitions:
 
 | `definition_kind` | `role` | Notes |
 |-------------------|--------|-------|
-| `item` | `pickable` | Optional instance overrides: `energy`, `color` |
+| `item` | `pickable` | Optional instance overrides: `energy`, `color`. Board Builder materializes **energy OR color** on the instance (not both): when `default_energy` is set, only instance `energy` is stored and visual color comes from the definition; when only `default_color` is set, instance `color` is stored (ball-like). Save/load normalizes invalid pairs (e.g. strips instance `color` when instance `energy` is present). |
 | `terrain` | `solid` | Blocks movement |
 | `fixture` | `solid` | Blocks movement; allows pickable stack |
 | `region` | — | Region layer; optional trigger override |
@@ -116,9 +116,13 @@ Creatures reference `creature_definition_id` or inline template fields during mi
 | Pickables | 0..N non-solid items (may share cell with fixture) |
 | Creature | 0..1 |
 
-**Pick up** removes the **most recently placed** pickable from the forward cell stack.
+**Pick up** (workflow **Pick Up Item** utility) removes the **most recently placed** pickable from the forward cell stack when `item_id` and `pick_all` are omitted.
+
+Remote Control **Pick up** accepts optional `item_id` (one pickable) or `pick_all: true` (every pickable on the forward cell). Omit both only for workflow-emitted `{action: "pick_up_item"}` (LIFO single pick).
 
 In Board Builder and paused Simulation cell edits, **Remove item** clears pickables and terrain only (fixtures remain). When multiple pickables share a cell, the cell action menu opens a picker to remove one item or **Remove all**.
+
+**Explorer (cell inspect):** When you inspect a cell in Simulation or Board Builder, the Explorer lists each occupant in layer order (region, fixture, terrain, pickables). Fixture and definition-backed item instances show their definition **label**, **name**, and role-appropriate fields (workflow for fixtures; shape, color, and energy for items). Built-in food/ball/wall instances keep legacy section titles (**Food**, **Ball**, **Terrain**).
 
 ## Fixture interaction (`use_fixture`)
 
@@ -127,36 +131,36 @@ When a creature (or Remote Control user) emits `{ "action": "use_fixture" }`:
 1. Engine resolves the **forward adjacent** fixture instance and `FixtureDefinition`
 2. Rejects if no fixture or workflow_id does not resolve
 3. Runs the fixture workflow with `FixtureInteractionInput` via `sandbox_fixture` override
-4. Fixture utility nodes may mutate world state (list/remove/spawn items). **Get position** probes the **fixture cell** (including `stack_count` and pickable `items` with resolved `label`); **Get facing**, **Get nearby**, and **Get inventory** resolve context from the injected `sandbox_fixture` override using the **actor** position/facing without requiring a Start `sandbox_tick` slot.
+4. Fixture utility nodes may mutate world state (list/remove/spawn items). **Get Position** probes the **fixture cell** (including `stack_count` and pickable `items` with resolved `label`); **Get Facing**, **Get Nearby**, and **Get Inventory** resolve context from the injected `sandbox_fixture` override using the **actor** position/facing without requiring a Start `sandbox_tick` slot.
 5. No Stop/DecisionIntent parse — side effects are the outcome
 
 When a fixture workflow runs during simulation, its node logs appear in the Simulation **Run Logs** tab under **Triggered workflows** (see [SANDBOX.md — Run Logs](SANDBOX.md#run-logs)). Fixture failures are recorded in `envelope.last_fixture_errors`, separate from creature brain errors.
 
-See [WORKFLOW_TOOL_INVENTORY.md](WORKFLOW_TOOL_INVENTORY.md) for handle details. In the Workflow Editor, **Get cell items**, **Remove item**, and **Spawn item** appear in **Sandbox Utilities** (same palette section as creature-brain navigation steps).
+See [WORKFLOW_TOOL_INVENTORY.md](WORKFLOW_TOOL_INVENTORY.md) for handle details. In the Workflow Editor, **Get Cell Items**, **Remove Item**, and **Spawn Item** appear in **Sandbox Utilities** (same palette section as creature-brain navigation steps).
 
 ### Consume item and spawn replacement (fixture workflow recipe)
 
 Common pattern: when the fixture cell holds a specific pickable (e.g. a **Key**), remove it and spawn a different item (e.g. a reward) at the **same cell** on `use_fixture`.
 
-Fixture workflows receive `FixtureInteractionInput` via the injected `sandbox_fixture` run override. **Get cell items** and **Get position** read pickables from the **initial** cell snapshot for that interaction (safe for find → remove → spawn in one run without re-probing).
+Fixture workflows receive `FixtureInteractionInput` via the injected `sandbox_fixture` run override. **Get Cell Items** and **Get Position** read pickables from the **initial** cell snapshot for that interaction (safe for find → remove → spawn in one run without re-probing).
 
-#### Recipe A — via **Get position**
+#### Recipe A — via **Get Position**
 
 ```
-Get position
+Get Position
   → Dictionary Value by Key "items"
   → For Loop
       item → Dictionary Value by Key "label" (or "definition_id")
            → Is? vs String primitive (expected value)
            → [first-match guard — see below]
            → true branch:
-                Dictionary Value by Key "id" → Remove item
-                Spawn item (definition_id in Explorer or wired, target "self")
+                Dictionary Value by Key "id" → Remove Item
+                Spawn Item (definition_id in Explorer or wired, target "self")
 ```
 
-#### Recipe B — via **Get cell items** (shorter)
+#### Recipe B — via **Get Cell Items** (shorter)
 
-Same loop body, but the list comes directly from **Get cell items** (no Start / `sandbox_tick` required).
+Same loop body, but the list comes directly from **Get Cell Items** (no Start / `sandbox_tick` required).
 
 #### Matching: label vs definition_id
 
@@ -165,19 +169,19 @@ Same loop body, but the list comes directly from **Get cell items** (no Start / 
 | Display **label** | Loop item → `label` → **Is?** vs String primitive (e.g. `"Key"`) | Uses resolved display label from the cell probe |
 | **definition_id** | Loop item → `definition_id` → **Is?** vs String primitive (ItemDefinition UUID) | Prefer for definition-backed pickables where probe `kind` is always `"item"` |
 
-Copy UUIDs from the **Definitions** tab, or pick an item definition in the **Spawn item** Explorer panel (dropdown + manual override).
+Copy UUIDs from the **Definitions** tab, or pick an item definition in the **Spawn Item** Explorer panel (dropdown + manual override).
 
 #### First match only; skip when none found
 
 - If **no** item matches, the loop completes with **no** remove and **no** spawn.
 - **For Loop** evaluates every list entry. To avoid removing/spawning for **each** matching item when multiple share the same label or definition, add a guard:
   1. Dictionary primitive `{ found: false }` before the loop
-  2. Loop body: **Is? (match) AND Is? (found == false)** → on true: **Remove item**, **Spawn item**, then **Dictionary Set Value by Key** `found = true`
+  2. Loop body: **Is? (match) AND Is? (found == false)** → on true: **Remove Item**, **Spawn Item**, then **Dictionary Set Value by Key** `found = true`
   3. Later iterations skip because `found` is true
 
 #### Spawn location
 
-**Spawn item** defaults `target` to **`self`** (same cell as the fixture). Optional `target` offset strings (`"dx dy"`) spawn on a neighbor cell instead.
+**Spawn Item** defaults `target` to **`self`** (same cell as the fixture). Optional `target` offset strings (`"dx dy"`) spawn on a neighbor cell instead.
 
 See [SANDBOX.md — Cell probe shape](SANDBOX.md#cell-probe-shape) for the `items[]` summary fields (`id`, `label`, `definition_id`).
 

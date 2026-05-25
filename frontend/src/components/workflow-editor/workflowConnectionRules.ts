@@ -96,17 +96,6 @@ export function isValidWorkflowConnection(nodes: Node[], edges: Edge[], connecti
         return false;
     }
     if (sourceHandle === 'signal_out') return false;
-    const branchControls = [
-        'basicConditional',
-        'isControl',
-        'isEmptyControl',
-        'gtControl',
-        'ltControl',
-        'gteControl',
-        'lteControl',
-        'betweenControl',
-    ];
-    if ((sourceHandle === 'true' || sourceHandle === 'false') && branchControls.includes(sourceNode.type ?? '')) return false;
 
     if (sourceNode.type === 'structurePrimitive') {
         if (targetNode.type === 'simpleLLMCall' && targetHandle === 'structure') return true;

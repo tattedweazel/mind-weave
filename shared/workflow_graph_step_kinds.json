@@ -87,7 +87,7 @@
       "react_flow_type": "sandboxTickPrimitive",
       "pydantic_model": "SandboxTickPrimitiveNode",
       "palette_handle": "sandbox_tick",
-      "editor_label": "Sandbox tick"
+      "editor_label": "Tick Input"
     },
     {
       "kind": "utility",
@@ -95,7 +95,7 @@
       "react_flow_type": "sandboxGetPosition",
       "pydantic_model": "SandboxGetPositionUtilityNode",
       "palette_handle": "sandbox_get_position",
-      "editor_label": "Get position"
+      "editor_label": "Get Position"
     },
     {
       "kind": "utility",
@@ -103,7 +103,7 @@
       "react_flow_type": "sandboxGetFacing",
       "pydantic_model": "SandboxGetFacingUtilityNode",
       "palette_handle": "sandbox_get_facing",
-      "editor_label": "Get facing"
+      "editor_label": "Get Facing"
     },
     {
       "kind": "utility",
@@ -111,7 +111,7 @@
       "react_flow_type": "sandboxGetNearby",
       "pydantic_model": "SandboxGetNearbyUtilityNode",
       "palette_handle": "sandbox_get_nearby",
-      "editor_label": "Get nearby"
+      "editor_label": "Get Nearby"
     },
     {
       "kind": "utility",
@@ -119,7 +119,7 @@
       "react_flow_type": "sandboxMoveForward",
       "pydantic_model": "SandboxMoveForwardUtilityNode",
       "palette_handle": "sandbox_move_forward",
-      "editor_label": "Move forward"
+      "editor_label": "Move Forward"
     },
     {
       "kind": "utility",
@@ -127,7 +127,7 @@
       "react_flow_type": "sandboxTurnLeft",
       "pydantic_model": "SandboxTurnLeftUtilityNode",
       "palette_handle": "sandbox_turn_left",
-      "editor_label": "Turn left"
+      "editor_label": "Turn Left"
     },
     {
       "kind": "utility",
@@ -135,7 +135,7 @@
       "react_flow_type": "sandboxTurnRight",
       "pydantic_model": "SandboxTurnRightUtilityNode",
       "palette_handle": "sandbox_turn_right",
-      "editor_label": "Turn right"
+      "editor_label": "Turn Right"
     },
     {
       "kind": "utility",
@@ -151,7 +151,7 @@
       "react_flow_type": "sandboxPickUpItem",
       "pydantic_model": "SandboxPickUpItemUtilityNode",
       "palette_handle": "sandbox_pick_up_item",
-      "editor_label": "Pick up item"
+      "editor_label": "Pick Up Item"
     },
     {
       "kind": "utility",
@@ -159,7 +159,7 @@
       "react_flow_type": "sandboxPlaceItem",
       "pydantic_model": "SandboxPlaceItemUtilityNode",
       "palette_handle": "sandbox_place_item",
-      "editor_label": "Place item"
+      "editor_label": "Place Item"
     },
     {
       "kind": "utility",
@@ -167,7 +167,7 @@
       "react_flow_type": "sandboxGetInventory",
       "pydantic_model": "SandboxGetInventoryUtilityNode",
       "palette_handle": "sandbox_get_inventory",
-      "editor_label": "Get inventory"
+      "editor_label": "Get Inventory"
     },
     {
       "kind": "utility",
@@ -191,7 +191,7 @@
       "react_flow_type": "sandboxGetCellItems",
       "pydantic_model": "SandboxGetCellItemsUtilityNode",
       "palette_handle": "sandbox_get_cell_items",
-      "editor_label": "Get cell items"
+      "editor_label": "Get Cell Items"
     },
     {
       "kind": "utility",
@@ -199,7 +199,7 @@
       "react_flow_type": "sandboxRemoveItemAtCell",
       "pydantic_model": "SandboxRemoveItemAtCellUtilityNode",
       "palette_handle": "sandbox_remove_item_at_cell",
-      "editor_label": "Remove item"
+      "editor_label": "Remove Item"
     },
     {
       "kind": "utility",
@@ -207,7 +207,7 @@
       "react_flow_type": "sandboxSpawnItemAtCell",
       "pydantic_model": "SandboxSpawnItemAtCellUtilityNode",
       "palette_handle": "sandbox_spawn_item_at_cell",
-      "editor_label": "Spawn item"
+      "editor_label": "Spawn Item"
     },
     {
       "kind": "primitive",

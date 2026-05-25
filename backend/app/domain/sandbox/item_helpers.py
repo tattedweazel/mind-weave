@@ -27,6 +27,8 @@ def resolved_item_type(it: SandboxItem) -> str:
     if kind == "region":
         return REGION_ITEM_TYPE
     if kind == "item":
+        if it.energy is not None:
+            return "food"
         slug = (it.builtin_slug or "").lower()
         if "ball" in slug or it.color is not None:
             return BALL_ITEM_TYPE

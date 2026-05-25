@@ -145,10 +145,10 @@ describe('SandboxUserActionModal', () => {
         );
         await user.click(screen.getByRole('button', { name: /^pick up$/i }));
         await user.click(screen.getByRole('button', { name: /^confirm$/i }));
-        expect(onConfirm).toHaveBeenCalledWith({ action: 'pick_up_item' });
+        expect(onConfirm).toHaveBeenCalledWith({ action: 'pick_up_item', item_id: 'f1' });
     });
 
-    it('requires inventory selection and empty forward cell before confirm for place_item', async () => {
+    it('requires inventory selection and blocks place on terrain forward cell', async () => {
         const user = userEvent.setup();
         const onConfirm = vi.fn();
         const creatureWithInventory: SandboxCreatureJson = {
@@ -184,8 +184,80 @@ describe('SandboxUserActionModal', () => {
 
         await user.click(screen.getByRole('button', { name: /food/i }));
         expect(confirm).toBeDisabled();
-        expect(screen.getByText('Forward cell must be empty to place')).toBeInTheDocument();
+        expect(screen.getByText('Forward cell is blocked by terrain')).toBeInTheDocument();
         expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('confirms place_item on fixture forward cell', async () => {
+        const user = userEvent.setup();
+        const onConfirm = vi.fn();
+        const creatureWithInventory: SandboxCreatureJson = {
+            ...creature,
+            inventory: [{ type: 'food', energy: 10 }],
+        };
+        const fixtureState: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [{ id: 'fix1', type: 'fixture', position: { x: 2, y: 1 } }],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creatureWithInventory}
+                sandboxState={fixtureState}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={onConfirm}
+                onDismiss={vi.fn()}
+            />,
+        );
+        await user.click(screen.getByRole('button', { name: /^place$/i }));
+        await user.click(screen.getByRole('button', { name: /food/i }));
+        const confirm = screen.getByRole('button', { name: /^confirm$/i });
+        expect(confirm).not.toBeDisabled();
+        await user.click(confirm);
+        expect(onConfirm).toHaveBeenCalledWith({
+            action: 'place_item',
+            inventory_index: 0,
+            item_type: 'food',
+        });
+    });
+
+    it('confirms place_item when forward cell already has pickables', async () => {
+        const user = userEvent.setup();
+        const onConfirm = vi.fn();
+        const creatureWithInventory: SandboxCreatureJson = {
+            ...creature,
+            inventory: [{ type: 'ball', color: '#AABBCC' }],
+        };
+        const pickableStackState: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [{ id: 'f1', type: 'food', position: { x: 2, y: 1 }, energy: 10 }],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creatureWithInventory}
+                sandboxState={pickableStackState}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={onConfirm}
+                onDismiss={vi.fn()}
+            />,
+        );
+        await user.click(screen.getByRole('button', { name: /^place$/i }));
+        await user.click(screen.getByRole('button', { name: /ball/i }));
+        const confirm = screen.getByRole('button', { name: /^confirm$/i });
+        expect(confirm).not.toBeDisabled();
+        await user.click(confirm);
+        expect(onConfirm).toHaveBeenCalledWith({
+            action: 'place_item',
+            inventory_index: 0,
+            item_type: 'ball',
+        });
     });
 
     it('confirms place_item with inventory_index when forward cell is empty', async () => {
@@ -402,6 +474,99 @@ describe('SandboxUserActionModal', () => {
         );
         await user.click(screen.getByRole('button', { name: 'Cancel' }));
         expect(onDismiss).toHaveBeenCalled();
+    });
+
+    it('shows Use and Pick up when forward cell has fixture and pickables', async () => {
+        const user = userEvent.setup();
+        const onConfirm = vi.fn();
+        const stateWithFixtureAndFood: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [
+                    { id: 'fix1', type: 'fixture', position: { x: 2, y: 1 }, color: '#8B5CF6' },
+                    { id: 'f1', type: 'food', position: { x: 2, y: 1 }, energy: 10 },
+                ],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creature}
+                sandboxState={stateWithFixtureAndFood}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={onConfirm}
+                onDismiss={vi.fn()}
+            />,
+        );
+        expect(screen.getByRole('button', { name: /^use$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^pick up$/i })).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: /^pick up$/i }));
+        await user.click(screen.getByRole('button', { name: /^confirm$/i }));
+        expect(onConfirm).toHaveBeenCalledWith({ action: 'pick_up_item', item_id: 'f1' });
+    });
+
+    it('requires pickable selection when multiple items are stacked', async () => {
+        const user = userEvent.setup();
+        const onConfirm = vi.fn();
+        const stateWithStack: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [
+                    { id: 'f1', type: 'food', position: { x: 2, y: 1 }, energy: 10 },
+                    { id: 'b1', type: 'ball', position: { x: 2, y: 1 }, color: '#AABBCC' },
+                ],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creature}
+                sandboxState={stateWithStack}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={onConfirm}
+                onDismiss={vi.fn()}
+            />,
+        );
+        await user.click(screen.getByRole('button', { name: /^pick up$/i }));
+        expect(screen.getByText('Choose an item to pick up')).toBeInTheDocument();
+        const confirm = screen.getByRole('button', { name: /^confirm$/i });
+        expect(confirm).toBeDisabled();
+
+        await user.click(screen.getByRole('button', { name: /Food \(10\)/i }));
+        expect(confirm).not.toBeDisabled();
+        await user.click(confirm);
+        expect(onConfirm).toHaveBeenCalledWith({ action: 'pick_up_item', item_id: 'f1' });
+    });
+
+    it('confirms pick_up_item with pick_all when Pick up all is selected', async () => {
+        const user = userEvent.setup();
+        const onConfirm = vi.fn();
+        const stateWithStack: SandboxSandboxStateJson = {
+            ...sandboxState,
+            world: {
+                grid: { width: 5, height: 5 },
+                items: [
+                    { id: 'f1', type: 'food', position: { x: 2, y: 1 }, energy: 10 },
+                    { id: 'b1', type: 'ball', position: { x: 2, y: 1 }, color: '#AABBCC' },
+                ],
+            },
+        };
+        render(
+            <SandboxUserActionModal
+                creature={creature}
+                sandboxState={stateWithStack}
+                creatureIndex={0}
+                creatureTotal={1}
+                onConfirm={onConfirm}
+                onDismiss={vi.fn()}
+            />,
+        );
+        await user.click(screen.getByRole('button', { name: /^pick up$/i }));
+        await user.click(screen.getByRole('button', { name: /^pick up all$/i }));
+        await user.click(screen.getByRole('button', { name: /^confirm$/i }));
+        expect(onConfirm).toHaveBeenCalledWith({ action: 'pick_up_item', pick_all: true });
     });
 
     it('shows Use when forward cell has a fixture and confirms use_fixture', async () => {

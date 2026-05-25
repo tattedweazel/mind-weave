@@ -9,9 +9,11 @@ from typing import List, Optional
 from sqlmodel import Session, select
 
 from app.domain.document_json import deterministic_json_dumps
+from app.domain.sandbox.board_normalization import normalize_board_definition_data
 from app.domain.sandbox.empty_board_seed import EMPTY_BOARD_BUILTIN_SLUG, empty_board_definition, parse_board_body
 from app.domain.schemas.sandbox import BoardDefinition
 from app.domain.services.board_project_service import BoardProjectService
+from app.domain.services.sandbox_definition_service import item_definition_probe_maps
 from app.persistence.tables import SandboxBoard
 
 
@@ -37,11 +39,27 @@ class BoardService:
             return row
         return None
 
+    def _normalize_definition(self, definition: BoardDefinition) -> BoardDefinition:
+        maps = item_definition_probe_maps(self.session, self.user_id)
+        data = normalize_board_definition_data(
+            definition.model_dump(mode="json"),
+            maps.defaults,
+        )
+        return BoardDefinition.model_validate(data)
+
+    def parse_and_normalize_board_definition(self, data: dict) -> BoardDefinition:
+        maps = item_definition_probe_maps(self.session, self.user_id)
+        normalized = normalize_board_definition_data(data, maps.defaults)
+        return BoardDefinition.model_validate(normalized)
+
     def get_board_definition(self, board_id: uuid.UUID) -> Optional[BoardDefinition]:
         row = self.get_board(board_id)
         if not row:
             return None
-        return parse_board_body(row.body)
+        import json
+
+        raw = json.loads(row.body) if row.body.strip() else {}
+        return self.parse_and_normalize_board_definition(raw)
 
     def create_board(
         self,
@@ -51,7 +69,7 @@ class BoardService:
         definition: Optional[BoardDefinition] = None,
         project_id: Optional[uuid.UUID] = None,
     ) -> SandboxBoard:
-        defn = definition or empty_board_definition()
+        defn = self._normalize_definition(definition or empty_board_definition())
         resolved_project_id = self._projects.resolve_project_id(project_id)
         now = datetime.now(timezone.utc)
         row = SandboxBoard(
@@ -89,7 +107,9 @@ class BoardService:
         if description is not None:
             row.description = description
         if definition is not None:
-            row.body = deterministic_json_dumps(definition.model_dump(mode="json"))
+            row.body = deterministic_json_dumps(
+                self._normalize_definition(definition).model_dump(mode="json")
+            )
         if project_id is not None:
             row.project_id = self._projects.resolve_project_id(project_id)
         row.updated_at = datetime.now(timezone.utc)

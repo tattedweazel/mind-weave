@@ -1411,6 +1411,7 @@ export interface StopNodeOutput extends NodeOutputBase {
 export interface ConditionalNodeOutput extends NodeOutputBase {
     kind: 'conditional';
     branch: 'true' | 'false';
+    passthrough_value?: unknown;
 }
 
 export type NodeOutputUnion =

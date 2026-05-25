@@ -131,7 +131,7 @@ Design pattern notes: Use `StyledNodeBase` with `inputs`/`outputs` as `NodeSlot[
 
 ## Adding a New Control
 
-When extending the codebase with a new control node (e.g. Basic Conditional), follow the same steps as Adding a New Utility, but use `kind: "control"` and `control_type` (e.g. `basic_conditional`). Add to the Controls palette section. Control nodes that branch (True/False) require executor changes to only activate downstream nodes on the matching branch.
+When extending the codebase with a new control node (e.g. Basic Conditional), follow the same steps as Adding a New Utility, but use `kind: "control"` and `control_type` (e.g. `basic_conditional`). Add to the Controls palette section. Branching controls (True/False) require executor changes to only activate downstream nodes on the matching branch; optional **passthrough_value** on `ConditionalNodeOutput` lets branch handles forward wired inputs for data edges.
 
 ## Navigation Structure
 

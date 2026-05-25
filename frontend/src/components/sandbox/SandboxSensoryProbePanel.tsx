@@ -2,6 +2,12 @@ import React, { useMemo } from 'react';
 
 import type { SandboxFacing, SandboxInventoryItemJson } from '../../domain/sandbox/types';
 import {
+    inventoryEntryColor,
+    inventoryEntryEnergy,
+    inventoryEntryTitle,
+    type InventoryLabelContext,
+} from '../../sandbox/sandboxCreatureInventory';
+import {
     forwardRingSlot,
     INVENTORY_SELECTION_HINT,
     nearbyCellKindBadgeClass,
@@ -12,7 +18,6 @@ import {
     NEARBY_RING_LAYOUT,
     PROBE_HINTS,
     PROBE_LABELS,
-    resolveBallDisplayColor,
     type NearbyRingSlot,
 } from '../../sandbox/sandboxSensoryProbeDisplay';
 import type { CellProbeJson, NearbyCellJson, SandboxSensoryProbeKind } from '../../sandbox/sandboxSensoryProbes';
@@ -28,6 +33,8 @@ export interface SandboxSensoryProbePanelProps {
     inventorySelectable?: boolean;
     selectedInventoryIndex?: number | null;
     onInventorySelect?: (index: number) => void;
+    /** Item definition catalog for definition-aware inventory labels. */
+    itemDefinitions?: InventoryLabelContext['itemDefinitions'];
 }
 
 function facingCompassHighlight(facing: SandboxFacing, direction: 'N' | 'E' | 'S' | 'W'): boolean {
@@ -132,27 +139,36 @@ function FacingReadout({ value }: { value: SandboxFacing }) {
     );
 }
 
-function InventoryEntryRow({ entry }: { entry: SandboxInventoryItemJson }) {
+function InventoryEntryRow({
+    entry,
+    inventoryLabelContext,
+}: {
+    entry: SandboxInventoryItemJson;
+    inventoryLabelContext?: InventoryLabelContext;
+}) {
+    const ctx = inventoryLabelContext ?? {};
+    const title = inventoryEntryTitle(entry, ctx);
     if (entry.type === 'ball') {
-        const hex = resolveBallDisplayColor(entry.color);
+        const hex = inventoryEntryColor(entry, ctx) ?? '#3B82F6';
         return (
             <div className="flex items-center gap-2">
                 <span className="font-semibold capitalize" style={{ color: hex }}>
-                    Ball
+                    {title}
                 </span>
                 <span
                     className="inline-block h-4 w-4 rounded border border-slate-300/60 dark:border-slate-500/60 shrink-0"
                     style={{ backgroundColor: hex }}
-                    aria-label={`Ball color ${hex}`}
+                    aria-label={`${title} color ${hex}`}
                 />
             </div>
         );
     }
+    const energy = inventoryEntryEnergy(entry, ctx);
     return (
         <div className="flex items-center gap-2">
-            <span className="font-semibold text-pink-700 dark:text-pink-300">Food</span>
+            <span className="font-semibold text-pink-700 dark:text-pink-300">{title}</span>
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-950/50 dark:text-pink-200 dark:border-pink-800 tabular-nums">
-                Energy {entry.energy ?? '?'}
+                Energy {energy ?? '?'}
             </span>
         </div>
     );
@@ -163,11 +179,13 @@ function InventoryReadout({
     selectable,
     selectedIndex,
     onSelect,
+    inventoryLabelContext,
 }: {
     value: SandboxInventoryItemJson[];
     selectable?: boolean;
     selectedIndex?: number | null;
     onSelect?: (index: number) => void;
+    inventoryLabelContext?: InventoryLabelContext;
 }) {
     if (value.length === 0) {
         return <p className="text-xs text-slate-500 dark:text-slate-400">Empty</p>;
@@ -176,7 +194,9 @@ function InventoryReadout({
         <ul className="space-y-2" role={selectable ? 'listbox' : undefined} aria-label={selectable ? 'Inventory items' : undefined}>
             {value.map((entry, idx) => {
                 const selected = selectable && selectedIndex === idx;
-                const content = <InventoryEntryRow entry={entry} />;
+                const content = (
+                    <InventoryEntryRow entry={entry} inventoryLabelContext={inventoryLabelContext} />
+                );
                 if (!selectable) {
                     return (
                         <li
@@ -286,7 +306,12 @@ function StructuredReadout({
     inventorySelectable,
     selectedInventoryIndex,
     onInventorySelect,
+    itemDefinitions,
 }: SandboxSensoryProbePanelProps) {
+    const inventoryLabelContext = useMemo(
+        (): InventoryLabelContext => ({ itemDefinitions }),
+        [itemDefinitions],
+    );
     switch (kind) {
         case 'position':
             if (value && typeof value === 'object' && 'x' in value && 'y' in value) {
@@ -306,6 +331,7 @@ function StructuredReadout({
                         selectable={inventorySelectable}
                         selectedIndex={selectedInventoryIndex}
                         onSelect={onInventorySelect}
+                        inventoryLabelContext={inventoryLabelContext}
                     />
                 );
             }
@@ -334,6 +360,7 @@ export const SandboxSensoryProbePanel: React.FC<SandboxSensoryProbePanelProps> =
     inventorySelectable,
     selectedInventoryIndex,
     onInventorySelect,
+    itemDefinitions,
 }) => {
     const rawJson = useMemo(() => {
         try {
@@ -363,6 +390,7 @@ export const SandboxSensoryProbePanel: React.FC<SandboxSensoryProbePanelProps> =
                 inventorySelectable={inventorySelectable}
                 selectedInventoryIndex={selectedInventoryIndex}
                 onInventorySelect={onInventorySelect}
+                itemDefinitions={itemDefinitions}
             />
             <details className="group">
                 <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 select-none">

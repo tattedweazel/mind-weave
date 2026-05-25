@@ -13,14 +13,20 @@ import {
     X,
 } from 'lucide-react';
 
+import type { ItemDefinitionRead } from '../../api/types';
 import type { SandboxCreatureJson, SandboxFacing, SandboxSandboxStateJson } from '../../domain/sandbox/types';
 import {
-    forwardCellKind,
+    forwardCellAllowsPlaceItem,
     forwardCellHasFixture,
+    forwardCellKind,
     forwardCellPickable,
+    forwardCellPickables,
+    forwardCellPlaceBlockedReason,
     runSensoryProbe,
+    type NearbyCellItemSummaryJson,
     type SandboxSensoryProbeKind,
 } from '../../sandbox/sandboxSensoryProbes';
+import { PICK_UP_SELECTION_HINT } from '../../sandbox/sandboxSensoryProbeDisplay';
 import type {
     SandboxCreatureUserAction,
     SandboxUserDecisionAction,
@@ -34,6 +40,7 @@ export interface SandboxUserActionModalProps {
     creatureTotal: number;
     onConfirm: (action: SandboxCreatureUserAction) => void;
     onDismiss: () => void;
+    itemDefinitions?: ReadonlyArray<Pick<ItemDefinitionRead, 'id' | 'name' | 'label' | 'default_color'>>;
 }
 
 const PROBE_BUTTONS: { kind: SandboxSensoryProbeKind; label: string }[] = [
@@ -47,6 +54,10 @@ function facingCompassHighlight(facing: SandboxFacing, direction: 'N' | 'E' | 'S
     return facing === direction;
 }
 
+function pickableRowLabel(item: NearbyCellItemSummaryJson): string {
+    return item.label?.trim() || item.kind;
+}
+
 export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
     creature,
     sandboxState,
@@ -54,9 +65,12 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
     creatureTotal,
     onConfirm,
     onDismiss,
+    itemDefinitions,
 }) => {
     const [selectedAction, setSelectedAction] = useState<SandboxUserDecisionAction | null>(null);
     const [selectedInventoryIndex, setSelectedInventoryIndex] = useState<number | null>(null);
+    const [selectedPickableItemId, setSelectedPickableItemId] = useState<string | null>(null);
+    const [pickUpAll, setPickUpAll] = useState(false);
     const [activeProbe, setActiveProbe] = useState<SandboxSensoryProbeKind | null>(null);
     const [probeCache, setProbeCache] = useState<Partial<Record<SandboxSensoryProbeKind, unknown>>>({});
 
@@ -68,6 +82,10 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
         () => forwardCellPickable(creature, sandboxState),
         [creature, sandboxState],
     );
+    const forwardPickables = useMemo(
+        () => forwardCellPickables(creature, sandboxState),
+        [creature, sandboxState],
+    );
     const canUseFixture = useMemo(
         () => forwardCellHasFixture(creature, sandboxState),
         [creature, sandboxState],
@@ -76,7 +94,14 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
         () => forwardCellKind(creature, sandboxState),
         [creature, sandboxState],
     );
-    const forwardCellEmpty = forwardKind === 'empty';
+    const forwardPlaceAllowed = useMemo(
+        () => forwardCellAllowsPlaceItem(creature, sandboxState),
+        [creature, sandboxState],
+    );
+    const forwardPlaceBlockedReason = useMemo(
+        () => forwardCellPlaceBlockedReason(creature, sandboxState),
+        [creature, sandboxState],
+    );
 
     const openInventoryProbe = useCallback(() => {
         const kind: SandboxSensoryProbeKind = 'inventory';
@@ -92,18 +117,33 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
             setSelectedAction(action);
             if (action !== 'place_item') {
                 setSelectedInventoryIndex(null);
-                return;
             }
-            setSelectedInventoryIndex(null);
-            openInventoryProbe();
+            if (action !== 'pick_up_item') {
+                setSelectedPickableItemId(null);
+                setPickUpAll(false);
+            } else {
+                setPickUpAll(false);
+                const pickables = forwardCellPickables(creature, sandboxState);
+                setSelectedPickableItemId(pickables.length === 1 ? (pickables[0]?.id ?? null) : null);
+            }
+            if (action === 'place_item') {
+                setSelectedInventoryIndex(null);
+                openInventoryProbe();
+            }
         },
-        [openInventoryProbe],
+        [creature, openInventoryProbe, sandboxState],
     );
+
+    const pickUpNeedsSelection = selectedAction === 'pick_up_item' && forwardPickables.length > 1;
+    const pickUpSelectionReady =
+        selectedAction === 'pick_up_item' &&
+        (forwardPickables.length <= 1 || pickUpAll || selectedPickableItemId != null);
 
     const confirmDisabled =
         selectedAction == null ||
         (selectedAction === 'place_item' &&
-            (selectedInventoryIndex == null || !forwardCellEmpty));
+            (selectedInventoryIndex == null || !forwardPlaceAllowed)) ||
+        (selectedAction === 'pick_up_item' && !pickUpSelectionReady);
 
     const handleConfirm = useCallback(() => {
         if (!selectedAction) return;
@@ -115,8 +155,22 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
                 payload.item_type = entry.type;
             }
         }
+        if (selectedAction === 'pick_up_item') {
+            if (pickUpAll) {
+                payload.pick_all = true;
+            } else if (selectedPickableItemId) {
+                payload.item_id = selectedPickableItemId;
+            }
+        }
         onConfirm(payload);
-    }, [inventory, onConfirm, selectedAction, selectedInventoryIndex]);
+    }, [
+        inventory,
+        onConfirm,
+        pickUpAll,
+        selectedAction,
+        selectedInventoryIndex,
+        selectedPickableItemId,
+    ]);
 
     const toggleProbe = useCallback(
         (kind: SandboxSensoryProbeKind) => {
@@ -371,9 +425,57 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
                         </div>
                     ) : null}
 
-                    {selectedAction === 'place_item' && selectedInventoryIndex != null && !forwardCellEmpty ? (
+                    {pickUpNeedsSelection ? (
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
+                                {PICK_UP_SELECTION_HINT}
+                            </p>
+                            <ul className="space-y-2" role="listbox" aria-label="Pickable items">
+                                {forwardPickables.map(item => (
+                                    <li key={item.id} role="option" aria-selected={selectedPickableItemId === item.id}>
+                                        <button
+                                            type="button"
+                                            className={`w-full text-left rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                                                selectedPickableItemId === item.id
+                                                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-400/50'
+                                                    : 'border-slate-200 dark:border-slate-600 hover:border-sky-500 hover:bg-sky-50/50 dark:hover:bg-sky-950/20'
+                                            }`}
+                                            onClick={() => {
+                                                setSelectedPickableItemId(item.id);
+                                                setPickUpAll(false);
+                                            }}
+                                            aria-pressed={selectedPickableItemId === item.id}
+                                        >
+                                            {pickableRowLabel(item)}
+                                        </button>
+                                    </li>
+                                ))}
+                                <li role="option" aria-selected={pickUpAll}>
+                                    <button
+                                        type="button"
+                                        className={`w-full text-left rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                                            pickUpAll
+                                                ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-400/50'
+                                                : 'border-slate-200 dark:border-slate-600 hover:border-sky-500 hover:bg-sky-50/50 dark:hover:bg-sky-950/20'
+                                        }`}
+                                        onClick={() => {
+                                            setPickUpAll(true);
+                                            setSelectedPickableItemId(null);
+                                        }}
+                                        aria-pressed={pickUpAll}
+                                    >
+                                        Pick up all
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    ) : null}
+
+                    {selectedAction === 'place_item' &&
+                    selectedInventoryIndex != null &&
+                    forwardPlaceBlockedReason ? (
                         <p className="text-xs text-center text-amber-700 dark:text-amber-300">
-                            Forward cell must be empty to place
+                            {forwardPlaceBlockedReason}
                         </p>
                     ) : null}
 
@@ -403,6 +505,7 @@ export const SandboxUserActionModal: React.FC<SandboxUserActionModalProps> = ({
                                 inventorySelectable={inventorySelectionMode && activeProbe === 'inventory'}
                                 selectedInventoryIndex={selectedInventoryIndex}
                                 onInventorySelect={setSelectedInventoryIndex}
+                                itemDefinitions={itemDefinitions}
                             />
                         ) : null}
                     </div>

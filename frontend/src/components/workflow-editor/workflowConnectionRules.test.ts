@@ -174,10 +174,17 @@ describe('isValidWorkflowConnection', () => {
         ).toBe(false);
     });
 
-    it('blocks branch true handle from feeding non-trigger targets', () => {
+    it('allows branch true handle to feed non-trigger data targets', () => {
         const cond = node({ id: 'bc', type: 'basicConditional', data: {} });
         const c: Connection = { source: 'bc', target: 's1', sourceHandle: 'true', targetHandle: 'output' };
-        expect(isValidWorkflowConnection([cond, stopDictionary], [], c)).toBe(false);
+        expect(isValidWorkflowConnection([cond, stopDictionary], [], c)).toBe(true);
+    });
+
+    it('allows isEmptyControl false handle to feed lenFromList list input', () => {
+        const ie = node({ id: 'ie', type: 'isEmptyControl', data: {} });
+        const len = node({ id: 'len', type: 'lenFromList', data: {} });
+        const c: Connection = { source: 'ie', target: 'len', sourceHandle: 'false', targetHandle: 'list' };
+        expect(isValidWorkflowConnection([ie, len], [], c)).toBe(true);
     });
 
     it('allows documentPrimitive and loadDocument into readDocumentProperty document handle only', () => {

@@ -53,9 +53,10 @@ See also: [SANDBOX.md](SANDBOX.md) for simulation runtime, tick API, and creatur
 
 | Type | Behavior | Board Builder metadata |
 |------|----------|------------------------|
-| `wall` | Blocks movement and placement | None (read-only Id/Type/Position in Explorer) |
-| `food` | Reported by **Get nearby**; does not block movement; pickable | **Energy** editable in Explorer (default `48`) |
+| `wall` / terrain definition | Blocks movement and placement | Definition label/name; read-only Id/Position in Explorer |
+| `food` / item definition (pickable) | Reported by **Get nearby**; does not block movement; pickable | **Energy** editable in Explorer when the item has energy semantics |
 | `ball` | Reported by **Get nearby** as `ball`; does not block movement; pickable | **Color** at placement (read-only in Explorer after place) |
+| `fixture` | Solid; workflow-powered; allows pickable stack | Definition label/name, workflow, color — read-only in Explorer |
 | `region` | Colored underlay; coexists with other occupants; non-blocking; **`label`** readable via **Get nearby** (`region_label` on each neighbor cell) and **Get position** (`region_label` on the creature’s current cell) | **Label**, **Color**, **trigger** (`enabled`, `mode`, `workflow_id`, `inputs` — executed at runtime; see [SANDBOX.md — Region triggers](SANDBOX.md#region-triggers)) |
 
 ### Cell occupancy layers
@@ -73,7 +74,7 @@ Regions can be placed on cells that already have creatures, fixtures, or pickabl
 
 - **`facing`**: `"N"` \| `"E"` \| `"S"` \| `"W"` (default `"N"` if omitted). Editable in Board Builder Explorer.
 - **`color`**: `#RRGGBB` hex (chosen in the placement wizard; not editable in Explorer after placement). Legacy board creatures without `color` render with the index palette.
-- **`inventory`**: ordered list of held items (`ball` with `color`, `food` with `energy`). Editable in Board Builder Explorer; read-only during Simulation.
+- **`inventory`**: ordered list of held items (`ball` with `color`, `food` with `energy`; optional `definition_id` for definition-backed pickables). Editable in Board Builder Explorer; read-only during Simulation.
 - Compass: North = decreasing y, East = +x.
 
 ### Item metadata editing
@@ -82,12 +83,13 @@ In **Board Builder**, inspect a cell with an item to open the Explorer. Type-spe
 
 | Item type | Editable fields |
 |-----------|-----------------|
-| `food` | `energy` (integer ≥ 0) |
+| `food` / definition-backed pickable with energy | `energy` (integer ≥ 0) |
 | `ball` | — (color chosen at placement) |
-| `wall` | — |
+| `wall` / terrain definition | — |
+| `fixture` | — (placed/removed via cell action modal) |
 | `region` | `label`; `color`; `trigger.enabled`, `trigger.mode`, `trigger.workflow_id`, `trigger.inputs` |
 
-**Adding a new item type:** extend `ItemType` in [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) and backend schemas; engine occupancy + movement in [`engine.py`](../backend/app/domain/sandbox/engine.py); **Get nearby** in [`query.py`](../backend/app/domain/sandbox/query.py); interactions + cell modal; Phaser in [`phaserSandboxAdapter.ts`](../frontend/src/sandbox/runtime/phaserSandboxAdapter.ts); Explorer fields in [`sandboxItemInspectorFields.ts`](../frontend/src/sandbox/sandboxItemInspectorFields.ts); tests in `backend/tests/test_sandbox_*.py` and frontend sandbox unit tests.
+**Adding a new item type:** extend `ItemType` in [`shared/sandbox_canonical.schema.json`](../shared/sandbox_canonical.schema.json) and backend schemas; engine occupancy + movement in [`engine.py`](../backend/app/domain/sandbox/engine.py); **Get nearby** in [`query.py`](../backend/app/domain/sandbox/query.py); interactions + cell modal; Phaser in [`phaserSandboxAdapter.ts`](../frontend/src/sandbox/runtime/phaserSandboxAdapter.ts); Explorer display in [`sandboxItemInspectorDisplay.ts`](../frontend/src/sandbox/sandboxItemInspectorDisplay.ts) and fields in [`sandboxItemInspectorFields.ts`](../frontend/src/sandbox/sandboxItemInspectorFields.ts); tests in `backend/tests/test_sandbox_*.py` and frontend sandbox unit tests.
 
 ### Favorite colors
 

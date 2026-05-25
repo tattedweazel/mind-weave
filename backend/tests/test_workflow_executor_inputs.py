@@ -2,6 +2,7 @@
 
 from app.domain.schemas import (
     BooleanNodeOutput,
+    ConditionalNodeOutput,
     DictionaryNodeOutput,
     DocumentNodeOutput,
     GmailNodeOutput,
@@ -12,7 +13,11 @@ from app.domain.schemas import (
     StringNodeOutput,
     StructureNodeOutput,
 )
-from app.domain.workflow_executor.inputs import node_output_to_input_override_value
+from app.domain.workflow_executor.inputs import (
+    _branch_control_passthrough_slot,
+    node_output_to_input_override_value,
+    passthrough_value_to_node_output,
+)
 
 
 def test_node_output_to_input_override_value_preserves_list_and_dict():
@@ -74,3 +79,25 @@ def test_node_output_to_input_override_value_gmail_minimal():
     result = node_output_to_input_override_value(out)
     assert isinstance(result, dict)
     assert result["kind"] == "gmail"
+
+
+def test_passthrough_value_to_node_output_types():
+    assert passthrough_value_to_node_output("n1", [1, 2]).data == [1, 2]
+    assert passthrough_value_to_node_output("n2", {"a": 1}).data == {"a": 1}
+    assert passthrough_value_to_node_output("n3", True).value is True
+    assert passthrough_value_to_node_output("n4", 9).value == 9
+    assert passthrough_value_to_node_output("n5", "hi").text == "hi"
+
+
+def test_branch_control_passthrough_slot_active_branch_data_handle():
+    out = ConditionalNodeOutput(node_id="c1", branch="false", passthrough_value=[1, 2, 3])
+    slot = _branch_control_passthrough_slot(out, "false", "list")
+    assert isinstance(slot, ListNodeOutput)
+    assert slot.data == [1, 2, 3]
+
+
+def test_branch_control_passthrough_slot_skips_trigger_edges():
+    out = ConditionalNodeOutput(node_id="c1", branch="false", passthrough_value=[1, 2, 3])
+    assert _branch_control_passthrough_slot(out, "false", "trigger") is None
+    assert _branch_control_passthrough_slot(out, "false", None) is None
+    assert _branch_control_passthrough_slot(out, "true", "list") is None

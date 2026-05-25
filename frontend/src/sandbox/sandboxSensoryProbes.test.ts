@@ -4,8 +4,11 @@ import type { SandboxCreatureJson, SandboxSandboxStateJson } from '../domain/san
 import {
     creatureFacingFromState,
     creaturePositionFromState,
+    forwardCellAllowsPlaceItem,
     forwardCellKind,
     forwardCellPickable,
+    forwardCellPickables,
+    forwardCellPlaceBlockedReason,
     inventoryFromCreature,
     nearbyCellsFromState,
 } from './sandboxSensoryProbes';
@@ -195,7 +198,7 @@ describe('sandboxSensoryProbes', () => {
         expect(forwardCellKind(edgeCreature, state(edgeCreature))).toBe('out_of_bounds');
     });
 
-    it('forwardCellPickable is true only for ball or food in forward cell', () => {
+    it('forwardCellPickable is true when forward cell has pickables', () => {
         const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
         expect(forwardCellPickable(c, state(c))).toBe(false);
 
@@ -235,6 +238,17 @@ describe('sandboxSensoryProbes', () => {
         expect(forwardCellPickable(edgeCreature, state(edgeCreature))).toBe(false);
     });
 
+    it('forwardCellPickable is true on fixture cells with stacked pickables', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        const stackedState = state(c, [
+            { id: 'fix1', type: 'fixture', position: { x: 3, y: 1 } },
+            { id: 'f1', type: 'food', position: { x: 3, y: 1 }, energy: 10 },
+        ]);
+        expect(forwardCellPickable(c, stackedState)).toBe(true);
+        expect(forwardCellPickables(c, stackedState)).toHaveLength(1);
+        expect(forwardCellPickables(c, stackedState)[0]?.id).toBe('f1');
+    });
+
     it('forwardCellKind reports fixture and stack_count on stacked pickables', () => {
         const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
         const fixtureState = state(c, [
@@ -259,5 +273,47 @@ describe('sandboxSensoryProbes', () => {
         expect(nearby[0]?.kind).toBe('fixture');
         expect(nearby[0]?.stack_count).toBe(1);
         expect(nearby[0]?.items).toHaveLength(1);
+    });
+
+    it('forwardCellAllowsPlaceItem matches board builder placement rules', () => {
+        const c = creature({ position: { x: 3, y: 2 }, facing: 'N' });
+        expect(forwardCellAllowsPlaceItem(c, state(c))).toBe(true);
+
+        const fixtureState = state(c, [{ id: 'fix1', type: 'fixture', position: { x: 3, y: 1 } }]);
+        expect(forwardCellAllowsPlaceItem(c, fixtureState)).toBe(true);
+
+        const stackedFixtureState = state(c, [
+            { id: 'fix1', type: 'fixture', position: { x: 3, y: 1 } },
+            { id: 'f1', type: 'food', position: { x: 3, y: 1 }, energy: 10 },
+        ]);
+        expect(forwardCellAllowsPlaceItem(c, stackedFixtureState)).toBe(true);
+
+        const pickableStackState = state(c, [
+            { id: 'f1', type: 'food', position: { x: 3, y: 1 }, energy: 10 },
+        ]);
+        expect(forwardCellAllowsPlaceItem(c, pickableStackState)).toBe(true);
+
+        const wallState = state(c, [{ id: 'w1', type: 'wall', position: { x: 3, y: 1 } }]);
+        expect(forwardCellAllowsPlaceItem(c, wallState)).toBe(false);
+        expect(forwardCellPlaceBlockedReason(c, wallState)).toBe('Forward cell is blocked by terrain');
+
+        const edgeCreature = creature({ position: { x: 0, y: 0 }, facing: 'W' });
+        expect(forwardCellAllowsPlaceItem(edgeCreature, state(edgeCreature))).toBe(false);
+        expect(forwardCellPlaceBlockedReason(edgeCreature, state(edgeCreature))).toBe(
+            'Forward cell is out of bounds',
+        );
+
+        const blocked = creature({ position: { x: 2, y: 2 }, facing: 'N' });
+        const withCreature = state(blocked, []);
+        withCreature.creatures.push({
+            id: 'c2',
+            workflow_id: 'wf2',
+            position: { x: 2, y: 1 },
+            facing: 'S',
+        });
+        expect(forwardCellAllowsPlaceItem(blocked, withCreature)).toBe(false);
+        expect(forwardCellPlaceBlockedReason(blocked, withCreature)).toBe(
+            'Forward cell is occupied by a creature',
+        );
     });
 });

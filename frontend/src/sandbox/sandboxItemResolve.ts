@@ -17,6 +17,7 @@ export function resolvedItemType(item: SandboxItemJson): SandboxItemType {
     if (kind === 'fixture') return FIXTURE_ITEM_TYPE;
     if (kind === 'region') return REGION_ITEM_TYPE;
     if (kind === 'item') {
+        if (item.energy != null) return 'food';
         const slug = (item.builtin_slug ?? '').toLowerCase();
         if (slug.includes('ball') || item.color != null) return BALL_ITEM_TYPE;
         return 'food';

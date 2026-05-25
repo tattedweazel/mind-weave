@@ -384,7 +384,7 @@ async def test_sandbox_remove_and_spawn_item_at_cell_with_mutations(db_session):
                         "id": remove_id,
                         "kind": "utility",
                         "utility_type": "sandbox_remove_item_at_cell",
-                        "label": "Remove item",
+                        "label": "Remove Item",
                         "data": {
                             "required_inputs": [
                                 {"key": "item_id", "type": "string", "value": "k1"},
@@ -396,7 +396,7 @@ async def test_sandbox_remove_and_spawn_item_at_cell_with_mutations(db_session):
                         "id": spawn_id,
                         "kind": "utility",
                         "utility_type": "sandbox_spawn_item_at_cell",
-                        "label": "Spawn item",
+                        "label": "Spawn Item",
                         "data": {
                             "required_inputs": [
                                 {"key": "definition_id", "type": "string", "value": reward_def_id},
@@ -612,7 +612,7 @@ def test_sandbox_tick_primitive(client: TestClient):
                         "id": p_id,
                         "kind": "primitive",
                         "primitive_type": "sandbox_tick",
-                        "label": "Tick input",
+                        "label": "Tick Input",
                         "data": {},
                         "position": {"x": 200, "y": 0},
                     },

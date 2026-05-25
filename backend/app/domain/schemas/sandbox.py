@@ -94,6 +94,7 @@ class InventoryItem(BaseModel):
     type: InventoryItemType
     color: Optional[str] = None
     energy: Optional[int] = Field(default=None, ge=0)
+    definition_id: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_fields(self) -> InventoryItem:
@@ -137,7 +138,12 @@ class SandboxItem(BaseModel):
             elif self.definition_kind == "region":
                 effective = REGION_ITEM_TYPE
             elif self.definition_kind == "item":
-                effective = BALL_ITEM_TYPE if self.color else "food"
+                if self.energy is not None:
+                    effective = "food"
+                elif self.color is not None:
+                    effective = BALL_ITEM_TYPE
+                else:
+                    effective = "food"
         if effective == REGION_ITEM_TYPE:
             if not self.color:
                 raise ValueError("region items require color")
@@ -171,6 +177,8 @@ class DecisionIntent(BaseModel):
     reason: Optional[str] = None
     item_type: Optional[PlaceItemFilterType] = None
     inventory_index: Optional[int] = Field(default=None, ge=0)
+    item_id: Optional[str] = None
+    pick_all: Optional[bool] = None
 
 
 class CreatureState(BaseModel):

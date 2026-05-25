@@ -1,3 +1,4 @@
+import type { ItemDefinitionRead } from '../api/types';
 import type {
     BoardDefinitionJson,
     SandboxInventoryItemJson,
@@ -5,6 +6,63 @@ import type {
 } from '../domain/sandbox/types';
 import { normalizeHexColor } from './sandboxColorUtils';
 import { SANDBOX_DEFAULT_FOOD_ENERGY } from './sandboxItemInspectorFields';
+import { resolveBallDisplayColor } from './sandboxSensoryProbeDisplay';
+
+export interface InventoryLabelContext {
+    itemDefinitions?: ReadonlyArray<Pick<ItemDefinitionRead, 'id' | 'name' | 'label' | 'default_color'>>;
+}
+
+function definitionForEntry(
+    entry: SandboxInventoryItemJson,
+    ctx: InventoryLabelContext = {},
+): Pick<ItemDefinitionRead, 'id' | 'name' | 'label' | 'default_color'> | undefined {
+    const defId = entry.definition_id;
+    if (!defId) return undefined;
+    return ctx.itemDefinitions?.find(d => d.id === defId);
+}
+
+export function inventoryEntryTitle(
+    entry: SandboxInventoryItemJson,
+    ctx: InventoryLabelContext = {},
+): string {
+    const def = definitionForEntry(entry, ctx);
+    if (def?.label) {
+        return `Item · ${def.label}`;
+    }
+    if (entry.type === 'ball') {
+        return 'Ball';
+    }
+    return 'Food';
+}
+
+export function inventoryEntryShowsEnergy(
+    entry: SandboxInventoryItemJson,
+    ctx: InventoryLabelContext = {},
+): boolean {
+    return entry.type === 'food';
+}
+
+export function inventoryEntryEnergy(
+    entry: SandboxInventoryItemJson,
+    ctx: InventoryLabelContext = {},
+): number | null {
+    if (!inventoryEntryShowsEnergy(entry, ctx)) return null;
+    if (typeof entry.energy === 'number') return entry.energy;
+    const def = definitionForEntry(entry, ctx);
+    if (def && 'default_energy' in def && typeof def.default_energy === 'number') {
+        return def.default_energy;
+    }
+    return null;
+}
+
+export function inventoryEntryColor(
+    entry: SandboxInventoryItemJson,
+    ctx: InventoryLabelContext = {},
+): string | null {
+    if (entry.type !== 'ball') return null;
+    const def = definitionForEntry(entry, ctx);
+    return resolveBallDisplayColor(entry.color ?? def?.default_color ?? undefined);
+}
 
 export function defaultInventoryEntry(type: SandboxInventoryItemType): SandboxInventoryItemJson {
     if (type === 'ball') {
@@ -13,11 +71,17 @@ export function defaultInventoryEntry(type: SandboxInventoryItemType): SandboxIn
     return { type: 'food', energy: SANDBOX_DEFAULT_FOOD_ENERGY };
 }
 
-export function formatInventoryEntryLabel(entry: SandboxInventoryItemJson): string {
+export function formatInventoryEntryLabel(
+    entry: SandboxInventoryItemJson,
+    ctx: InventoryLabelContext = {},
+): string {
+    const title = inventoryEntryTitle(entry, ctx);
     if (entry.type === 'ball') {
-        return `Ball (${entry.color ?? '?'})`;
+        const color = inventoryEntryColor(entry, ctx);
+        return `${title} (${color ?? '?'})`;
     }
-    return `Food (energy ${entry.energy ?? '?'})`;
+    const energy = inventoryEntryEnergy(entry, ctx);
+    return `${title} (energy ${energy ?? '?'})`;
 }
 
 export function updateBoardCreatureInventory(
@@ -71,11 +135,19 @@ export function patchBoardCreatureInventoryEntry(
     if (next.type === 'ball') {
         const color = normalizeHexColor(next.color ?? '');
         if (!color) return def;
-        next = { type: 'ball', color };
+        next = {
+            type: 'ball',
+            color,
+            ...(next.definition_id ? { definition_id: next.definition_id } : {}),
+        };
     } else if (next.type === 'food') {
         const energy = next.energy;
         if (energy == null || !Number.isInteger(energy) || energy < 0) return def;
-        next = { type: 'food', energy };
+        next = {
+            type: 'food',
+            energy,
+            ...(next.definition_id ? { definition_id: next.definition_id } : {}),
+        };
     }
     inventory[index] = next;
     return updateBoardCreatureInventory(def, creatureId, inventory);

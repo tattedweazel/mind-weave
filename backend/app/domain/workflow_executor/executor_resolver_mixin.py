@@ -154,6 +154,24 @@ def _executor_mod():
     return mod
 
 
+def _conditional_node_result(
+    node_id: str,
+    branch: Literal["true", "false"],
+    passthrough_value: Any,
+    resolved_inputs: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Branching control result with optional value passthrough on the active branch handle."""
+    return {
+        "status": "ok",
+        "output": ConditionalNodeOutput(
+            node_id=node_id,
+            branch=branch,
+            passthrough_value=passthrough_value,
+        ),
+        "details": {"resolved_inputs": resolved_inputs},
+    }
+
+
 class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
     def _coerce_list_value_for_for_loop(self, raw: Any) -> List[Any]:
         if raw is None:
@@ -2543,11 +2561,12 @@ class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
         if condition_val is None or (isinstance(condition_val, str) and condition_val.strip() == ""):
             condition_val = node.data.get("condition")
         branch = "true" if _condition_to_bool(condition_val) else "false"
-        return {
-            "status": "ok",
-            "output": ConditionalNodeOutput(node_id=node.id, branch=branch),
-            "details": {"resolved_inputs": {"condition": condition_val}},
-        }
+        return _conditional_node_result(
+            node.id,
+            branch,
+            condition_val,
+            {"condition": condition_val},
+        )
 
     def _resolve_is_node(
         self,
@@ -2569,11 +2588,12 @@ class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
         input_a = resolved.get("input_a")
         input_b = resolved.get("input_b")
         branch = "true" if _values_equal(input_a, input_b) else "false"
-        return {
-            "status": "ok",
-            "output": ConditionalNodeOutput(node_id=node.id, branch=branch),
-            "details": {"resolved_inputs": {"input_a": input_a, "input_b": input_b}},
-        }
+        return _conditional_node_result(
+            node.id,
+            branch,
+            input_a,
+            {"input_a": input_a, "input_b": input_b},
+        )
 
     def _resolve_is_empty_node(
         self,
@@ -2615,11 +2635,7 @@ class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
             )
         is_empty = len(val) == 0
         branch = "true" if is_empty else "false"
-        return {
-            "status": "ok",
-            "output": ConditionalNodeOutput(node_id=node.id, branch=branch),
-            "details": {"resolved_inputs": {"value": val}},
-        }
+        return _conditional_node_result(node.id, branch, val, {"value": val})
 
     def _resolve_comparison_node(
         self,
@@ -2645,11 +2661,12 @@ class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
         else:
             result = a_val <= b_val
         branch = "true" if result else "false"
-        return {
-            "status": "ok",
-            "output": ConditionalNodeOutput(node_id=node.id, branch=branch),
-            "details": {"resolved_inputs": {"input_a": input_a, "input_b": input_b}},
-        }
+        return _conditional_node_result(
+            node.id,
+            branch,
+            input_a,
+            {"input_a": input_a, "input_b": input_b},
+        )
 
     def _resolve_gt_node(
         self,
@@ -2898,11 +2915,12 @@ class WorkflowExecutorResolverMixin(SandboxNodeResolverMixin):
                 "error": f"low ({low}) must be <= high ({high})",
             }
         branch = "true" if low <= value <= high else "false"
-        return {
-            "status": "ok",
-            "output": ConditionalNodeOutput(node_id=node.id, branch=branch),
-            "details": {"resolved_inputs": {"low": low, "value": value, "high": high}},
-        }
+        return _conditional_node_result(
+            node.id,
+            branch,
+            value,
+            {"low": low, "value": value, "high": high},
+        )
 
     def _resolve_structure_primitive_node(self, node: StructurePrimitiveNode) -> Dict[str, Any]:
         """Load Structure by structure_id and return StructureNodeOutput with parsed schema."""

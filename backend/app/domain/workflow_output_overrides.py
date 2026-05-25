@@ -148,6 +148,16 @@ def _raw_to_intermediate_for_stop(raw: Any) -> NodeOutputUnion:
     return _json_like_to_node_output("", raw)
 
 
+def _conditional_output_override(node_id: str, raw: Any) -> ConditionalNodeOutput | None:
+    if not isinstance(raw, dict):
+        return None
+    branch = raw.get("branch")
+    if branch not in ("true", "false"):
+        return None
+    passthrough = raw.get("passthrough_value") if "passthrough_value" in raw else None
+    return ConditionalNodeOutput(node_id=node_id, branch=branch, passthrough_value=passthrough)
+
+
 def coerce_raw_to_node_output(
     node_id: str,
     parsed: Any,
@@ -485,23 +495,24 @@ def coerce_raw_to_node_output(
         return DateTimeNodeOutput(node_id=node_id, iso=norm)
 
     if isinstance(parsed, BasicConditionalControlNode):
-        if isinstance(raw, dict) and raw.get("branch") in ("true", "false"):
-            return ConditionalNodeOutput(node_id=node_id, branch=raw["branch"])
-        if isinstance(raw, dict) and raw.get("kind") == "conditional" and raw.get("branch") in ("true", "false"):
-            return ConditionalNodeOutput(node_id=node_id, branch=raw["branch"])
+        coerced = _conditional_output_override(node_id, raw)
+        if coerced is not None:
+            return coerced
         raise ValueError(f'output_overrides[{node_id!r}]: basic conditional requires {{"branch": "true"|"false"}}')
 
     if isinstance(parsed, BetweenControlNode):
-        if isinstance(raw, dict) and raw.get("branch") in ("true", "false"):
-            return ConditionalNodeOutput(node_id=node_id, branch=raw["branch"])
+        coerced = _conditional_output_override(node_id, raw)
+        if coerced is not None:
+            return coerced
         raise ValueError(f"output_overrides[{node_id!r}]: between requires branch true/false")
 
     if isinstance(
         parsed,
         (IsControlNode, IsEmptyControlNode, GtControlNode, LtControlNode, GteControlNode, LteControlNode),
     ):
-        if isinstance(raw, dict) and raw.get("branch") in ("true", "false"):
-            return ConditionalNodeOutput(node_id=node_id, branch=raw["branch"])
+        coerced = _conditional_output_override(node_id, raw)
+        if coerced is not None:
+            return coerced
         raise ValueError(f"output_overrides[{node_id!r}]: comparison control requires branch true/false")
 
     if isinstance(parsed, (AndControlNode, OrControlNode, XorControlNode, NotControlNode)):

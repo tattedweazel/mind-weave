@@ -33,6 +33,7 @@ from app.domain.schemas.sandbox import (
 from app.domain.schemas.workflow_run import WorkflowRunResult
 from app.domain.services.board_service import BoardService
 from app.domain.services.document_service import DocumentService
+from app.domain.services.sandbox_definition_service import item_definition_probe_maps
 from app.domain.services.workflow_definition_service import WorkflowDefinitionService
 from app.domain.workflow_executor.broadcast_message import append_broadcast_segments_from_run
 from app.domain.workflow_executor.executor import WorkflowExecutor
@@ -155,6 +156,7 @@ class SandboxService:
         last_errors: Dict[str, Optional[str]] = dict(env.last_errors or {})
         last_fixture_errors: Dict[str, Optional[str]] = dict(env.last_fixture_errors or {})
         user_actions = creature_user_actions or {}
+        definition_defaults = item_definition_probe_maps(self.session, self.user_id).defaults
 
         async def _run_trigger_events(events: list) -> None:
             nonlocal trigger_session
@@ -247,7 +249,8 @@ class SandboxService:
                 last_errors[creature.id] = perr
             elif dec.action == "use_fixture":
                 trigger_events, trigger_session = eng.apply_decision(
-                    st, creature, dec, region_trigger_session=trigger_session
+                    st, creature, dec, region_trigger_session=trigger_session,
+                    definition_defaults=definition_defaults,
                 )
                 await _run_trigger_events(trigger_events)
                 from app.domain.sandbox.engine import _fixture_at_cell, _forward_cell
@@ -300,7 +303,8 @@ class SandboxService:
                             last_fixture_errors[creature.id] = fx_err
             else:
                 trigger_events, trigger_session = eng.apply_decision(
-                    st, creature, dec, region_trigger_session=trigger_session
+                    st, creature, dec, region_trigger_session=trigger_session,
+                    definition_defaults=definition_defaults,
                 )
                 await _run_trigger_events(trigger_events)
                 last_errors[creature.id] = None

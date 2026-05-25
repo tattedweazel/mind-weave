@@ -735,7 +735,7 @@ def _create_fixture_get_position_workflow(client: TestClient) -> str:
                         "id": gp_id,
                         "kind": "utility",
                         "utility_type": "sandbox_get_position",
-                        "label": "Get position",
+                        "label": "Get Position",
                         "data": {},
                         "position": {"x": 200, "y": 0},
                     },
@@ -857,7 +857,7 @@ def _create_fixture_key_swap_workflow(client: TestClient, *, reward_definition_i
                         "id": gci_id,
                         "kind": "utility",
                         "utility_type": "sandbox_get_cell_items",
-                        "label": "Get cell items",
+                        "label": "Get Cell Items",
                         "data": {},
                         "position": {"x": 200, "y": 0},
                     },
@@ -893,7 +893,7 @@ def _create_fixture_key_swap_workflow(client: TestClient, *, reward_definition_i
                         "id": remove_id,
                         "kind": "utility",
                         "utility_type": "sandbox_remove_item_at_cell",
-                        "label": "Remove item",
+                        "label": "Remove Item",
                         "data": {
                             "required_inputs": [
                                 {"key": "item_id", "type": "string", "value": None},
@@ -905,7 +905,7 @@ def _create_fixture_key_swap_workflow(client: TestClient, *, reward_definition_i
                         "id": spawn_id,
                         "kind": "utility",
                         "utility_type": "sandbox_spawn_item_at_cell",
-                        "label": "Spawn item",
+                        "label": "Spawn Item",
                         "data": {
                             "required_inputs": [
                                 {"key": "definition_id", "type": "string", "value": reward_definition_id},

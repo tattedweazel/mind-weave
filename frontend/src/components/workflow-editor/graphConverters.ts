@@ -1489,7 +1489,7 @@ export function getSourceOutputType(nodes: Node[], sourceId: string, sourceHandl
         'lteControl',
         'betweenControl',
     ];
-    if (branchControls.includes(src.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) return 'boolean';
+    if (branchControls.includes(src.type ?? '') && (sourceHandle === 'true' || sourceHandle === 'false')) return 'any';
     if (src.type === 'basicConditional') return 'basic_conditional';
     if (src.type === 'isControl') return 'is_control';
     if (src.type === 'isEmptyControl') return 'is_empty';
@@ -2187,7 +2187,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_get_position',
-            label: d?.label ?? 'Get position',
+            label: d?.label ?? 'Get Position',
             data: {},
             position: pos,
         };
@@ -2198,7 +2198,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_get_facing',
-            label: d?.label ?? 'Get facing',
+            label: d?.label ?? 'Get Facing',
             data: {},
             position: pos,
         };
@@ -2209,7 +2209,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_get_nearby',
-            label: d?.label ?? 'Get nearby',
+            label: d?.label ?? 'Get Nearby',
             data: {},
             position: pos,
         };
@@ -2220,7 +2220,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_get_inventory',
-            label: d?.label ?? 'Get inventory',
+            label: d?.label ?? 'Get Inventory',
             data: {},
             position: pos,
         };
@@ -2253,7 +2253,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_get_cell_items',
-            label: d?.label ?? 'Get cell items',
+            label: d?.label ?? 'Get Cell Items',
             data: {},
             position: pos,
         };
@@ -2270,7 +2270,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_remove_item_at_cell',
-            label: d?.label ?? 'Remove item',
+            label: d?.label ?? 'Remove Item',
             data: { required_inputs: requiredInputs },
             position: pos,
         };
@@ -2294,7 +2294,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_spawn_item_at_cell',
-            label: d?.label ?? 'Spawn item',
+            label: d?.label ?? 'Spawn Item',
             data: { required_inputs: requiredInputs },
             position: pos,
         };
@@ -2311,7 +2311,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_pick_up_item',
-            label: d?.label ?? 'Pick up item',
+            label: d?.label ?? 'Pick Up Item',
             data: { required_inputs: requiredInputs },
             position: pos,
         };
@@ -2336,7 +2336,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'utility',
             utility_type: 'sandbox_place_item',
-            label: d?.label ?? 'Place item',
+            label: d?.label ?? 'Place Item',
             data: { required_inputs: requiredInputs },
             position: pos,
         };
@@ -2358,11 +2358,11 @@ export function flowNodeToApp(n: Node): AppGraphNode {
                     : 'sandbox_idle';
         const defaultLabel =
             n.type === 'sandboxMoveForward'
-                ? 'Move forward'
+                ? 'Move Forward'
                 : n.type === 'sandboxTurnLeft'
-                  ? 'Turn left'
+                  ? 'Turn Left'
                   : n.type === 'sandboxTurnRight'
-                    ? 'Turn right'
+                    ? 'Turn Right'
                     : 'Idle';
         const requiredInputs = Array.isArray(d?.required_inputs) && d.required_inputs.length > 0
             ? d.required_inputs.filter((r: { key?: string }) => r?.key === 'reason')
@@ -3108,7 +3108,7 @@ export function flowNodeToApp(n: Node): AppGraphNode {
             id: n.id,
             kind: 'primitive',
             primitive_type: 'sandbox_tick',
-            label: d?.label ?? 'Tick input',
+            label: d?.label ?? 'Tick Input',
             data: {},
             position: pos,
         };

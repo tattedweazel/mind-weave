@@ -113,7 +113,7 @@ async def create_sandbox_board(
     defn = None
     if body.definition is not None:
         try:
-            defn = BoardDefinition.model_validate(body.definition)
+            defn = svc.parse_and_normalize_board_definition(body.definition)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     row = svc.create_board(
@@ -151,7 +151,7 @@ async def update_sandbox_board(
     defn = None
     if body.definition is not None:
         try:
-            defn = BoardDefinition.model_validate(body.definition)
+            defn = svc.parse_and_normalize_board_definition(body.definition)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     row = svc.update_board(

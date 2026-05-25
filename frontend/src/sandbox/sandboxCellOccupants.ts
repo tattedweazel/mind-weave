@@ -165,7 +165,7 @@ function cellHasNonRegionItems(items: SandboxItemJson[]): boolean {
     return items.some(it => !isRegionItem(it));
 }
 
-function canPlacePickableItem(items: SandboxItemJson[], hasCreatures: boolean): boolean {
+export function canPlacePickableItem(items: SandboxItemJson[], hasCreatures: boolean): boolean {
     if (hasCreatures) return false;
     const solid = getSolidItems(items);
     if (solid.length === 0) return true;

@@ -414,6 +414,16 @@ def test_manifest_palette_handles_cover_default_colors():
     assert not unset, f"palette_defaults keys missing from manifest handles: {unset}"
 
 
+def test_manifest_palette_handles_have_default_colors():
+    raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    handles = {s["palette_handle"] for s in raw["steps"]}
+    extras = raw.get("palette_extras") or []
+    handles |= {e["palette_handle"] for e in extras}
+    pseudo = WORKFLOW_PALETTE_FAMILY_KEYS | {"any", "workflow", "start", "stop", "audio"}
+    missing = sorted(h for h in handles if h not in pseudo and h not in DEFAULT_PALETTE_COLORS)
+    assert not missing, f"manifest palette_handle keys missing from DEFAULT_PALETTE_COLORS: {missing}"
+
+
 def test_manifest_palette_handles_unique():
     raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     step_handles = [s["palette_handle"] for s in raw["steps"]]

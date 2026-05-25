@@ -3,6 +3,7 @@ from typing import AbstractSet, Any, Dict, List, Optional
 
 from app.domain.schemas import (
     BooleanNodeOutput,
+    ConditionalNodeOutput,
     DateTimeNodeOutput,
     DictionaryNodeOutput,
     DocumentNodeOutput,
@@ -22,6 +23,46 @@ from app.domain.workflow_executor.gmail_llm_prompt import (
     format_gmail_message_dict_for_llm_prompt,
     is_gmail_like_message_dict,
 )
+
+
+def _branch_control_passthrough_slot(
+    out: NodeOutputUnion,
+    source_handle: Optional[str],
+    target_handle: Optional[str],
+) -> NodeOutputUnion | None:
+    """Return typed passthrough for an active branch data edge, or None to use default slot resolution."""
+    if not isinstance(out, ConditionalNodeOutput):
+        return None
+    sh = source_handle or ""
+    th = target_handle or ""
+    if sh not in ("true", "false") or sh != out.branch or out.passthrough_value is None:
+        return None
+    if th in ("", "trigger"):
+        return None
+    return passthrough_value_to_node_output(out.node_id, out.passthrough_value)
+
+
+def _is_branch_control_signal_edge(out: NodeOutputUnion | None, source_handle: Optional[str], target_handle: Optional[str]) -> bool:
+    if not isinstance(out, ConditionalNodeOutput):
+        return False
+    sh = source_handle or ""
+    th = target_handle or ""
+    return sh in ("true", "false") and th in ("", "trigger")
+
+
+def passthrough_value_to_node_output(node_id: str, val: Any) -> NodeOutputUnion:
+    """Convert a branching control passthrough payload into a typed node output."""
+    if isinstance(val, list):
+        return ListNodeOutput(node_id=node_id, data=list(val))
+    if isinstance(val, dict):
+        return DictionaryNodeOutput(node_id=node_id, data=dict(val))
+    if isinstance(val, bool):
+        return BooleanNodeOutput(node_id=node_id, value=val)
+    if isinstance(val, int):
+        return IntNodeOutput(node_id=node_id, value=val)
+    if val is None:
+        return StringNodeOutput(node_id=node_id, text="")
+    return StringNodeOutput(node_id=node_id, text=str(val))
 
 
 def _get_slot_value(out: NodeOutputUnion, source_handle: Optional[str]) -> NodeOutputUnion:
@@ -221,7 +262,8 @@ def _resolve_upstream_for_node(
         out = outputs.get(src)
         if out is None:
             continue
-        slot_val = _get_slot_value(out, edge.source_handle)
+        passthrough_slot = _branch_control_passthrough_slot(out, edge.source_handle, edge.target_handle)
+        slot_val = passthrough_slot if passthrough_slot is not None else _get_slot_value(out, edge.source_handle)
         result.append(slot_val)
     return result
 
@@ -271,7 +313,8 @@ def _resolve_inputs_by_target_handle(
             out = outputs.get(src)
             if out is None:
                 continue
-            slot = _get_slot_value(out, edge.source_handle)
+            passthrough_slot = _branch_control_passthrough_slot(out, edge.source_handle, edge.target_handle)
+            slot = passthrough_slot if passthrough_slot is not None else _get_slot_value(out, edge.source_handle)
             expected_type = _expected_type_for_key(node_required_inputs, key)
             upstream_val = _plain_upstream_from_slot(slot, expected_type, input_key=key)
             break
@@ -305,6 +348,7 @@ def _resolve_inputs_by_target_handle(
         if e.target == node_id
         and (e.target_handle is None or e.target_handle == "")
         and (e.target_handle or "") != "trigger"
+        and not _is_branch_control_signal_edge(outputs.get(e.source), e.source_handle, e.target_handle)
     ]
     if missing_keys and null_edges:
         for i, edge in enumerate(null_edges):
@@ -315,7 +359,8 @@ def _resolve_inputs_by_target_handle(
             out = outputs.get(src)
             if out is None:
                 continue
-            slot = _get_slot_value(out, edge.source_handle)
+            passthrough_slot = _branch_control_passthrough_slot(out, edge.source_handle, edge.target_handle)
+            slot = passthrough_slot if passthrough_slot is not None else _get_slot_value(out, edge.source_handle)
             et = _expected_type_for_key(node_required_inputs, key)
             result[key] = _plain_upstream_from_slot(slot, et, input_key=key)
 

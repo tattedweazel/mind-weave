@@ -5,7 +5,7 @@ import {
     createEmptyBoardDefinition,
     updateBoardItemMetadata,
 } from './boardBuilderLocalEdits';
-import { placeBallInteraction, placeFoodInteraction, placeRegionInteraction } from './sandboxCellInteractions';
+import { placeBallInteraction, placeFoodInteraction, placeRegionInteraction, placeItemDefinitionInteraction } from './sandboxCellInteractions';
 import { SANDBOX_DEFAULT_FOOD_ENERGY } from './sandboxItemInspectorFields';
 
 describe('boardBuilderLocalEdits', () => {
@@ -44,6 +44,21 @@ describe('boardBuilderLocalEdits', () => {
         const updated = updateBoardItemMetadata(def, 'w1', { energy: 99 });
         expect(updated).toBe(def);
         expect(updated.items[0]?.energy).toBeUndefined();
+    });
+
+    it('places definition-backed item with energy only when both defaults exist', () => {
+        const def = applyBoardBuilderInteraction(
+            createEmptyBoardDefinition(4, 4),
+            placeItemDefinitionInteraction({ x: 1, y: 1 }, 'item-def-milk', { energy: 25 }),
+        );
+        expect(def.items[0]).toMatchObject({
+            definition_id: 'item-def-milk',
+            definition_kind: 'item',
+            role: 'pickable',
+            energy: 25,
+            position: { x: 1, y: 1 },
+        });
+        expect(def.items[0]?.color).toBeUndefined();
     });
 
     it('remove_item preserves fixture and removes pickables', () => {

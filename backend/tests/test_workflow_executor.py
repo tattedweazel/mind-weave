@@ -5479,6 +5479,285 @@ def test_is_empty_invalid_type_errors(client: TestClient):
     assert "is_empty" in (ie_res.get("error") or "").lower()
 
 
+def test_is_empty_passthrough_false_branch_to_len_from_list(client: TestClient):
+    """Is Empty? false branch forwards wired list to Len from List without upstream rewire."""
+    list_id = "n_list_five"
+    ie_id = "n_is_empty"
+    len_id = "n_len"
+    true_id = "n_true_skip"
+    stop_id = "n_stop"
+    items = [1, 2, 3, 4, 5]
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "Is Empty passthrough len",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "n_start",
+                        "kind": "start",
+                        "label": "Start",
+                        "data": {"required_inputs": []},
+                        "position": {"x": 50, "y": 100},
+                    },
+                    {
+                        "id": list_id,
+                        "kind": "primitive",
+                        "primitive_type": "list",
+                        "label": "Five",
+                        "data": items,
+                        "position": {"x": 150, "y": 100},
+                    },
+                    _is_empty_node(ie_id, value=None),
+                    {
+                        "id": len_id,
+                        "kind": "utility",
+                        "utility_type": "len_from_list",
+                        "label": "Len",
+                        "data": {},
+                        "position": {"x": 450, "y": 150},
+                    },
+                    {
+                        "id": true_id,
+                        "kind": "primitive",
+                        "primitive_type": "string",
+                        "label": "True",
+                        "data": {"text": "empty"},
+                        "position": {"x": 450, "y": 50},
+                    },
+                    {
+                        "id": stop_id,
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": "int"}]},
+                        "position": {"x": 650, "y": 100},
+                    },
+                ],
+                "edges": [
+                    {"source": "n_start", "target": ie_id},
+                    {"source": list_id, "target": ie_id, "target_handle": "value"},
+                    {"source": ie_id, "target": true_id, "source_handle": "true"},
+                    {"source": ie_id, "target": len_id, "source_handle": "false", "target_handle": "trigger"},
+                    {"source": ie_id, "target": len_id, "source_handle": "false", "target_handle": "list"},
+                    {"source": len_id, "target": stop_id},
+                ],
+            },
+        },
+    )
+    assert workflow_res.status_code == 201
+    workflow_id = workflow_res.json()["id"]
+    run_res = client.post(f"/api/v1/workflow-definitions/{workflow_id}/run")
+    assert run_res.status_code == 200
+    result = run_res.json()
+    assert result["status"] == "ok"
+    node_ids = {r["node_id"] for r in result["node_results"]}
+    assert len_id in node_ids
+    assert true_id not in node_ids
+    len_result = next(r for r in result["node_results"] if r["node_id"] == len_id)
+    assert len_result["output"]["value"] == 5
+    ie_result = next(r for r in result["node_results"] if r["node_id"] == ie_id)
+    assert ie_result["output"]["branch"] == "false"
+    assert ie_result["output"]["passthrough_value"] == items
+
+
+def test_is_control_passthrough_input_a_on_true_branch(client: TestClient):
+    """Is? true branch forwards input_a to downstream data input."""
+    list_a_id = "n_list_a"
+    list_b_id = "n_list_b"
+    is_id = "n_is"
+    len_id = "n_len"
+    false_id = "n_false_skip"
+    stop_id = "n_stop"
+    shared = ["x", "y"]
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "Is passthrough input_a",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "n_start",
+                        "kind": "start",
+                        "label": "Start",
+                        "data": {"required_inputs": []},
+                        "position": {"x": 50, "y": 100},
+                    },
+                    {
+                        "id": list_a_id,
+                        "kind": "primitive",
+                        "primitive_type": "list",
+                        "label": "A",
+                        "data": shared,
+                        "position": {"x": 150, "y": 80},
+                    },
+                    {
+                        "id": list_b_id,
+                        "kind": "primitive",
+                        "primitive_type": "list",
+                        "label": "B",
+                        "data": shared,
+                        "position": {"x": 150, "y": 120},
+                    },
+                    {
+                        "id": is_id,
+                        "kind": "control",
+                        "control_type": "is",
+                        "label": "Is?",
+                        "data": {
+                            "required_inputs": [
+                                {"key": "input_a", "type": "any", "value": None},
+                                {"key": "input_b", "type": "any", "value": None},
+                            ]
+                        },
+                        "position": {"x": 350, "y": 100},
+                    },
+                    {
+                        "id": len_id,
+                        "kind": "utility",
+                        "utility_type": "len_from_list",
+                        "label": "Len",
+                        "data": {},
+                        "position": {"x": 550, "y": 80},
+                    },
+                    {
+                        "id": false_id,
+                        "kind": "primitive",
+                        "primitive_type": "string",
+                        "label": "False",
+                        "data": {"text": "not-equal"},
+                        "position": {"x": 550, "y": 140},
+                    },
+                    {
+                        "id": stop_id,
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": "int"}]},
+                        "position": {"x": 750, "y": 100},
+                    },
+                ],
+                "edges": [
+                    {"source": "n_start", "target": is_id},
+                    {"source": list_a_id, "target": is_id, "target_handle": "input_a"},
+                    {"source": list_b_id, "target": is_id, "target_handle": "input_b"},
+                    {"source": is_id, "target": len_id, "source_handle": "true", "target_handle": "trigger"},
+                    {"source": is_id, "target": len_id, "source_handle": "true", "target_handle": "list"},
+                    {"source": is_id, "target": false_id, "source_handle": "false"},
+                    {"source": len_id, "target": stop_id},
+                ],
+            },
+        },
+    )
+    assert workflow_res.status_code == 201
+    workflow_id = workflow_res.json()["id"]
+    run_res = client.post(f"/api/v1/workflow-definitions/{workflow_id}/run")
+    assert run_res.status_code == 200
+    result = run_res.json()
+    assert result["status"] == "ok"
+    node_ids = {r["node_id"] for r in result["node_results"]}
+    assert len_id in node_ids
+    assert false_id not in node_ids
+    len_result = next(r for r in result["node_results"] if r["node_id"] == len_id)
+    assert len_result["output"]["value"] == 2
+
+
+def test_between_passthrough_value_on_true_branch(client: TestClient):
+    """Between true branch forwards value to downstream Is? input_a."""
+    bet_id = "n_between"
+    is_id = "n_is_compare"
+    true_id = "n_str_true"
+    false_id = "n_false_skip"
+    stop_id = "n_stop"
+    workflow_res = client.post(
+        "/api/v1/workflow-definitions/",
+        json={
+            "name": "Between passthrough value",
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "n_start",
+                        "kind": "start",
+                        "label": "Start",
+                        "data": {"required_inputs": []},
+                        "position": {"x": 50, "y": 100},
+                    },
+                    {
+                        "id": bet_id,
+                        "kind": "control",
+                        "control_type": "between",
+                        "label": "Between",
+                        "data": {
+                            "required_inputs": [
+                                {"key": "low", "type": "int", "value": 1},
+                                {"key": "value", "type": "int", "value": 5},
+                                {"key": "high", "type": "int", "value": 10},
+                            ]
+                        },
+                        "position": {"x": 250, "y": 100},
+                    },
+                    {
+                        "id": is_id,
+                        "kind": "control",
+                        "control_type": "is",
+                        "label": "Is 5?",
+                        "data": {
+                            "required_inputs": [
+                                {"key": "input_a", "type": "any", "value": None},
+                                {"key": "input_b", "type": "int", "value": 5},
+                            ]
+                        },
+                        "position": {"x": 450, "y": 80},
+                    },
+                    {
+                        "id": true_id,
+                        "kind": "primitive",
+                        "primitive_type": "string",
+                        "label": "True",
+                        "data": {"text": "in-range"},
+                        "position": {"x": 650, "y": 80},
+                    },
+                    {
+                        "id": false_id,
+                        "kind": "primitive",
+                        "primitive_type": "string",
+                        "label": "False",
+                        "data": {"text": "out-of-range"},
+                        "position": {"x": 450, "y": 140},
+                    },
+                    {
+                        "id": stop_id,
+                        "kind": "stop",
+                        "label": "Stop",
+                        "data": {"required_outputs": [{"key": "output", "type": "string"}]},
+                        "position": {"x": 850, "y": 100},
+                    },
+                ],
+                "edges": [
+                    {"source": "n_start", "target": bet_id},
+                    {"source": bet_id, "target": is_id, "source_handle": "true", "target_handle": "trigger"},
+                    {"source": bet_id, "target": is_id, "source_handle": "true", "target_handle": "input_a"},
+                    {"source": bet_id, "target": false_id, "source_handle": "false"},
+                    {"source": is_id, "target": true_id, "source_handle": "true"},
+                    {"source": true_id, "target": stop_id},
+                ],
+            },
+        },
+    )
+    assert workflow_res.status_code == 201
+    workflow_id = workflow_res.json()["id"]
+    run_res = client.post(f"/api/v1/workflow-definitions/{workflow_id}/run")
+    assert run_res.status_code == 200
+    result = run_res.json()
+    assert result["status"] == "ok"
+    node_ids = {r["node_id"] for r in result["node_results"]}
+    assert is_id in node_ids
+    assert true_id in node_ids
+    assert false_id not in node_ids
+    stop_result = next(r for r in result["node_results"] if r["node_id"] == stop_id)
+    assert stop_result["output"]["text"] == "in-range"
+    bet_result = next(r for r in result["node_results"] if r["node_id"] == bet_id)
+    assert bet_result["output"]["passthrough_value"] == 5
+
+
 def test_is_control_equal_lists_true_branch(client: TestClient):
     """Wire two List nodes with same data -> True branch."""
     list_a_id = "n_list_a"

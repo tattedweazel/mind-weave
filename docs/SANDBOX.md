@@ -39,19 +39,19 @@ Navigation-focused utilities in the workflow editor (**Sandbox Utilities** secti
 
 | Utility | Role |
 |---------|------|
-| **Tick input** (`sandbox_tick` primitive) | Full `SandboxTickInput` dict (includes `tick` for scripted sequences) |
-| **Get position** | Cell probe for the focused creature's current cell, or the **fixture cell** in fixture workflows — see [Cell probe shape](#cell-probe-shape) |
-| **Get facing** | `"N"` \| `"E"` \| `"S"` \| `"W"` |
-| **Get nearby** | Eight neighbors clockwise from facing; each cell uses the [cell probe shape](#cell-probe-shape) |
-| **Get inventory** | List of held items on the focused creature (`{type, color?}` or `{type, energy?}`) |
-| **Get cell items** | List of pickables at the **fixture cell** — **simulation-only** during fixture `use_fixture` workflows |
-| **Remove item** | Remove a pickable by instance **`item_id`** at the fixture cell — fixture workflows only; set `item_id` in Explorer or wire from a loop |
-| **Spawn item** | Spawn a pickable at the fixture cell (or neighbor via `target`) — fixture workflows only; set `definition_id`, `target`, optional `energy`/`color` in Explorer or wire handles |
-| **Move forward** | Emits `{action: "move_forward"}` for Stop |
-| **Turn left** / **Turn right** | Emits turn action dict for Stop |
+| **Tick Input** (`sandbox_tick` primitive) | Full `SandboxTickInput` dict (includes `tick` for scripted sequences) |
+| **Get Position** | Cell probe for the focused creature's current cell, or the **fixture cell** in fixture workflows — see [Cell probe shape](#cell-probe-shape) |
+| **Get Facing** | `"N"` \| `"E"` \| `"S"` \| `"W"` |
+| **Get Nearby** | Eight neighbors clockwise from facing; each cell uses the [cell probe shape](#cell-probe-shape) |
+| **Get Inventory** | List of held items on the focused creature (`{type, color?}` or `{type, energy?}`; optional `definition_id` when picked up from a definition-backed pickable) |
+| **Get Cell Items** | List of pickables at the **fixture cell** — **simulation-only** during fixture `use_fixture` workflows |
+| **Remove Item** | Remove a pickable by instance **`item_id`** at the fixture cell — fixture workflows only; set `item_id` in Explorer or wire from a loop |
+| **Spawn Item** | Spawn a pickable at the fixture cell (or neighbor via `target`) — fixture workflows only; set `definition_id`, `target`, optional `energy`/`color` in Explorer or wire handles |
+| **Move Forward** | Emits `{action: "move_forward"}` for Stop |
+| **Turn Left** / **Turn Right** | Emits turn action dict for Stop |
 | **Idle** | Emits `{action: "idle"}` for Stop |
-| **Pick up item** | Emits `{action: "pick_up_item"}` — picks up **ball** or **food** in the **forward adjacent** cell into inventory |
-| **Place item** | Emits `{action: "place_item", item_type?: "ball" \| "food", inventory_index?: number}` — places the chosen inventory entry (by index, or first / first matching `item_type`) on the **forward adjacent** cell |
+| **Pick Up Item** | Emits `{action: "pick_up_item"}` — picks up **ball** or **food** in the **forward adjacent** cell into inventory |
+| **Place Item** | Emits `{action: "place_item", item_type?: "ball" \| "food", inventory_index?: number}` — places the chosen inventory entry (by index, or first / first matching `item_type`) on the **forward adjacent** cell |
 | **Prompt for User Action** | Emits a `DecisionIntent` chosen in the **Simulation** remote-control modal (see below) |
 | **Force Simulation Pause** | Emits `{ "pause": true }` and sets tick `simulation_effects.force_pause` — **simulation-only** (region trigger workflows, etc.) |
 
@@ -61,7 +61,7 @@ Wire one action node (or a conditional that picks one) to **Stop** `output` (dic
 
 ### Cell probe shape
 
-**Get position**, **Get nearby** (each neighbor), and the Simulation **Position** / **Nearby** sensory probes share this dictionary shape:
+**Get Position**, **Get Nearby** (each neighbor), and the Simulation **Position** / **Nearby** sensory probes share this dictionary shape:
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -73,7 +73,9 @@ Wire one action node (or a conditional that picks one) to **Stop** `output` (dic
 
 Each item summary: `{ id, kind, definition_id?, energy?, color?, label }`. **`kind`** is `item` for definition-backed pickables, or legacy built-in types (`food`, `ball`) when no definition is linked. **`energy`** and **`color`** use instance values when set, otherwise fall back to the item definition defaults. **`label`** is resolved for display: instance `label` when set, else the item definition's label, else a built-in fallback (`Food (48)`, `Ball (#RRGGBB)`, etc.).
 
-In **creature brain** / `sandbox_tick` context, **Get position** probes the focused creature's cell. In **fixture workflows** (server-injected `sandbox_fixture` run override), **Get position** probes the **fixture cell** (where stacked pickables live). **Get facing**, **Get nearby**, and **Get inventory** still use the interacting actor's position/facing in fixture workflows. **Get cell items**, **Remove item**, and **Spawn item** run during fixture `use_fixture` workflows only; see [SANDBOX_DEFINITIONS.md — Fixture interaction](SANDBOX_DEFINITIONS.md#fixture-interaction-use_fixture).
+**Pick up** uses the same energy/color resolution when converting a world pickable into `creature.inventory`: instance override → item definition default → no pickup (the world item stays on the cell). Energy semantics take precedence over visual color when both exist on an ItemDefinition.
+
+In **creature brain** / `sandbox_tick` context, **Get Position** probes the focused creature's cell. In **fixture workflows** (server-injected `sandbox_fixture` run override), **Get Position** probes the **fixture cell** (where stacked pickables live). **Get Facing**, **Get Nearby**, and **Get Inventory** still use the interacting actor's position/facing in fixture workflows. **Get Cell Items**, **Remove Item**, and **Spawn Item** run during fixture `use_fixture` workflows only; see [SANDBOX_DEFINITIONS.md — Fixture interaction](SANDBOX_DEFINITIONS.md#fixture-interaction-use_fixture).
 
 ### Manual control brain (Prompt for User Action)
 
@@ -86,12 +88,40 @@ On each **Step** or **Play** tick, the SPA **auto-pauses**, opens a **remote-con
 | Simulation UI | Behavior |
 |---------------|----------|
 | D-pad | **Forward**, **Turn left**, **Turn right**, **Idle** |
-| Secondary | **Pick up item** only when forward cell is **ball** or **food**; **Place item** only when the creature holds at least one item — opens **Inventory** selection (choose a held item; **Confirm** requires an empty forward cell) |
-| Sensory probes | **Nearby**, **Position**, **Facing**, **Inventory** — client-side reads from the current envelope (no extra HTTP). One structured readout at a time (latest click replaces the previous): compass ring for **Nearby** (primary kind badge plus a separate **Region** chip when `region_label` is present; labeled regions show the label text, unlabeled regions show **Region**), coordinate rows for **Position**, compass badge for **Facing**, inventory cards for **Inventory** (balls show a colored **Ball** label and matching swatch; food shows **Food** with a separate energy badge; selectable rows when **Place item** is active). Optional collapsible **Raw JSON** for debugging. Re-click the active probe to collapse; cached results restore on re-open for the modal session. |
+| Secondary | **Use** when forward cell has a **fixture**; **Pick up item** when forward cell has one or more pickables (`stack_count > 0`), including on fixture cells — when multiple pickables are stacked, choose one item or **Pick up all**, then **Confirm** (optional tick fields: `item_id`, `pick_all`); **Place item** only when the creature holds at least one item — opens **Inventory** selection (choose a held item; **Confirm** requires a **placeable** forward cell: empty, pickable stack, or fixture stack — not wall/terrain, another creature, or out of bounds) |
+| Sensory probes | **Nearby**, **Position**, **Facing**, **Inventory** — client-side reads from the current envelope (no extra HTTP). One structured readout at a time (latest click replaces the previous): compass ring for **Nearby** (primary kind badge plus a separate **Region** chip when `region_label` is present; labeled regions show the label text, unlabeled regions show **Region**), coordinate rows for **Position**, compass badge for **Facing**, inventory cards for **Inventory** (built-in balls show a colored **Ball** label and matching swatch; built-in food shows **Food** with a separate energy badge; definition-backed held items show **Item · {label}** when `definition_id` is present, with energy or color as appropriate; selectable rows when **Place item** is active). Optional collapsible **Raw JSON** for debugging. Re-click the active probe to collapse; cached results restore on re-open for the modal session. |
 | Cancel | Aborts the tick; playback stays paused |
 | Confirm | Submits the tick; **Play** resumes if it was active before the modal opened (**Step** stays paused) |
 
 **Tick body** (optional):
+
+```json
+{
+  "interactions": [],
+  "state_version": 1,
+  "creature_user_actions": {
+    "creature-id": {
+      "action": "pick_up_item",
+      "item_id": "food-instance-id"
+    }
+  }
+}
+```
+
+Or pick up every pickable on the forward cell:
+
+```json
+{
+  "creature_user_actions": {
+    "creature-id": {
+      "action": "pick_up_item",
+      "pick_all": true
+    }
+  }
+}
+```
+
+Example **place_item** payload:
 
 ```json
 {
@@ -107,29 +137,29 @@ On each **Step** or **Play** tick, the SPA **auto-pauses**, opens a **remote-con
 }
 ```
 
-The executor receives `sandbox_user_action` in `input_overrides` for that creature’s brain run. `reason` is auto-filled (e.g. `user: move_forward`, `user: place_item:ball@0`) and appears in **Run Logs**. Brains without this node ignore `creature_user_actions`. Brains with the node but no entry for that creature record `last_errors` and skip applying a decision for that creature.
+The executor receives `sandbox_user_action` in `input_overrides` for that creature’s brain run. `reason` is auto-filled (e.g. `user: move_forward`, `user: place_item:ball@0`, `user: pick_up_item:f1`, `user: pick_up_item:all`) and appears in **Run Logs**. Brains without this node ignore `creature_user_actions`. Brains with the node but no entry for that creature record `last_errors` and skip applying a decision for that creature.
 
 Compass: **North = decreasing y**, East = +x. Default spawn facing: **North**.
 
 ### Starter workflow
 
-Built-in graph: **Start → Get nearby → forward-cell kind → Is empty? → Move forward (true) / Turn left (false) → Stop** (left-hand wall follower). Wire **Is** `true`/`false` branch handles directly to action nodes — do not chain **Is → Basic Conditional**, because the conditional only schedules on its `true` incoming branch and will skip the `false` path from **Is**.
+Built-in graph: **Start → Get Nearby → forward-cell kind → Is empty? → Move Forward (true) / Turn Left (false) → Stop** (left-hand wall follower). Wire **Is** `true`/`false` branch handles directly to action nodes — do not chain **Is → Basic Conditional**, because the conditional only schedules on its `true` incoming branch and will skip the `false` path from **Is**. Branching controls (**Is?**, **Is Empty?**, comparisons, **Between**, **Basic Conditional**) can also forward their primary wired value on the taken **True** / **False** handle (separate edges for **trigger** vs data inputs) so branch bodies do not need to rewire upstream nodes.
 
-If forward `kind == "empty"`, **Move forward**; otherwise **Turn left** (walls, canvas edge / `out_of_bounds`, creatures, food).
+If forward `kind == "empty"`, **Move Forward**; otherwise **Turn Left** (walls, canvas edge / `out_of_bounds`, creatures, food).
 
 Seeded as `starter_sandbox_behavior` via [`starter_workflow_seed.py`](../backend/app/domain/sandbox/starter_workflow_seed.py).
 
 ### Example brains
 
-**Reactive wall follower** (same as starter): each tick, index `0` of **Get nearby** is the forward cell; if `kind == "empty"`, **Move forward**, else **Turn left**.
+**Reactive wall follower** (same as starter): each tick, index `0` of **Get Nearby** is the forward cell; if `kind == "empty"`, **Move Forward**, else **Turn Left**.
 
-**Scripted brute-force path**: use **Tick input** → **Dictionary value by key** (`tick`) → conditionals mapping tick numbers to **Move forward** / **Turn left** / **Turn right** nodes.
+**Scripted brute-force path**: use **Tick Input** → **Dictionary value by key** (`tick`) → conditionals mapping tick numbers to **Move Forward** / **Turn Left** / **Turn Right** nodes.
 
 ## Schema 2.4.0 (region labels)
 
-Each **`region`** item stores a required string **`label`** (may be `""`). **Get nearby** exposes region metadata on each neighbor cell as **`region_label`**: `null` when no region is present, otherwise the region’s label (including empty string). Primary **`kind`** is unchanged — a cell with only a region still reports `kind: "empty"`; food/wall/ball/creature kinds take precedence when stacked. Regions **do not** block movement.
+Each **`region`** item stores a required string **`label`** (may be `""`). **Get Nearby** exposes region metadata on each neighbor cell as **`region_label`**: `null` when no region is present, otherwise the region’s label (including empty string). Primary **`kind`** is unchanged — a cell with only a region still reports `kind: "empty"`; food/wall/ball/creature kinds take precedence when stacked. Regions **do not** block movement.
 
-Example brain pattern: **Get nearby** → index `0` (forward) → **Dictionary value by key** `region_label` → **Is?** vs `"target"` → branch to an action.
+Example brain pattern: **Get Nearby** → index `0` (forward) → **Dictionary value by key** `region_label` → **Is?** vs `"target"` → branch to an action.
 
 ## Schema 2.2.0 (regions)
 

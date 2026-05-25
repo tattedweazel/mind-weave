@@ -125,6 +125,8 @@ export const PROBE_HINTS: Record<'nearby' | 'position' | 'facing' | 'inventory',
 
 export const INVENTORY_SELECTION_HINT = 'Choose an item to place';
 
+export const PICK_UP_SELECTION_HINT = 'Choose an item to pick up';
+
 export const PROBE_LABELS: Record<'nearby' | 'position' | 'facing' | 'inventory', string> = {
     nearby: 'Nearby',
     position: 'Position',

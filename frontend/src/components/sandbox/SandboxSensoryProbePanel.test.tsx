@@ -77,6 +77,26 @@ describe('SandboxSensoryProbePanel', () => {
         expect(screen.getByLabelText('Ball color #EAF73B')).toBeInTheDocument();
     });
 
+    it('renders definition-backed inventory with item label instead of Food', () => {
+        render(
+            <SandboxSensoryProbePanel
+                kind="inventory"
+                value={[{ type: 'food', energy: 10, definition_id: 'item-def-golden-key' }]}
+                itemDefinitions={[
+                    {
+                        id: 'item-def-golden-key',
+                        name: 'golden_key',
+                        label: 'Golden Key',
+                        default_color: null,
+                    },
+                ]}
+            />,
+        );
+        expect(screen.getByText('Item · Golden Key')).toBeInTheDocument();
+        expect(screen.queryByText('Food')).not.toBeInTheDocument();
+        expect(screen.getByText('Energy 10')).toBeInTheDocument();
+    });
+
     it('uses default ball color when color is missing', () => {
         render(
             <SandboxSensoryProbePanel

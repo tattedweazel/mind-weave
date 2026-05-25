@@ -18,10 +18,35 @@ const wallItem: SandboxItemJson = {
     position: { x: 1, y: 1 },
 };
 
+const definitionBackedItem: SandboxItemJson = {
+    id: 'key-1',
+    definition_id: 'item-def-1',
+    definition_kind: 'item',
+    role: 'pickable',
+    position: { x: 4, y: 5 },
+    energy: 12,
+};
+
+const definitionContext = {
+    itemDefinitions: [
+        {
+            id: 'item-def-1',
+            name: 'golden_key',
+            label: 'Golden Key',
+            default_energy: 10,
+            default_color: '#FFD700',
+            shape: 'square' as const,
+            pickable: true,
+            is_system: false,
+        },
+    ],
+};
+
 describe('SandboxItemInspectorSection', () => {
     it('shows read-only energy text in read-only mode', () => {
         render(<SandboxItemInspectorSection item={foodItem} readOnly />);
 
+        expect(screen.getByRole('heading', { name: 'Food' })).toBeTruthy();
         expect(screen.getByText('Energy')).toBeTruthy();
         expect(screen.getByText('48')).toBeTruthy();
         expect(screen.queryByRole('spinbutton')).toBeNull();
@@ -48,7 +73,37 @@ describe('SandboxItemInspectorSection', () => {
     it('does not show editable fields for wall items', () => {
         render(<SandboxItemInspectorSection item={wallItem} readOnly={false} onItemChange={vi.fn()} />);
 
-        expect(screen.getByText('wall')).toBeTruthy();
+        expect(screen.getByRole('heading', { name: 'Terrain' })).toBeTruthy();
         expect(screen.queryByRole('spinbutton')).toBeNull();
+    });
+
+    it('shows definition-backed item with label instead of food type', () => {
+        render(
+            <SandboxItemInspectorSection
+                item={definitionBackedItem}
+                readOnly
+                definitionContext={definitionContext}
+            />,
+        );
+
+        expect(screen.getByText('Item · Golden Key')).toBeTruthy();
+        expect(screen.getByText('Golden Key')).toBeTruthy();
+        expect(screen.getByText('golden_key')).toBeTruthy();
+        expect(screen.getByText('Pickable')).toBeTruthy();
+        expect(screen.getByText('square')).toBeTruthy();
+        expect(screen.queryByText('food')).toBeNull();
+    });
+
+    it('allows editing energy for definition-backed pickables in builder mode', () => {
+        render(
+            <SandboxItemInspectorSection
+                item={definitionBackedItem}
+                readOnly={false}
+                definitionContext={definitionContext}
+                onItemChange={vi.fn()}
+            />,
+        );
+
+        expect(screen.getByRole('spinbutton', { name: 'Energy' })).toBeTruthy();
     });
 });

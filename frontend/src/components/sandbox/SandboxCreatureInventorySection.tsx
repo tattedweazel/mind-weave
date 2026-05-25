@@ -1,5 +1,6 @@
 import React from 'react';
 
+import type { ItemDefinitionRead } from '../../api/types';
 import type {
     BoardDefinitionJson,
     SandboxCreatureJson,
@@ -17,6 +18,7 @@ export interface SandboxCreatureInventorySectionProps {
     readOnly: boolean;
     onBoardChange?: (updater: (def: BoardDefinitionJson) => BoardDefinitionJson) => void;
     onAddEntry?: (type: SandboxInventoryItemType) => void;
+    itemDefinitions?: ReadonlyArray<Pick<ItemDefinitionRead, 'id' | 'name' | 'label' | 'default_color'>>;
 }
 
 export const SandboxCreatureInventorySection: React.FC<SandboxCreatureInventorySectionProps> = ({
@@ -24,8 +26,10 @@ export const SandboxCreatureInventorySection: React.FC<SandboxCreatureInventoryS
     readOnly,
     onBoardChange,
     onAddEntry,
+    itemDefinitions,
 }) => {
     const inventory = creature.inventory ?? [];
+    const labelContext = { itemDefinitions };
 
     return (
         <InspectorSection title="Inventory">
@@ -40,7 +44,7 @@ export const SandboxCreatureInventorySection: React.FC<SandboxCreatureInventoryS
                         >
                             <div className="flex items-center justify-between gap-2">
                                 <span className="font-medium text-mw-text-primary">
-                                    {formatInventoryEntryLabel(entry)}
+                                    {formatInventoryEntryLabel(entry, labelContext)}
                                 </span>
                                 {!readOnly && onBoardChange ? (
                                     <button
