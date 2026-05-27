@@ -29,6 +29,7 @@ import { DEFAULT_REGION_TRIGGER, SANDBOX_FACING_VALUES, type SandboxFacing } fro
 import { MANAGER_INPUT_CLS, MANAGER_LABEL_CLS } from '../managerShellStyles';
 import { SandboxColorPicker } from './SandboxColorPicker';
 import { SandboxRegionInspectorSection } from './SandboxRegionInspectorSection';
+import { SandboxWorkflowSelect } from './SandboxWorkflowSelect';
 import { CustomMetadataEditor, validateCustomMetadata } from './CustomMetadataEditor';
 
 export type DefinitionCategory = 'items' | 'terrain' | 'fixtures' | 'creatures' | 'regions';

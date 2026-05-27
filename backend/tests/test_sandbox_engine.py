@@ -218,6 +218,69 @@ def test_remove_item_on_fixture_cell_preserves_fixture():
     assert cell_items[0].type == FIXTURE_ITEM_TYPE
 
 
+def test_place_item_definition_id_with_color_on_empty_cell():
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [
+            {
+                "type": "place_item",
+                "cell": {"x": 3, "y": 4},
+                "definition_id": "item-def-snack",
+                "color": "#FF6B6B",
+            },
+        ],
+    )
+    placed = [
+        it
+        for it in st.world.items
+        if it.position.x == 3 and it.position.y == 4
+    ]
+    assert len(placed) == 1
+    assert placed[0].definition_id == "item-def-snack"
+    assert placed[0].definition_kind == "item"
+    assert placed[0].role == "pickable"
+    assert placed[0].color == "#FF6B6B"
+    assert placed[0].type == "ball"
+
+
+def test_place_item_definition_id_stacks_on_fixture_cell():
+    from app.domain.schemas.sandbox import FIXTURE_ITEM_TYPE
+
+    st = initial_sandbox_state_clean()
+    eng = SandboxEngine()
+    eng.apply_interactions(
+        st,
+        [
+            {"type": "place_fixture", "cell": {"x": 1, "y": 1}, "definition_id": "fx-1"},
+            {
+                "type": "place_item",
+                "cell": {"x": 1, "y": 1},
+                "definition_id": "item-def-a",
+                "color": "#AABBCC",
+            },
+            {
+                "type": "place_item",
+                "cell": {"x": 1, "y": 1},
+                "definition_id": "item-def-b",
+                "energy": 25,
+            },
+        ],
+    )
+    cell_items = [it for it in st.world.items if it.position.x == 1 and it.position.y == 1]
+    assert len(cell_items) == 3
+    fixtures = [it for it in cell_items if it.type == FIXTURE_ITEM_TYPE]
+    pickables = [
+        it
+        for it in cell_items
+        if it.definition_kind == "item" and it.role == "pickable"
+    ]
+    assert len(fixtures) == 1
+    assert len(pickables) == 2
+    assert {it.definition_id for it in pickables} == {"item-def-a", "item-def-b"}
+
+
 def test_remove_item_with_item_id_removes_single_pickable():
     st = initial_sandbox_state_clean()
     eng = SandboxEngine()

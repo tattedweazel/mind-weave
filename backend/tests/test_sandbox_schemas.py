@@ -53,6 +53,30 @@ def test_place_item_ball_requires_color():
         PlaceItemEvent(cell={"x": 0, "y": 0}, item_type="ball")
 
 
+def test_place_item_definition_id_accepts_color():
+    ev = PlaceItemEvent(
+        cell={"x": 1, "y": 2},
+        definition_id="item-def-snack",
+        color="#abc",
+    )
+    assert ev.definition_id == "item-def-snack"
+    assert ev.color == "#AABBCC"
+
+
+def test_place_item_definition_id_accepts_energy():
+    ev = PlaceItemEvent(
+        cell={"x": 0, "y": 0},
+        definition_id="item-def-milk",
+        energy=25,
+    )
+    assert ev.energy == 25
+
+
+def test_place_item_rejects_color_without_ball_or_definition():
+    with pytest.raises(ValidationError):
+        PlaceItemEvent(cell={"x": 0, "y": 0}, item_type="food", color="#FF0000")
+
+
 def test_inventory_ball_and_food():
     ball = InventoryItem(type="ball", color="#FF0000")
     assert ball.color == "#FF0000"

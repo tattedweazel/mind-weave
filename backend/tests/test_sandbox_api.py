@@ -189,6 +189,39 @@ def test_sandbox_apply_interactions_without_tick(client: TestClient):
     assert "last_workflow_runs" not in applied.json()
 
 
+def test_sandbox_apply_interactions_place_definition_backed_item(client: TestClient):
+    r = client.post("/api/v1/sandbox/sessions", json={"board_id": str(EMPTY_SANDBOX_BOARD_ID)})
+    doc_id = r.json()["document_id"]
+    v0 = r.json()["envelope"]["state_version"]
+
+    applied = client.post(
+        f"/api/v1/sandbox/sessions/{doc_id}/interactions",
+        json={
+            "interactions": [
+                {
+                    "type": "place_item",
+                    "cell": {"x": 4, "y": 5},
+                    "definition_id": "item-def-custom",
+                    "color": "#FF6B6B",
+                },
+            ],
+            "state_version": v0,
+        },
+    )
+    assert applied.status_code == 200
+    items = applied.json()["envelope"]["sandbox"]["world"]["items"]
+    placed = [
+        it
+        for it in items
+        if it["position"]["x"] == 4 and it["position"]["y"] == 5
+    ]
+    assert len(placed) == 1
+    assert placed[0]["definition_id"] == "item-def-custom"
+    assert placed[0]["definition_kind"] == "item"
+    assert placed[0]["role"] == "pickable"
+    assert placed[0]["color"] == "#FF6B6B"
+
+
 def test_sandbox_apply_interactions_rejects_when_not_paused(client: TestClient, db_session):
     import json
 

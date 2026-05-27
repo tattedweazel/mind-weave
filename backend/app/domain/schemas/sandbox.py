@@ -328,6 +328,7 @@ class PlaceItemEvent(BaseModel):
     item_type: Optional[PlaceableItemType] = None
     definition_id: Optional[str] = None
     color: Optional[str] = None
+    energy: Optional[int] = None
 
     @model_validator(mode="after")
     def _validate_place_item(self) -> PlaceItemEvent:
@@ -337,8 +338,12 @@ class PlaceItemEvent(BaseModel):
             if not self.color:
                 raise ValueError("ball placement requires color")
             self.color = normalize_hex_color(self.color)
+        elif self.definition_id and self.color is not None:
+            self.color = normalize_hex_color(self.color)
         elif self.color is not None:
-            raise ValueError("color is only valid when placing a ball")
+            raise ValueError("color is only valid when placing a ball or definition-backed item")
+        if self.energy is not None and self.item_type not in (None, "food"):
+            raise ValueError("energy is only valid for food or definition-backed item placement")
         return self
 
 

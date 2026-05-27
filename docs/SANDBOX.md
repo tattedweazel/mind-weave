@@ -191,7 +191,7 @@ Base: `/api/v1/sandbox/`
 
 | `type` | Payload | Behavior |
 |--------|---------|----------|
-| `place_item` | `cell`, `item_type`: `food` \| `wall` \| `ball`, optional `definition_id`, `color` required for `ball` | Place pickable or terrain if no creature; pickables may stack on fixture cells (0..N pickables); terrain blocked when any solid exists (regions ignored) |
+| `place_item` | `cell`; **either** legacy `item_type`: `food` \| `wall` \| `ball` (built-ins / terrain: use `wall` + terrain `definition_id`), **or** user item `definition_id` with optional `color` / `energy` (no `item_type`) | Place pickable or terrain if no creature; pickables may stack on fixture cells (0..N pickables); terrain blocked when any solid exists (regions ignored). `color` required for `ball`; definition-backed items may include `color` (materialized from ItemDefinition `default_color` in the UI) or `energy` on the instance. Board Builder and Simulation share this payload shape; Simulation applies via `/interactions` (paused) through the server engine. |
 | `remove_item` | `cell`, optional `item_id` | Remove pickables and non-fixture solids at cell; fixtures and regions remain; omit `item_id` to clear all removable items at once |
 | `place_fixture` | `cell`, `definition_id` | Place solid fixture if no creature and no existing solid |
 | `remove_fixture` | `cell` | Remove fixture only; pickables at cell remain |
@@ -211,7 +211,7 @@ On first Sandbox visit after a page load, **Simulation** renders the session gri
 
 When placing a creature (Simulation or Board Builder), the cell action modal steps through **workflow** → **initial facing** (`N`/`E`/`S`/`W`, default North) → **color** (presets, favorites, or custom hex). Placement does not auto-advance ticks — press **Play** or **Step** to run brains.
 
-**Place item** on an empty cell opens **Item** (user item definitions from Definitions) → **Terrain** (user terrain definitions) → **Built-ins** (legacy food, wall, and ball placement). Seeded system definitions (`is_system`) are excluded from the Item/Terrain pickers; use **Built-ins** for Food/Wall/Ball.
+**Place item** on an empty cell opens **Item** (user item definitions from Definitions) → **Terrain** (user terrain definitions) → **Built-ins** (legacy food, wall, and ball placement). Seeded system definitions (`is_system`) are excluded from the Item/Terrain pickers; use **Built-ins** for Food/Wall/Ball. Choosing a user item sends `definition_id` plus optional instance `color` (from the definition’s `default_color` when set); Simulation persists that via the same interaction API as Board Builder.
 
 **Tick ms** in Explorer sets the client-side Play interval (200–60000 ms). It does not advance simulation or require pause; commit with Enter or by leaving the field (partial values while typing do not affect playback until committed).
 

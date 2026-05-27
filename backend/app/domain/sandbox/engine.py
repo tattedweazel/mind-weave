@@ -247,6 +247,58 @@ def _place_item_at_cell(
         )
 
 
+def _place_definition_pickable_at_cell(
+    state: SandboxState,
+    g: GridCell,
+    definition_id: str,
+    *,
+    color: str | None = None,
+    energy: int | None = None,
+) -> None:
+    """Place a user ItemDefinition pickable (definition_id without legacy item_type)."""
+    if _cell_blocked_for_item_placement(state, g, placing_solid=False):
+        return
+    if energy is not None:
+        state.world.items.append(
+            SandboxItem(
+                id=str(uuid.uuid4()),
+                definition_id=definition_id,
+                definition_kind="item",
+                role="pickable",
+                position=g,
+                energy=energy,
+            )
+        )
+        return
+    normalized_color: str | None = None
+    if color is not None and str(color).strip():
+        try:
+            normalized_color = normalize_hex_color(str(color))
+        except ValueError:
+            return
+    if normalized_color is not None:
+        state.world.items.append(
+            SandboxItem(
+                id=str(uuid.uuid4()),
+                definition_id=definition_id,
+                definition_kind="item",
+                role="pickable",
+                position=g,
+                color=normalized_color,
+            )
+        )
+        return
+    state.world.items.append(
+        SandboxItem(
+            id=str(uuid.uuid4()),
+            definition_id=definition_id,
+            definition_kind="item",
+            role="pickable",
+            position=g,
+        )
+    )
+
+
 def _find_pickable_at_cell(
     state: SandboxState,
     g: GridCell,
@@ -522,18 +574,51 @@ class SandboxEngine:
                 if g is None:
                     continue
                 item_type = ev.get("item_type")
+                raw_def_id = ev.get("definition_id")
+                def_id = (
+                    str(raw_def_id).strip()
+                    if raw_def_id is not None and str(raw_def_id).strip()
+                    else None
+                )
                 if item_type == "food":
-                    _place_item_at_cell(state, g, "food")
+                    _place_item_at_cell(state, g, "food", definition_id=def_id)
                 elif item_type == "wall":
-                    _place_item_at_cell(state, g, "wall")
+                    _place_item_at_cell(state, g, "wall", definition_id=def_id)
                 elif item_type == BALL_ITEM_TYPE:
                     raw_color = ev.get("color")
                     if not raw_color or not str(raw_color).strip():
                         continue
                     try:
-                        _place_item_at_cell(state, g, BALL_ITEM_TYPE, color=str(raw_color))
+                        _place_item_at_cell(
+                            state,
+                            g,
+                            BALL_ITEM_TYPE,
+                            color=str(raw_color),
+                            definition_id=def_id,
+                        )
                     except ValueError:
                         continue
+                elif def_id:
+                    raw_energy = ev.get("energy")
+                    energy_val: int | None = None
+                    if raw_energy is not None and str(raw_energy).strip() != "":
+                        try:
+                            energy_val = int(raw_energy)
+                        except (TypeError, ValueError):
+                            energy_val = None
+                    raw_color = ev.get("color")
+                    color_val = (
+                        str(raw_color).strip()
+                        if raw_color is not None and str(raw_color).strip()
+                        else None
+                    )
+                    _place_definition_pickable_at_cell(
+                        state,
+                        g,
+                        def_id,
+                        color=color_val,
+                        energy=energy_val,
+                    )
                 continue
             if et == "remove_item":
                 g = _parse_interaction_cell(ev, w, h)
